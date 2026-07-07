@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/providers/theme-provider';
 import { ToastProvider } from '@/components/ui/toast';
 import QueryProvider from '@/providers/query-provider';
 import { SessionProvider } from 'next-auth/react';
+import PWARegister from '@/components/pwa-register';
 
 const inter = Inter({
   variable: '--font-sans',
@@ -25,7 +26,6 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'Supervisor Field Visit Management',
   description: 'Enterprise Audit and NPD Checking Tool for Supervisor Field Operations.',
-  manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -52,6 +52,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body className={`${inter.variable} ${calistoga.variable} ${jetbrainsMono.variable} antialiased h-full`}>
+        <PWARegister />
         <SessionProvider>
           <QueryProvider>
             <ThemeProvider>

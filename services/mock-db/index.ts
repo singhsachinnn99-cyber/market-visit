@@ -51,6 +51,7 @@ const initialUsers = (): User[] => [
     name: 'System Admin',
     employeeCode: 'ADM001',
     email: 'admin@system.local',
+    //password: password123
     // bcrypt hash of "password123"
     passwordHash: '$2b$10$xANokfvRXd/XsM009BIC1euSO5eHLed8NrkJzI669T924C6Btn2uW',
     mobile: '9876543210',
@@ -63,6 +64,7 @@ const initialUsers = (): User[] => [
     name: 'John Doe',
     employeeCode: 'SUP001',
     email: 'john@system.local',
+     //password: password123
     // bcrypt hash of "password123"
     passwordHash: '$2b$10$xANokfvRXd/XsM009BIC1euSO5eHLed8NrkJzI669T924C6Btn2uW',
     mobile: '9876543211',

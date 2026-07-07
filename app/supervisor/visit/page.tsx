@@ -350,79 +350,80 @@ function VisitWizardContent() {
         </button>
       </div>
 
-      {/* Interactive Stepper Track */}
-      <div className="space-y-3">
-        <div 
-          className="flex items-center gap-2 overflow-x-auto py-2.5 px-1 scrollbar-none snap-x"
-          style={{ WebkitOverflowScrolling: 'touch' }}
-        >
+      {/* Interactive Stepper Track - Premium Background Line Design */}
+      <div className="space-y-4 card p-4">
+        <div className="relative flex items-center justify-between w-full px-1 py-2">
+          {/* Background track line */}
+          <div 
+            className="absolute left-4 right-4 h-[2px] z-0" 
+            style={{ background: 'var(--border-soft)', top: '50%', transform: 'translateY(-50%)' }}
+          />
+          {/* Active progress track line */}
+          <div 
+            className="absolute left-4 h-[2px] z-0 transition-all duration-300"
+            style={{ 
+              background: 'var(--accent)', 
+              top: '50%', 
+              transform: 'translateY(-50%)',
+              width: currentStep === 0 ? '0px' : `calc(${(currentStep / 7) * 100}% - 8px)`
+            }}
+          />
+          
           {Array.from({ length: 8 }).map((_, i) => {
             const isActive = i === currentStep;
             const isCompleted = i < currentStep;
             return (
-              <React.Fragment key={i}>
-                {/* Bubble Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (isCompleted) {
-                      setCurrentStep(i);
-                    }
-                  }}
-                  className={`h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center text-[12px] font-bold transition-all duration-200 snap-center cursor-pointer ${
-                    isCompleted ? 'hover:bg-indigo-100 dark:hover:bg-indigo-950/30' : ''
-                  }`}
-                  style={{
-                    background: isActive 
-                      ? 'linear-gradient(135deg, var(--accent) 0%, #7C3AED 100%)' 
-                      : isCompleted 
-                        ? 'var(--accent-light)' 
-                        : 'var(--surface-2)',
-                    color: isActive 
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  if (isCompleted) {
+                    setCurrentStep(i);
+                  }
+                }}
+                className={`h-7 w-7 sm:h-8 sm:w-8 rounded-full flex-shrink-0 flex items-center justify-center text-[11px] font-bold transition-all duration-200 z-10 relative cursor-pointer ${
+                  isCompleted ? 'hover:scale-105' : ''
+                }`}
+                style={{
+                  background: isActive 
+                    ? 'linear-gradient(135deg, var(--accent) 0%, #7C3AED 100%)' 
+                    : isCompleted 
+                      ? 'var(--accent)' 
+                      : 'var(--surface)',
+                  color: isActive 
+                    ? 'white' 
+                    : isCompleted 
                       ? 'white' 
+                      : 'var(--text-muted)',
+                  border: `2px solid ${
+                    isActive 
+                      ? 'transparent' 
                       : isCompleted 
                         ? 'var(--accent)' 
-                        : 'var(--text-muted)',
-                    border: `1px solid ${
-                      isActive 
-                        ? 'transparent' 
-                        : isCompleted 
-                          ? 'var(--accent-soft)' 
-                          : 'var(--border)'
-                    }`,
-                    boxShadow: isActive ? '0 4px 12px rgba(79,70,229,0.35)' : 'none',
-                    transform: isActive ? 'scale(1.1)' : 'scale(1)',
-                  }}
-                  title={STEP_NAMES[i]}
-                >
-                  {isCompleted ? '✓' : i + 1}
-                </button>
-
-                {/* Connector line */}
-                {i < 7 && (
-                  <div 
-                    className="h-[2px] w-6 flex-shrink-0 transition-colors duration-300"
-                    style={{
-                      background: isCompleted ? 'var(--accent)' : 'var(--border-soft)',
-                    }}
-                  />
-                )}
-              </React.Fragment>
+                        : 'var(--border)'
+                  }`,
+                  boxShadow: isActive ? '0 0 10px rgba(79,70,229,0.4)' : 'none',
+                  transform: isActive ? 'scale(1.15)' : 'scale(1)',
+                }}
+                title={STEP_NAMES[i]}
+              >
+                {isCompleted ? '✓' : i + 1}
+              </button>
             );
           })}
         </div>
 
         {/* Step Info Card Header */}
         <div 
-          className="p-3.5 rounded-xl flex items-center justify-between border border-solid border-[var(--border-soft)]"
+          className="p-3 rounded-lg flex items-center justify-between border border-solid border-[var(--border-soft)]"
           style={{ background: 'var(--surface-2)' }}
         >
           <div className="space-y-0.5">
-            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Current Phase</p>
-            <h3 className="text-[14px] font-extrabold text-[var(--text-primary)] leading-none">{STEP_NAMES[currentStep]}</h3>
+            <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Current Phase</p>
+            <h3 className="text-[13px] font-extrabold text-[var(--text-primary)] leading-none">{STEP_NAMES[currentStep]}</h3>
           </div>
           <span 
-            className="text-[11px] font-bold px-2.5 py-1 rounded-full text-white"
+            className="text-[10px] font-bold px-2.5 py-1 rounded-full text-white"
             style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #7C3AED 100%)' }}
           >
             Step {currentStep + 1} / 8
@@ -715,20 +716,19 @@ function VisitWizardContent() {
         </div>
       )}
 
-      {/* Sticky Nav Footer */}
+      {/* Wizard Navigation Footer - Inline flow on Mobile/Desktop to prevent overlapping layout widgets */}
       <div
-        className="max-md:fixed max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:z-40 flex items-center justify-between gap-4 p-4"
+        className="flex items-center justify-between gap-4 p-4 rounded-xl border border-solid border-[var(--border-soft)] mt-4"
         style={{
-          borderTop: '1px solid var(--border)',
           background: 'var(--surface)',
-          boxShadow: '0 -4px 12px rgba(0,0,0,0.03)',
+          boxShadow: 'var(--shadow-card)',
         }}
       >
         <button
           onClick={prevStep}
           disabled={currentStep === 0 || savingDraft || submittingVisit}
-          className="btn-ghost"
-          style={{ height: '44px', padding: '0 20px', opacity: currentStep === 0 ? 0.35 : 1 }}
+          className="btn-ghost cursor-pointer"
+          style={{ height: '40px', padding: '0 16px', opacity: currentStep === 0 ? 0.35 : 1 }}
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Back
@@ -737,9 +737,9 @@ function VisitWizardContent() {
           <button
             onClick={nextStep}
             disabled={savingDraft || submittingVisit || (currentStep === 0 && !selectedRoute) || (currentStep === 1 && !selectedCustomer) || (currentStep === 6 && (gpsLoading || !latitude))}
-            className="btn-primary"
+            className="btn-primary cursor-pointer"
             style={{
-              height: '44px', padding: '0 24px',
+              height: '40px', padding: '0 20px',
               background: 'linear-gradient(135deg, var(--accent) 0%, #7C3AED 100%)',
               boxShadow: '0 4px 16px rgba(79,70,229,0.3)',
               opacity: (savingDraft || submittingVisit) ? 0.5 : 1,

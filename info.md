@@ -2,7 +2,7 @@ Login
  authenticate the supervisor; keep their identity for the session.
  Select outlet — pick Route, then Customer. Customers filtered strictly to the selected route (see §6). On customer select, show Classification (A–E) and Channel.
  
- Capture — multiple photos for Dairy, Beverages, Ice Cream, Assets; Asset dropdown (Chiller/Freezer) + temperature; mandatory Action Required + optional Observations.
+ Capture — multiple photos for Dairy, Beverages, Fruits, Vegetables; Asset dropdown (Chiller/Freezer) + temperature; mandatory Action Required + optional Observations.
 
  NPD check — list NPD SKUs; each gets one of three states: Available / Not available / Not required.
 

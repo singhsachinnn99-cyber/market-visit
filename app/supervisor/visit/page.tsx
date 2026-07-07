@@ -161,15 +161,23 @@ function VisitWizardContent() {
     }
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, category: 'Dairy' | 'Beverages' | 'Ice Cream' | 'Assets') => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, category: 'Dairy' | 'Beverages' | 'Fruits' | 'Vegetables') => {
     if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
+      const files = Array.from(e.target.files);
       setUploadingPhoto(true);
 
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = reader.result as string;
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const file of files) {
         try {
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = (err) => reject(err);
+            reader.readAsDataURL(file);
+          });
+
           const res = await fetch('/api/upload', {
             method: 'POST',
             body: JSON.stringify({ file: base64, category }),
@@ -189,14 +197,21 @@ function VisitWizardContent() {
           };
 
           setPhotos((prev) => [...prev, newPhoto]);
-          showToast(`Photo uploaded successfully to ${category}.`, 'success');
+          successCount++;
         } catch (err) {
-          showToast('Failed to upload image.', 'error');
-        } finally {
-          setUploadingPhoto(false);
+          console.error(err);
+          failCount++;
         }
-      };
-      reader.readAsDataURL(file);
+      }
+
+      if (successCount > 0) {
+        showToast(`${successCount} photo(s) uploaded successfully to ${category}.`, 'success');
+      }
+      if (failCount > 0) {
+        showToast(`Failed to upload ${failCount} photo(s).`, 'error');
+      }
+      setUploadingPhoto(false);
+      e.target.value = '';
     }
   };
 
@@ -266,18 +281,7 @@ function VisitWizardContent() {
         return;
       }
 
-      const missingCategories: string[] = [];
-      const categories: ('Dairy' | 'Beverages' | 'Ice Cream' | 'Assets')[] = ['Dairy', 'Beverages', 'Ice Cream', 'Assets'];
-      categories.forEach((cat) => {
-        const matching = photos.filter((p) => p.category === cat);
-        if (matching.length === 0) missingCategories.push(cat);
-      });
-
-      if (missingCategories.length > 0) {
-        showToast(`Please upload photos for all categories. Missing: ${missingCategories.join(', ')}`, 'warning');
-        setSubmittingVisit(false);
-        return;
-      }
+      // Photos are now optional, no validation check required.
 
       if (temperature === '') {
         showToast('Temperature is mandatory to submit.', 'error');
@@ -423,7 +427,7 @@ function VisitWizardContent() {
         <div className="card p-5 space-y-4 animate-slide-up">
           <span className="badge badge-accent">Camera Capture</span>
           <div className="space-y-3">
-            {(['Dairy', 'Beverages', 'Ice Cream', 'Assets'] as const).map((cat) => {
+            {(['Dairy', 'Beverages', 'Fruits', 'Vegetables'] as const).map((cat) => {
               const catPhotos = photos.filter((p) => p.category === cat);
               return (
                 <div key={cat} className="p-4 rounded-xl space-y-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
@@ -431,8 +435,8 @@ function VisitWizardContent() {
                     <span className="text-[12px] font-bold uppercase" style={{ color: 'var(--text-primary)' }}>{cat}</span>
                     <label className="btn-ghost cursor-pointer" style={{ height: '32px', padding: '0 12px' }}>
                       <Camera className="h-3.5 w-3.5" style={{ color: 'var(--accent)' }} />
-                      <span>Capture</span>
-                      <input type="file" accept="image/*" capture="environment" disabled={uploadingPhoto} onChange={(e) => handlePhotoUpload(e, cat)} className="hidden" />
+                      <span>Add Photos</span>
+                      <input type="file" accept="image/*" multiple disabled={uploadingPhoto} onChange={(e) => handlePhotoUpload(e, cat)} className="hidden" />
                     </label>
                   </div>
                   {catPhotos.length === 0 ? (

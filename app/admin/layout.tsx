@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useTheme } from '@/providers/theme-provider';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
@@ -23,6 +23,7 @@ import {
   Settings,
   RefreshCw,
   Activity,
+  ArrowLeft,
 } from 'lucide-react';
 
 const navGroups = [
@@ -53,9 +54,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { data: session } = useSession();
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  
+  const canGoBack = pathname !== '/admin';
   const userMenuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -256,6 +260,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Menu className="h-5 w-5" />
           </button>
 
+          {/* Back button (mobile only, on subpages) */}
+          {canGoBack && (
+            <button
+              onClick={() => router.back()}
+              className="md:hidden p-1.5 rounded-lg cursor-pointer flex-shrink-0 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              style={{ color: 'var(--text-secondary)' }}
+              title="Go Back"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
+
           {/* Search bar */}
           <div
             className="flex items-center gap-2 flex-grow max-w-xs h-9 px-3 rounded-lg cursor-text"
@@ -422,10 +438,86 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* ─── PAGE CONTENT ─────────────────────────── */}
         <main className="flex-grow overflow-y-auto" style={{ background: 'var(--bg)' }}>
-          <div className="max-w-screen-2xl mx-auto p-5 md:p-6">
+          <div className="max-w-screen-2xl mx-auto p-5 md:p-6 pb-24 md:pb-6">
             {children}
           </div>
         </main>
+
+        {/* ── Bottom Sticky Tab-Bar (Mobile Devices Only) ── */}
+        <footer
+          className="md:hidden fixed bottom-0 left-0 right-0 z-45 py-2 px-3 flex items-end justify-around"
+          style={{
+            background: 'var(--surface)',
+            borderTop: '1px solid var(--border)',
+            boxShadow: '0 -4px 12px rgba(0,0,0,0.03)',
+            height: '64px',
+          }}
+        >
+          {/* Dashboard Tab */}
+          <Link
+            href="/admin"
+            className="flex flex-col items-center gap-1 pb-1 transition-all"
+            style={{
+              color: pathname === '/admin' ? 'var(--accent)' : 'var(--text-muted)',
+              width: '20%',
+            }}
+          >
+            <LayoutDashboard className="h-5 w-5" />
+            <span className="text-[9px] tracking-wide font-semibold">Dashboard</span>
+          </Link>
+
+          {/* Visits Tab */}
+          <Link
+            href="/admin/visits"
+            className="flex flex-col items-center gap-1 pb-1 transition-all"
+            style={{
+              color: pathname.startsWith('/admin/visits') ? 'var(--accent)' : 'var(--text-muted)',
+              width: '20%',
+            }}
+          >
+            <CalendarCheck className="h-5 w-5" />
+            <span className="text-[9px] tracking-wide font-semibold">Visits</span>
+          </Link>
+
+          {/* Supervisors Tab */}
+          <Link
+            href="/admin/supervisors"
+            className="flex flex-col items-center gap-1 pb-1 transition-all"
+            style={{
+              color: pathname.startsWith('/admin/supervisors') ? 'var(--accent)' : 'var(--text-muted)',
+              width: '20%',
+            }}
+          >
+            <Users className="h-5 w-5" />
+            <span className="text-[9px] tracking-wide font-semibold">Supervisors</span>
+          </Link>
+
+          {/* Reports Tab */}
+          <Link
+            href="/admin/reports"
+            className="flex flex-col items-center gap-1 pb-1 transition-all"
+            style={{
+              color: pathname.startsWith('/admin/reports') ? 'var(--accent)' : 'var(--text-muted)',
+              width: '20%',
+            }}
+          >
+            <FileBarChart2 className="h-5 w-5" />
+            <span className="text-[9px] tracking-wide font-semibold">Reports</span>
+          </Link>
+
+          {/* Import Tab */}
+          <Link
+            href="/admin/import"
+            className="flex flex-col items-center gap-1 pb-1 transition-all"
+            style={{
+              color: pathname.startsWith('/admin/import') ? 'var(--accent)' : 'var(--text-muted)',
+              width: '20%',
+            }}
+          >
+            <FileSpreadsheet className="h-5 w-5" />
+            <span className="text-[9px] tracking-wide font-semibold">Import</span>
+          </Link>
+        </footer>
       </div>
     </div>
   );

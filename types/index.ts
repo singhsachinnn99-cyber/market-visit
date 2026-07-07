@@ -64,7 +64,7 @@ export interface Visit {
 export interface VisitPhoto {
   photoId: string;
   visitId: string;
-  category: 'Dairy' | 'Beverages' | 'Ice Cream' | 'Assets';
+  category: 'Dairy' | 'Beverages' | 'Fruits' | 'Vegetables';
   cloudinaryUrl: string;
   publicId: string;
   uploadedAt: string; // ISO string

@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { useTheme } from '@/providers/theme-provider';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   ClipboardList,
   PlusCircle,
@@ -22,6 +22,7 @@ import {
   Home,
   MapPin,
   BarChart3,
+  ArrowLeft,
 } from 'lucide-react';
 
 const navGroups = [
@@ -50,9 +51,12 @@ export default function SupervisorLayout({ children }: { children: React.ReactNo
   const { data: session } = useSession();
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  
+  const canGoBack = pathname !== '/supervisor';
   const userMenuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -251,6 +255,18 @@ export default function SupervisorLayout({ children }: { children: React.ReactNo
           >
             <Menu className="h-5 w-5" />
           </button>
+
+          {/* Back button (mobile only, on subpages) */}
+          {canGoBack && (
+            <button
+              onClick={() => router.back()}
+              className="md:hidden p-1.5 rounded-lg cursor-pointer flex-shrink-0 hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors"
+              style={{ color: 'var(--text-secondary)' }}
+              title="Go Back"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
 
           {/* Search bar */}
           <div

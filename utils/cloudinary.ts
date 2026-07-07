@@ -22,10 +22,10 @@ export const uploadToCloudinary = async (
     let url = 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=600&q=80'; // Dairy
     if (category === 'Beverages') {
       url = 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=600&q=80';
-    } else if (category === 'Ice Cream') {
-      url = 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?auto=format&fit=crop&w=600&q=80';
-    } else if (category === 'Assets') {
-      url = 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80';
+    } else if (category === 'Fruits') {
+      url = 'https://images.unsplash.com/photo-1619546813926-a78fa6372cd2?auto=format&fit=crop&w=600&q=80';
+    } else if (category === 'Vegetables') {
+      url = 'https://images.unsplash.com/photo-1597362925123-77861d3fbac7?auto=format&fit=crop&w=600&q=80';
     }
     
     const mockId = `mock_${category.toLowerCase().replace(/\s+/g, '_')}_${Math.random().toString(36).substring(2, 8)}`;

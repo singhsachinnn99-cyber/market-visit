@@ -350,27 +350,83 @@ function VisitWizardContent() {
         </button>
       </div>
 
-      {/* Progress Bar */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div
-              key={i}
-              className="flex-grow h-1.5 rounded-full transition-all"
-              style={{
-                background: i === currentStep
-                  ? 'var(--accent)'
-                  : i < currentStep
-                    ? 'var(--accent-light)'
-                    : 'var(--border)',
-                boxShadow: i === currentStep ? '0 0 8px rgba(79,70,229,0.5)' : 'none',
-              }}
-            />
-          ))}
+      {/* Interactive Stepper Track */}
+      <div className="space-y-3">
+        <div 
+          className="flex items-center gap-2 overflow-x-auto py-2.5 px-1 scrollbar-none snap-x"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          {Array.from({ length: 8 }).map((_, i) => {
+            const isActive = i === currentStep;
+            const isCompleted = i < currentStep;
+            return (
+              <React.Fragment key={i}>
+                {/* Bubble Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isCompleted) {
+                      setCurrentStep(i);
+                    }
+                  }}
+                  className={`h-8 w-8 rounded-full flex-shrink-0 flex items-center justify-center text-[12px] font-bold transition-all duration-200 snap-center cursor-pointer ${
+                    isCompleted ? 'hover:bg-indigo-100 dark:hover:bg-indigo-950/30' : ''
+                  }`}
+                  style={{
+                    background: isActive 
+                      ? 'linear-gradient(135deg, var(--accent) 0%, #7C3AED 100%)' 
+                      : isCompleted 
+                        ? 'var(--accent-light)' 
+                        : 'var(--surface-2)',
+                    color: isActive 
+                      ? 'white' 
+                      : isCompleted 
+                        ? 'var(--accent)' 
+                        : 'var(--text-muted)',
+                    border: `1px solid ${
+                      isActive 
+                        ? 'transparent' 
+                        : isCompleted 
+                          ? 'var(--accent-soft)' 
+                          : 'var(--border)'
+                    }`,
+                    boxShadow: isActive ? '0 4px 12px rgba(79,70,229,0.35)' : 'none',
+                    transform: isActive ? 'scale(1.1)' : 'scale(1)',
+                  }}
+                  title={STEP_NAMES[i]}
+                >
+                  {isCompleted ? '✓' : i + 1}
+                </button>
+
+                {/* Connector line */}
+                {i < 7 && (
+                  <div 
+                    className="h-[2px] w-6 flex-shrink-0 transition-colors duration-300"
+                    style={{
+                      background: isCompleted ? 'var(--accent)' : 'var(--border-soft)',
+                    }}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
         </div>
-        <div className="flex items-center justify-between px-0.5">
-          <span className="text-[11px] font-bold" style={{ color: 'var(--accent)' }}>Step {currentStep + 1} of 8</span>
-          <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{STEP_NAMES[currentStep]}</span>
+
+        {/* Step Info Card Header */}
+        <div 
+          className="p-3.5 rounded-xl flex items-center justify-between border border-solid border-[var(--border-soft)]"
+          style={{ background: 'var(--surface-2)' }}
+        >
+          <div className="space-y-0.5">
+            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Current Phase</p>
+            <h3 className="text-[14px] font-extrabold text-[var(--text-primary)] leading-none">{STEP_NAMES[currentStep]}</h3>
+          </div>
+          <span 
+            className="text-[11px] font-bold px-2.5 py-1 rounded-full text-white"
+            style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #7C3AED 100%)' }}
+          >
+            Step {currentStep + 1} / 8
+          </span>
         </div>
       </div>
 

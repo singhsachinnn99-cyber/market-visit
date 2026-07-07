@@ -15,14 +15,14 @@ export default function InfoRowsClient({ rows }: { rows: Row[] }) {
   const iconMap: Record<string, any> = { Mail, Phone, Calendar, UserCheck };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-5" style={{ background: 'var(--surface)' }}>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3.5 p-4 sm:p-5" style={{ background: 'var(--surface)' }}>
       {rows.map((r) => {
         const Icon = iconMap[r.icon] ?? (() => null);
         const isPrivileges = r.label === 'Privileges';
         return (
           <div
             key={r.label}
-            className={`flex items-start gap-4 p-4 rounded-xl border border-solid border-[var(--border-soft)] transition-all duration-200 hover:shadow-sm hover:border-[var(--border)] ${
+            className={`flex items-start gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-xl border border-solid border-[var(--border-soft)] transition-all duration-200 hover:shadow-sm hover:border-[var(--border)] ${
               isPrivileges ? 'sm:col-span-2' : ''
             }`}
             style={{

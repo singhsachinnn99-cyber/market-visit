@@ -23,24 +23,24 @@ export default async function SupervisorProfilePage() {
   const initial = user.name.charAt(0).toUpperCase();
 
   return (
-    <div className="mx-auto px-4 sm:px-6 max-w-2xl space-y-4 pb-6 animate-fade-in">
+    <div className="mx-auto px-3 sm:px-6 max-w-2xl space-y-3 pb-6 animate-fade-in">
       <BackHeader title="Profile" hideBack />
 
       {/* Unified Profile Card */}
       <div className="card overflow-hidden transition-all duration-300 hover:shadow-md">
         {/* Gradient header banner */}
         <div
-          className="h-32 sm:h-28 relative"
+          className="h-24 sm:h-28 relative"
           style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #7C3AED 100%)' }}
         >
           <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-200 via-violet-600 to-indigo-900 pointer-events-none" />
         </div>
 
         {/* Avatar & Core Metadata (with a circular floating style) */}
-        <div className="px-6 pb-6 -mt-10 sm:-mt-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3.5">
+        <div className="px-4 pb-4 -mt-8 sm:-mt-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
             <div
-              className="h-20 w-20 sm:h-20 sm:w-20 rounded-full flex items-center justify-center text-[28px] font-bold text-white relative z-10"
+              className="h-16 w-16 sm:h-20 sm:w-20 rounded-full flex items-center justify-center text-[22px] sm:text-[28px] font-bold text-white relative z-10"
               style={{
                 background: 'var(--surface)',
                 border: '4px solid var(--surface)',
@@ -50,8 +50,8 @@ export default async function SupervisorProfilePage() {
             >
               {initial}
             </div>
-            <div className="space-y-1">
-              <h2 className="text-[20px] sm:text-[18px] font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>{user.name}</h2>
+            <div className="space-y-0.5">
+              <h2 className="text-[18px] sm:text-[18px] font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>{user.name}</h2>
               <p className="font-mono text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>Employee ID: {user.employeeCode}</p>
             </div>
           </div>
@@ -75,7 +75,7 @@ export default async function SupervisorProfilePage() {
         </div>
 
         {/* Security & Action Footer (side-by-side on desktop, stacked on mobile) */}
-        <div className="p-5 bg-[var(--surface-2)] border-t border-solid border-[var(--border-soft)] flex flex-col md:flex-row md:items-center justify-between gap-5">
+        <div className="p-4 sm:p-5 bg-[var(--surface-2)] border-t border-solid border-[var(--border-soft)] flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-5">
           <div className="flex items-start gap-3 max-w-md">
             <Shield className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--text-muted)' }} />
             <div>

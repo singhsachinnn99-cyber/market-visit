@@ -58,10 +58,45 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   const canGoBack = pathname !== '/admin';
   const userMenuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const adminNavActions = [
+    { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+    { name: 'Visits Log', path: '/admin/visits', icon: CalendarCheck },
+    { name: 'Supervisors List', path: '/admin/supervisors', icon: Users },
+    { name: 'Reports & Stats', path: '/admin/reports', icon: FileBarChart2 },
+    { name: 'Import Master Data', path: '/admin/import', icon: FileSpreadsheet },
+    { name: 'Toggle Light/Dark Theme', action: 'theme', icon: Moon },
+    { name: 'Log Out Session', action: 'logout', icon: LogOut },
+  ];
+
+  const handleNavigate = (item: any) => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    if (item.path) {
+      router.push(item.path);
+    } else if (item.action === 'theme') {
+      toggleTheme();
+    } else if (item.action === 'logout') {
+      handleSignOut();
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchRef.current?.focus();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const user = session?.user as any;
   const initial = user?.name ? user.name.charAt(0).toUpperCase() : 'A';
@@ -260,21 +295,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Menu className="h-5 w-5" />
           </button>
 
-          {/* Back button (mobile only, on subpages) */}
+          {/* Back button (on subpages, desktop & mobile) */}
           {canGoBack && (
             <button
               onClick={() => router.back()}
-              className="md:hidden p-1.5 rounded-lg cursor-pointer flex-shrink-0 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              style={{ color: 'var(--text-secondary)' }}
+              className="flex items-center gap-1 h-8 px-2.5 rounded-lg border border-solid border-[var(--border)] hover:bg-[var(--surface-2)] transition-all cursor-pointer"
+              style={{ color: 'var(--text-secondary)', background: 'var(--surface)' }}
               title="Go Back"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline text-[11px] font-bold uppercase tracking-wider">Back</span>
             </button>
           )}
 
-          {/* Search bar */}
+          {/* Search bar with dropdown actions */}
           <div
-            className="flex items-center gap-2 flex-grow max-w-xs h-9 px-3 rounded-lg cursor-text"
+            className="flex items-center gap-2 flex-grow max-w-xs h-9 px-3 rounded-lg cursor-text relative"
             style={{
               background: 'var(--surface-2)',
               border: '1px solid var(--border)',
@@ -285,10 +321,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <input
               ref={searchRef}
               type="text"
-              placeholder="Search visits, supervisors…"
+              placeholder="Search / Ctrl+K…"
               className="flex-grow bg-transparent outline-none text-[13px] placeholder:text-[var(--text-muted)]"
               style={{ color: 'var(--text-primary)' }}
-              onBlur={() => setSearchOpen(false)}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
             />
             <kbd
               className="hidden md:inline-flex items-center px-1.5 rounded text-[10px] font-mono"
@@ -298,8 +337,41 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 border: '1px solid var(--border)',
               }}
             >
-              /
+              Ctrl+K
             </kbd>
+
+            {searchOpen && (
+              <div
+                className="absolute left-0 right-0 top-11 z-50 p-2 rounded-xl shadow-xl border border-solid border-[var(--border)] overflow-hidden max-h-[280px] overflow-y-auto"
+                style={{ background: 'var(--surface)', minWidth: '220px' }}
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                <div className="px-2.5 py-1 text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                  Quick Navigation
+                </div>
+                {adminNavActions.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+                  <p className="px-2.5 py-3 text-[11px] italic text-[var(--text-muted)]">No results match "{searchQuery}"</p>
+                ) : (
+                  <div className="space-y-0.5 mt-1">
+                    {adminNavActions
+                      .filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <button
+                            key={item.name}
+                            onClick={() => handleNavigate(item)}
+                            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-[12px] font-semibold transition-all hover:bg-[var(--surface-2)] text-[var(--text-primary)] hover:text-[var(--accent)]"
+                          >
+                            <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                            <span>{item.name}</span>
+                          </button>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Right cluster */}
@@ -445,77 +517,92 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* ── Bottom Sticky Tab-Bar (Mobile Devices Only) ── */}
         <footer
-          className="md:hidden fixed bottom-0 left-0 right-0 z-45 py-2 px-3 flex items-end justify-around"
+          className="md:hidden fixed bottom-0 left-0 right-0 z-45 py-2 px-3 flex items-center justify-around"
           style={{
             background: 'var(--surface)',
             borderTop: '1px solid var(--border)',
-            boxShadow: '0 -4px 12px rgba(0,0,0,0.03)',
+            boxShadow: '0 -8px 24px rgba(0,0,0,0.05)',
             height: '64px',
           }}
         >
           {/* Dashboard Tab */}
           <Link
             href="/admin"
-            className="flex flex-col items-center gap-1 pb-1 transition-all"
+            className="flex flex-col items-center justify-center gap-0.5 transition-all relative py-1"
             style={{
               color: pathname === '/admin' ? 'var(--accent)' : 'var(--text-muted)',
               width: '20%',
             }}
           >
-            <LayoutDashboard className="h-5 w-5" />
-            <span className="text-[9px] tracking-wide font-semibold">Dashboard</span>
+            <LayoutDashboard className="h-5 w-5 transition-transform duration-200" style={{ transform: pathname === '/admin' ? 'scale(1.1)' : 'scale(1)' }} />
+            <span className="text-[9px] tracking-wide font-semibold" style={{ fontWeight: pathname === '/admin' ? 700 : 500 }}>Dashboard</span>
+            {pathname === '/admin' && (
+              <span className="absolute bottom-0 w-1 h-1 rounded-full bg-[var(--accent)]" />
+            )}
           </Link>
 
           {/* Visits Tab */}
           <Link
             href="/admin/visits"
-            className="flex flex-col items-center gap-1 pb-1 transition-all"
+            className="flex flex-col items-center justify-center gap-0.5 transition-all relative py-1"
             style={{
               color: pathname.startsWith('/admin/visits') ? 'var(--accent)' : 'var(--text-muted)',
               width: '20%',
             }}
           >
-            <CalendarCheck className="h-5 w-5" />
-            <span className="text-[9px] tracking-wide font-semibold">Visits</span>
+            <CalendarCheck className="h-5 w-5 transition-transform duration-200" style={{ transform: pathname.startsWith('/admin/visits') ? 'scale(1.1)' : 'scale(1)' }} />
+            <span className="text-[9px] tracking-wide font-semibold" style={{ fontWeight: pathname.startsWith('/admin/visits') ? 700 : 500 }}>Visits</span>
+            {pathname.startsWith('/admin/visits') && (
+              <span className="absolute bottom-0 w-1 h-1 rounded-full bg-[var(--accent)]" />
+            )}
           </Link>
 
           {/* Supervisors Tab */}
           <Link
             href="/admin/supervisors"
-            className="flex flex-col items-center gap-1 pb-1 transition-all"
+            className="flex flex-col items-center justify-center gap-0.5 transition-all relative py-1"
             style={{
               color: pathname.startsWith('/admin/supervisors') ? 'var(--accent)' : 'var(--text-muted)',
               width: '20%',
             }}
           >
-            <Users className="h-5 w-5" />
-            <span className="text-[9px] tracking-wide font-semibold">Supervisors</span>
+            <Users className="h-5 w-5 transition-transform duration-200" style={{ transform: pathname.startsWith('/admin/supervisors') ? 'scale(1.1)' : 'scale(1)' }} />
+            <span className="text-[9px] tracking-wide font-semibold" style={{ fontWeight: pathname.startsWith('/admin/supervisors') ? 700 : 500 }}>Supervisors</span>
+            {pathname.startsWith('/admin/supervisors') && (
+              <span className="absolute bottom-0 w-1 h-1 rounded-full bg-[var(--accent)]" />
+            )}
           </Link>
 
           {/* Reports Tab */}
           <Link
             href="/admin/reports"
-            className="flex flex-col items-center gap-1 pb-1 transition-all"
+            className="flex flex-col items-center justify-center gap-0.5 transition-all relative py-1"
             style={{
               color: pathname.startsWith('/admin/reports') ? 'var(--accent)' : 'var(--text-muted)',
               width: '20%',
             }}
           >
-            <FileBarChart2 className="h-5 w-5" />
-            <span className="text-[9px] tracking-wide font-semibold">Reports</span>
+            <FileBarChart2 className="h-5 w-5 transition-transform duration-200" style={{ transform: pathname.startsWith('/admin/reports') ? 'scale(1.1)' : 'scale(1)' }} />
+            <span className="text-[9px] tracking-wide font-semibold" style={{ fontWeight: pathname.startsWith('/admin/reports') ? 700 : 500 }}>Reports</span>
+            {pathname.startsWith('/admin/reports') && (
+              <span className="absolute bottom-0 w-1 h-1 rounded-full bg-[var(--accent)]" />
+            )}
           </Link>
 
           {/* Import Tab */}
           <Link
             href="/admin/import"
-            className="flex flex-col items-center gap-1 pb-1 transition-all"
+            className="flex flex-col items-center justify-center gap-0.5 transition-all relative py-1"
             style={{
               color: pathname.startsWith('/admin/import') ? 'var(--accent)' : 'var(--text-muted)',
               width: '20%',
             }}
           >
-            <FileSpreadsheet className="h-5 w-5" />
-            <span className="text-[9px] tracking-wide font-semibold">Import</span>
+            <FileSpreadsheet className="h-5 w-5 transition-transform duration-200" style={{ transform: pathname.startsWith('/admin/import') ? 'scale(1.1)' : 'scale(1)' }} />
+            <span className="text-[9px] tracking-wide font-semibold" style={{ fontWeight: pathname.startsWith('/admin/import') ? 700 : 500 }}>Import</span>
+            {pathname.startsWith('/admin/import') && (
+              <span className="absolute bottom-0 w-1 h-1 rounded-full bg-[var(--accent)]" />
+            )}
           </Link>
         </footer>
       </div>

@@ -15,27 +15,30 @@ export default function InfoRowsClient({ rows }: { rows: Row[] }) {
   const iconMap: Record<string, any> = { Mail, Phone, Calendar, UserCheck };
 
   return (
-    <>
-      {rows.map((r, i, arr) => {
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-5" style={{ background: 'var(--surface)' }}>
+      {rows.map((r) => {
         const Icon = iconMap[r.icon] ?? (() => null);
+        const isPrivileges = r.label === 'Privileges';
         return (
           <div
             key={r.label}
-            className="flex items-start gap-4 px-5 py-4 transition-colors"
-            style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--border-soft)' : 'none' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            className={`flex items-start gap-4 p-4 rounded-xl border border-solid border-[var(--border-soft)] transition-all duration-200 hover:shadow-sm hover:border-[var(--border)] ${
+              isPrivileges ? 'sm:col-span-2' : ''
+            }`}
+            style={{
+              background: 'var(--surface-2)',
+            }}
           >
-            <div className="icon-wrap h-9 w-9 rounded-lg flex-shrink-0" style={{ background: r.bg }}>
-              <Icon className="h-4 w-4" style={{ color: r.color }} />
+            <div className="icon-wrap h-9 w-9 rounded-lg flex-shrink-0 flex items-center justify-center" style={{ background: r.bg }}>
+              <Icon className="h-4.5 w-4.5" style={{ color: r.color }} />
             </div>
             <div className="min-w-0">
-              <p className="form-label mb-0.5">{r.label}</p>
-              <p className="text-[13px] font-medium leading-normal" style={{ color: 'var(--text-primary)' }}>{r.value}</p>
+              <p className="form-label mb-1 text-[10px] tracking-wider" style={{ color: 'var(--text-muted)' }}>{r.label}</p>
+              <p className="text-[13px] font-bold leading-relaxed" style={{ color: 'var(--text-primary)' }}>{r.value}</p>
             </div>
           </div>
         );
       })}
-    </>
+    </div>
   );
 }

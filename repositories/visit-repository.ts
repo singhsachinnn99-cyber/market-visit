@@ -82,6 +82,11 @@ export const visitRepository = {
     return rows.map(mapRowToNpd);
   },
 
+  async getAllNpdResponses(): Promise<NPDResponse[]> {
+    const [rows]: any = await pool.execute('SELECT * FROM `NPDResponse`');
+    return rows.map(mapRowToNpd);
+  },
+
   async saveVisitRecord(visit: Visit, connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
     const executor = connection || pool;
     const tempInRange = visit.tempInRange ? 1 : 0;

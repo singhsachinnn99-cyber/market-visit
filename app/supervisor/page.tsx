@@ -1,48 +1,36 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getVisitsAction, getVisitDetailsAction } from '@/actions/visit-actions';
 import { useSession } from 'next-auth/react';
 import { useToast } from '@/components/ui/toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
+import { Chart } from 'chart.js/auto';
+import { useTheme } from '@/providers/theme-provider';
 import {
   FileText, Clock, CheckCircle2, Eye, PlusCircle,
   AlertTriangle, MapPin, X, Calendar, Trash2, Thermometer,
   RefreshCw, ChevronRight,
 } from 'lucide-react';
-import { Visit, VisitWizardState, VisitPhoto, NPDResponse } from '@/types';
+import { Visit, VisitPhoto, VisitWizardState, NPDResponse } from '@/types';
 
-function SectionCard({ title, icon: Icon, iconColor, action, children, noPad = false }: {
-  title: string;
-  icon: React.ElementType;
-  iconColor?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-  noPad?: boolean;
-}) {
-  return (
-    <div className="card h-full flex flex-col">
-      <div className="section-header flex-shrink-0">
-        <span className="section-title">
-          <Icon className="h-4 w-4" style={{ color: iconColor || 'var(--accent)' }} />
-          {title}
-        </span>
-        {action}
-      </div>
-      <div className={noPad ? 'flex-grow overflow-hidden' : 'p-5 flex-grow'}>
-        {children}
-      </div>
-    </div>
-  );
-}
+const GCOL: Record<string, string> = {
+  A: '#0b7a4c',
+  B: '#2b9c62',
+  C: '#c8801a',
+  D: '#d9663a',
+  E: '#c0392b',
+};
 
 export default function SupervisorDashboard() {
   const { data: session } = useSession();
   const { showToast } = useToast();
   const router = useRouter();
+  const { theme } = useTheme();
   const user = session?.user as any;
 
+  // Data States
   const [submittedVisits, setSubmittedVisits] = useState<Visit[]>([]);
   const [drafts, setDrafts] = useState<VisitWizardState[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,11 +38,37 @@ export default function SupervisorDashboard() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [reviewData, setReviewData] = useState<{ visit: Visit; photos: VisitPhoto[]; npdResponses: NPDResponse[] } | null>(null);
 
+  // Analytics Dashboard Data States (Admin match dependency)
+  const [rows, setRows] = useState<any[]>([]);
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(true);
+
+  // Analytics Filter States
+  const [fTime, setFTime] = useState('');
+  const [fMgr, setFMgr] = useState('');
+  const [fSuper, setFSuper] = useState('');
+  const [fChannel, setFChannel] = useState('');
+  const [fCust, setFCust] = useState('');
+
+  // Canvas Refs for Charts
+  const canvasTrendRef = useRef<HTMLCanvasElement>(null);
+  const canvasChannelRef = useRef<HTMLCanvasElement>(null);
+  const canvasSuperRef = useRef<HTMLCanvasElement>(null);
+  const canvasTempRef = useRef<HTMLCanvasElement>(null);
+  const canvasNpdRef = useRef<HTMLCanvasElement>(null);
+  const canvasPskuRef = useRef<HTMLCanvasElement>(null);
+  const canvasClassRef = useRef<HTMLCanvasElement>(null);
+
+  // Chart instances
+  const chartsRef = useRef<Record<string, any>>({});
+
+  // 1. Fetch Visits & Drafts (Operational List sync)
   const fetchVisits = async () => {
     try {
       const data = await getVisitsAction();
       setSubmittedVisits((data as Visit[]).filter(v => v.status === 'Submitted'));
-    } catch (e: any) { showToast(e.message || 'Failed to fetch visits.', 'error'); }
+    } catch (e: any) {
+      showToast(e.message || 'Failed to fetch visits.', 'error');
+    }
   };
 
   const loadDrafts = () => {
@@ -64,13 +78,38 @@ export default function SupervisorDashboard() {
     } catch { /* ignore */ }
   };
 
+  // 2. Fetch Analytics Aggregated Rows
+  const fetchAnalytics = async () => {
+    try {
+      const res = await fetch('/api/dashboard');
+      const data = await res.json();
+      if (data.success) {
+        setRows(data.rows);
+      }
+    } catch (err) {
+      console.error('Failed to load dashboard rows:', err);
+    } finally {
+      setIsAnalyticsLoading(false);
+    }
+  };
+
+  const refreshAll = () => {
+    setLoading(true);
+    setIsAnalyticsLoading(true);
+    Promise.all([fetchVisits(), fetchAnalytics()])
+      .finally(() => {
+        loadDrafts();
+        setLoading(false);
+      });
+  };
+
   useEffect(() => {
     if (session?.user) {
-      setLoading(true);
-      Promise.all([fetchVisits()]).finally(() => { loadDrafts(); setLoading(false); });
+      refreshAll();
     }
   }, [session]);
 
+  // Delete draft handler
   const handleDeleteDraft = (visitId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
@@ -82,9 +121,12 @@ export default function SupervisorDashboard() {
         setDrafts(next);
         showToast('Draft deleted.', 'success');
       }
-    } catch { showToast('Failed to delete draft.', 'error'); }
+    } catch {
+      showToast('Failed to delete draft.', 'error');
+    }
   };
 
+  // Detailed Modal Viewer handler
   const handleOpenReview = async (id: string) => {
     setReviewId(id);
     setDetailLoading(true);
@@ -93,514 +135,1033 @@ export default function SupervisorDashboard() {
     } catch (e: any) {
       showToast(e.message || 'Failed to load details.', 'error');
       setReviewId(null);
-    } finally { setDetailLoading(false); }
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
-  const totalBreaches = submittedVisits.filter(v => !v.tempInRange).length;
+  // Dropdown options derived from rows
+  const mgrOptions = useMemo(() => {
+    return Array.from(new Set(rows.map((r) => r.mgr))).sort();
+  }, [rows]);
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const supOptions = useMemo(() => {
+    return Array.from(new Set(rows.map((r) => r.sup))).sort();
+  }, [rows]);
 
-  const kpis = [
-    {
-      label: 'Submitted',
-      value: submittedVisits.length,
-      sub: 'Successfully uploaded',
-      icon: CheckCircle2,
-      color: 'var(--success)',
-      bg: 'var(--success-light)',
-    },
-    {
-      label: 'Drafts',
-      value: drafts.length,
-      sub: 'Saved on device',
-      icon: Clock,
-      color: 'var(--warning)',
-      bg: 'var(--warning-light)',
-    },
-    {
-      label: 'Breaches',
-      value: totalBreaches,
-      sub: 'Action required',
-      icon: Thermometer,
-      color: totalBreaches > 0 ? 'var(--danger)' : 'var(--text-muted)',
-      bg: totalBreaches > 0 ? 'var(--danger-light)' : 'var(--surface-2)',
-    },
-  ];
+  const custOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        rows
+          .filter(
+            (r) =>
+              (!fChannel || r.ch === fChannel) &&
+              (!fMgr || r.mgr === fMgr) &&
+              (!fSuper || r.sup === fSuper)
+          )
+          .map((r) => r.cust)
+      )
+    ).sort();
+  }, [rows, fChannel, fMgr, fSuper]);
+
+  const resetFilters = () => {
+    setFTime('');
+    setFMgr('');
+    setFSuper('');
+    setFChannel('');
+    setFCust('');
+  };
+
+  // Filtered rows matching selection
+  const filtered = useMemo(() => {
+    return rows.filter(
+      (r) =>
+        (!fMgr || r.mgr === fMgr) &&
+        (!fSuper || r.sup === fSuper) &&
+        (!fChannel || r.ch === fChannel) &&
+        (!fCust || r.cust === fCust) &&
+        (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4))
+    );
+  }, [rows, fTime, fMgr, fSuper, fChannel, fCust]);
+
+  // Compute KPI values
+  const outletsCount = useMemo(() => new Set(filtered.map((r) => r.cust)).size, [filtered]);
+  const breachesCount = useMemo(() => filtered.filter((r) => !r.ok).length, [filtered]);
+  const fefoCount = useMemo(() => filtered.filter((r) => r.fefo).length, [filtered]);
+  const breachPct = useMemo(
+    () => (filtered.length ? ((breachesCount / filtered.length) * 100).toFixed(1) + '% of assets' : '–'),
+    [filtered, breachesCount]
+  );
+  const fefoPct = useMemo(
+    () => (filtered.length ? Math.round((fefoCount / filtered.length) * 100) + '%' : '–'),
+    [filtered, fefoCount]
+  );
+
+  // Compute Manager scorecard metrics
+  const mgrTableData = useMemo(() => {
+    const mgrs: Record<string, { v: number; o: Set<string>; b: number; f: number }> = {};
+    filtered.forEach((r) => {
+      if (!mgrs[r.mgr]) {
+        mgrs[r.mgr] = { v: 0, o: new Set(), b: 0, f: 0 };
+      }
+      const m = mgrs[r.mgr];
+      m.v++;
+      m.o.add(r.cust);
+      if (!r.ok) m.b++;
+      if (r.fefo) m.f++;
+    });
+    return Object.entries(mgrs).sort((a, b) => b[1].v - a[1].v);
+  }, [filtered]);
+
+  // Render active note description
+  const activeNote = useMemo(() => {
+    const parts = [];
+    if (fTime) parts.push(`Period: <b>${fTime === 'recent' ? 'Recent' : 'Earlier'}</b>`);
+    if (fMgr) parts.push(`Manager: <b>${fMgr}</b>`);
+    if (fSuper) parts.push(`Supervisor: <b>${fSuper}</b>`);
+    if (fChannel) parts.push(`Channel: <b>${fChannel}</b>`);
+    if (fCust) parts.push(`Outlet: <b>${fCust}</b>`);
+    return parts.length ? 'Filtered by ' + parts.join(' · ') : 'Showing all visits';
+  }, [fTime, fMgr, fSuper, fChannel, fCust]);
+
+  // Chart Rendering Hook
+  useEffect(() => {
+    if (isAnalyticsLoading || !filtered) return;
+
+    const BLUE = '#4F46E5';
+    const BLUE_DEEP = '#4338CA';
+    const GREEN = '#0f9d63';
+    const AMBER = '#d08a12';
+    const RED = '#d63d2e';
+    const GREY = '#c3d2de';
+
+    const countFreq = (arr: any[], fn: (r: any) => string | number) => {
+      const m: Record<string, number> = {};
+      arr.forEach((r) => {
+        const k = fn(r);
+        m[k] = (m[k] || 0) + 1;
+      });
+      return m;
+    };
+
+    // 1. Trend Line Chart
+    if (canvasTrendRef.current) {
+      if (chartsRef.current.cTrend) chartsRef.current.cTrend.destroy();
+      const wk = countFreq(filtered, (r) => r.week);
+      const weeks = [1, 2, 3, 4, 5, 6, 7, 8];
+      chartsRef.current.cTrend = new Chart(canvasTrendRef.current, {
+        type: 'line',
+        data: {
+          labels: weeks.map((w) => 'W' + w),
+          datasets: [
+            {
+              label: 'Visits',
+              data: weeks.map((w) => wk[w] || 0),
+              borderColor: BLUE,
+              backgroundColor: 'rgba(79,70,229,.12)',
+              fill: true,
+              tension: 0.35,
+              pointRadius: 3,
+              borderWidth: 2.5,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+    }
+
+    // 2. Channel Doughnut Chart
+    if (canvasChannelRef.current) {
+      if (chartsRef.current.cChannel) chartsRef.current.cChannel.destroy();
+      const ch = countFreq(filtered, (r) => r.ch);
+      const chL = ['TT', 'MT', 'INST', 'EXPORT'];
+      chartsRef.current.cChannel = new Chart(canvasChannelRef.current, {
+        type: 'doughnut',
+        data: {
+          labels: chL,
+          datasets: [
+            {
+              data: chL.map((c) => ch[c] || 0),
+              backgroundColor: [BLUE, GREEN, AMBER, BLUE_DEEP],
+              borderWidth: 0,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          cutout: '62%',
+          plugins: { legend: { position: 'bottom' } },
+        },
+      });
+    }
+
+    // 3. Supervisor Scorecard Bar Chart
+    if (canvasSuperRef.current) {
+      if (chartsRef.current.cSuper) chartsRef.current.cSuper.destroy();
+      const sc = countFreq(filtered, (r) => r.sup);
+      const topSup = Object.entries(sc)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8);
+      chartsRef.current.cSuper = new Chart(canvasSuperRef.current, {
+        type: 'bar',
+        data: {
+          labels: topSup.map((x) => x[0]),
+          datasets: [
+            {
+              label: 'Visits',
+              data: topSup.map((x) => x[1]),
+              backgroundColor: BLUE,
+              borderRadius: 6,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+    }
+
+    // 4. Cold Chain Doughnut Chart
+    if (canvasTempRef.current) {
+      if (chartsRef.current.cTemp) chartsRef.current.cTemp.destroy();
+      const ok = filtered.filter((r) => r.ok).length;
+      const breaches = filtered.filter((r) => !r.ok).length;
+      chartsRef.current.cTemp = new Chart(canvasTempRef.current, {
+        type: 'doughnut',
+        data: {
+          labels: ['Within range', 'Breach'],
+          datasets: [
+            {
+              data: [ok, breaches],
+              backgroundColor: [GREEN, RED],
+              borderWidth: 0,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          cutout: '62%',
+          plugins: { legend: { position: 'bottom' } },
+        },
+      });
+    }
+
+    // 5. NPD Availability Bar Chart
+    if (canvasNpdRef.current) {
+      if (chartsRef.current.cNpd) chartsRef.current.cNpd.destroy();
+      const npd = countFreq(filtered, (r) => r.npd);
+      chartsRef.current.cNpd = new Chart(canvasNpdRef.current, {
+        type: 'bar',
+        data: {
+          labels: ['Available', 'Not avail.', 'Not req.'],
+          datasets: [
+            {
+              data: [npd.A || 0, npd.N || 0, npd.X || 0],
+              backgroundColor: [GREEN, RED, GREY],
+              borderRadius: 6,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+    }
+
+    // 6. Focus SKU Availability Bar Chart
+    if (canvasPskuRef.current) {
+      if (chartsRef.current.cPsku) chartsRef.current.cPsku.destroy();
+      const psku = countFreq(filtered, (r) => r.psku);
+      chartsRef.current.cPsku = new Chart(canvasPskuRef.current, {
+        type: 'bar',
+        data: {
+          labels: ['Available', 'Not avail.', 'Not req.'],
+          datasets: [
+            {
+              data: [psku.A || 0, psku.N || 0, psku.X || 0],
+              backgroundColor: [GREEN, RED, GREY],
+              borderRadius: 6,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+    }
+
+    // 7. Classification Bar Chart
+    if (canvasClassRef.current) {
+      if (chartsRef.current.cClass) chartsRef.current.cClass.destroy();
+      const cl = countFreq(filtered, (r) => r.gr);
+      const grades = ['A', 'B', 'C', 'D', 'E'];
+      chartsRef.current.cClass = new Chart(canvasClassRef.current, {
+        type: 'bar',
+        data: {
+          labels: grades,
+          datasets: [
+            {
+              label: 'Visits',
+              data: grades.map((g) => cl[g] || 0),
+              backgroundColor: grades.map((g) => GCOL[g]),
+              borderRadius: 6,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+    }
+  }, [filtered, isAnalyticsLoading, theme]);
+
+  if (isAnalyticsLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[var(--bg)]">
+        <p className="text-sm font-bold text-[var(--text-secondary)]">Loading Supervisor Dashboard...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-5 pb-24 md:pb-6">
+    <div className="dandy-dashboard-body animate-fade-in">
+      <style dangerouslySetInnerHTML={{ __html: `
+        .dandy-dashboard-body {
+          --ink:#0d2136; --soft:#5a7085; --line:#e2e9f0; --card:#fff; --bg:#eef3f8;
+          --blue:#4F46E5; --blue-deep:#4338CA; --green:#0f9d63; --amber:#d08a12; --red:#d63d2e;
+          --shadow:0 2px 8px rgba(13,33,54,.06),0 8px 24px rgba(13,33,54,.05);
+          font-family: var(--font-sans), 'Inter', system-ui, sans-serif;
+          background:var(--bg);
+          color:var(--ink);
+          -webkit-font-smoothing:antialiased;
+          padding-bottom:20px;
+          margin:-20px; /* offset standard padding */
+        }
+        .top {
+          background:linear-gradient(135deg,#6366F1,#4F46E5);
+          color:#fff;
+          padding:12px 18px;
+          display:flex;
+          align-items:center;
+          gap:12px;
+          box-shadow:var(--shadow);
+        }
+        .top .logo {
+          width:36px;
+          height:36px;
+          border-radius:9px;
+          background:#fff;
+          display:grid;
+          place-items:center;
+          font-weight:800;
+          color:#4F46E5;
+          font-size:16px;
+        }
+        .top h1 {
+          font-size:17px;
+          font-weight:800;
+          letter-spacing:-.3px;
+        }
+        .top .sub {
+          font-size:11px;
+          opacity:.85;
+          font-weight:500;
+          margin-top:2px;
+        }
+        .demo-tag {
+          margin-left:auto;
+          background:rgba(255,255,255,.18);
+          padding:4px 10px;
+          border-radius:99px;
+          font-size:10px;
+          font-weight:700;
+          letter-spacing:.03em;
+        }
+        .wrap {
+          max-width:100%;
+          padding:14px 14px;
+        }
+        .filters {
+          display:flex;
+          gap:8px;
+          flex-wrap:wrap;
+          margin-bottom:8px;
+          align-items:flex-end;
+        }
+        .fld {
+          display:flex;
+          flex-direction:column;
+          gap:4px;
+        }
+        .fld label {
+          font-size:10.5px;
+          font-weight:800;
+          text-transform:uppercase;
+          letter-spacing:.05em;
+          color:var(--soft);
+          padding-left:4px;
+        }
+        .filters select {
+          padding:8px 11px;
+          border:1.5px solid var(--line);
+          border-radius:11px;
+          background:#fff;
+          font-family:inherit;
+          font-size:12px;
+          font-weight:600;
+          color:var(--ink);
+          cursor:pointer;
+          min-width:120px;
+        }
+        .filters select:focus {
+          outline:none;
+          border-color:var(--blue);
+        }
+        .reset {
+          padding:8px 12px;
+          border:1.5px solid var(--line);
+          border-radius:11px;
+          background:#fff;
+          font-family:inherit;
+          font-size:12px;
+          font-weight:700;
+          color:var(--blue-deep);
+          cursor:pointer;
+        }
+        .active-note {
+          font-size:11px;
+          color:var(--soft);
+          font-weight:600;
+          margin-bottom:12px;
+          padding-left:2px;
+          min-height:16px;
+        }
+        .active-note b {
+          color:var(--blue-deep);
+        }
+        .kpis {
+          display:grid;
+          grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+          gap:10px;
+          margin-bottom:14px;
+        }
+        .kpi {
+          background:var(--card);
+          border-radius:12px;
+          padding:12px 14px;
+          box-shadow:var(--shadow);
+          border:1px solid var(--line);
+        }
+        .kpi .lbl {
+          font-size:10px;
+          color:var(--soft);
+          font-weight:700;
+          text-transform:uppercase;
+          letter-spacing:.04em;
+        }
+        .kpi .val {
+          font-size:24px;
+          font-weight:800;
+          letter-spacing:-1px;
+          margin-top:4px;
+        }
+        .kpi .delta {
+          font-size:11px;
+          font-weight:700;
+          margin-top:2px;
+          color:var(--soft);
+        }
+        .kpi.b .val { color:var(--blue-deep); }
+        .kpi.g .val { color:var(--green); }
+        .kpi.a .val { color:var(--amber); }
+        .kpi.r .val { color:var(--red); }
+        .grid {
+          display:grid;
+          grid-template-columns:2fr 1fr;
+          gap:12px;
+          margin-bottom:12px;
+        }
+        .grid3 {
+          display:grid;
+          grid-template-columns:1fr 1fr 1fr;
+          gap:12px;
+          margin-bottom:12px;
+        }
+        @media(max-width:820px){
+          .grid, .grid3 { grid-template-columns:1fr; }
+        }
+        .panel {
+          background:var(--card);
+          border-radius:12px;
+          padding:12px 14px 6px;
+          box-shadow:var(--shadow);
+          border:1px solid var(--line);
+        }
+        .panel.tbl { padding-bottom:12px; }
+        .panel h3 {
+          font-size:13px;
+          font-weight:800;
+          margin-bottom:3px;
+        }
+        .panel .psub {
+          font-size:10px;
+          color:var(--soft);
+          font-weight:600;
+          margin-bottom:8px;
+        }
+        .chart-box { position:relative; height:180px; }
+        .chart-sm { position:relative; height:150px; }
+        table {
+          width:100%;
+          border-collapse:collapse;
+          font-size:11.5px;
+        }
+        th {
+          text-align:left;
+          font-size:10px;
+          text-transform:uppercase;
+          letter-spacing:.03em;
+          color:var(--soft);
+          padding:6px 8px;
+          border-bottom:2px solid var(--line);
+          font-weight:800;
+          position:sticky;
+          top:0;
+          background:#fff;
+        }
+        td {
+          padding:6px 8px;
+          border-bottom:1px solid var(--line);
+        }
+        tr:hover td { background:#f6fafc; }
+        .tbl-wrap {
+          max-height:240px;
+          overflow-y:auto;
+          overflow-x:auto;
+          border-radius:12px;
+          border:1px solid var(--line);
+          -webkit-overflow-scrolling:touch;
+        }
+        .pill {
+          display:inline-block;
+          padding:2px 9px;
+          border-radius:99px;
+          font-size:11px;
+          font-weight:800;
+        }
+        .pill.g { background:#e3f6ec; color:#0b7a4c; }
+        .pill.r { background:#fdebe9; color:var(--red); }
+        .grade {
+          width:24px;
+          height:24px;
+          border-radius:6px;
+          display:inline-grid;
+          place-items:center;
+          color:#fff;
+          font-weight:800;
+          font-size:11px;
+        }
+        .foot {
+          text-align:center;
+          color:var(--soft);
+          font-size:11px;
+          margin-top:14px;
+          line-height:1.6;
+        }
+        @media(max-width: 640px) {
+          .top {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+            padding: 12px;
+          }
+          .top > div:last-child {
+            margin-left: 0 !important;
+            width: 100%;
+            justify-content: space-between;
+          }
+        }
+        @media(max-width: 480px) {
+          .filters {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+          }
+          .fld {
+            width: 100%;
+          }
+          .filters select {
+            width: 100%;
+            min-height: 40px;
+          }
+          .reset {
+            width: 100%;
+            min-height: 40px;
+            text-align: center;
+          }
+        }
+      ` }} />
 
-      {/* ── Page Header ────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 py-2 animate-fade-in">
-        <div className="min-w-0 max-w-lg space-y-1">
-          <p className="text-[12px] font-medium mb-0.5" style={{ color: 'var(--text-muted)' }}>
-            {greeting}, {user?.name?.split(' ')[0] || 'Supervisor'} 👋
-          </p>
-          <h1 className="text-[22px] font-bold tracking-tight leading-none" style={{ color: 'var(--text-primary)' }}>
-            Supervisor Dashboard
-          </h1>
-          <p className="text-[12px] mt-1.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-            Track your draft audits, submitted audits, and temperature breaches.
-          </p>
-          <div className="flex items-center gap-2 pt-2.5 flex-wrap">
-            <button
-              onClick={() => router.push('/supervisor/visit')}
-              className="btn-primary"
-            >
-              <PlusCircle className="h-3.5 w-3.5" />
-              New Audit
-            </button>
-            <button className="btn-ghost" onClick={() => fetchVisits()}>
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          </div>
+      {/* Header Banner */}
+      <div className="top">
+        <div className="logo">D</div>
+        <div>
+          <h1>Dandy Market Visit — Supervisor Dashboard</h1>
+          <div className="sub">Field-force visit compliance & execution · Dandy Company Ltd</div>
         </div>
-
-        {/* Right side illustration decoration */}
-        <div className="flex-shrink-0 relative ml-2">
-          <svg className="w-20 h-20 sm:w-24 sm:h-24 text-indigo-500" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="60" cy="60" r="45" fill="var(--accent-soft)" opacity="0.12" />
-            <circle cx="95" cy="30" r="7" fill="var(--accent)" opacity="0.15" />
-            <circle cx="25" cy="85" r="5" fill="#7C3AED" opacity="0.2" />
-            {/* Clipboard card */}
-            <rect x="38" y="22" width="44" height="64" rx="8" fill="var(--surface)" stroke="var(--border)" strokeWidth="2" />
-            {/* Clip */}
-            <rect x="50" y="18" width="20" height="6" rx="1.5" fill="var(--text-muted)" />
-            {/* Lines */}
-            <line x1="48" y1="36" x2="60" y2="36" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" />
-            <line x1="48" y1="48" x2="72" y2="48" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
-            <line x1="48" y1="60" x2="66" y2="60" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
-            <line x1="48" y1="72" x2="56" y2="72" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
-            {/* Checkmark circle */}
-            <circle cx="78" cy="40" r="8" fill="var(--accent)" />
-            <path d="M75 40L77 42L81 37" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={() => router.push('/supervisor/visit')}
+            className="flex items-center justify-center gap-1.5 px-4 h-9 bg-white text-[#4F46E5] hover:bg-opacity-90 rounded-xl text-xs font-bold shadow-sm transition-all active:scale-95"
+          >
+            <PlusCircle className="h-4 w-4" />
+            New Audit
+          </button>
+          <button
+            onClick={refreshAll}
+            className="flex items-center justify-center gap-1.5 px-3 h-9 bg-[#ffffff20] text-white hover:bg-[#ffffff30] rounded-xl text-xs font-bold transition-all border border-[#ffffff30]"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading || isAnalyticsLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
         </div>
       </div>
 
-      {/* ── KPI Cards ───────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-2 md:gap-3">
-        {kpis.map((kpi, i) => {
-          const Icon = kpi.icon;
+      <div className="wrap">
+        
+        {/* Continue draft notification banner (if drafts exist) */}
+        {drafts.length > 0 && (() => {
+          const latestDraft = drafts[0];
+          const stepPercent = ((latestDraft.currentStep + 1) / 8) * 100;
           return (
             <div
-              key={i}
-              className="card card-hover p-3.5 md:p-4 flex flex-col gap-2.5 md:gap-3.5 animate-fade-up"
-              style={{ animationDelay: `${i * 40}ms`, borderRadius: '16px' }}
+              className="rounded-xl p-4 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer overflow-hidden relative mb-4 animate-scale-up"
+              style={{
+                background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
+                boxShadow: '0 8px 24px rgba(79, 70, 229, 0.16)',
+              }}
+              onClick={() => router.push(`/supervisor/visit?resumeId=${latestDraft.visitId}`)}
             >
-              <div className="flex items-center justify-between">
-                <div
-                  className="icon-wrap h-8 w-8 rounded-xl"
-                  style={{ background: kpi.bg }}
-                >
-                  <Icon className="h-4 w-4" style={{ color: kpi.color }} />
+              <div className="absolute right-4 bottom-[-15px] opacity-10 pointer-events-none">
+                <MapPin className="w-20 h-20 stroke-[1.5]" />
+              </div>
+              <div className="space-y-1 min-w-0 flex-grow relative z-10">
+                <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-wide uppercase opacity-90">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>Resume Pending Audit Draft</span>
+                </div>
+                <h3 className="text-[15px] font-extrabold leading-none mt-1 text-white">
+                  Continue {latestDraft.customerName || latestDraft.customerCode || 'Unsaved Outlet'} audit
+                </h3>
+                <p className="font-mono text-[9px] opacity-80 mt-1">
+                  ID: {latestDraft.visitId} • Route: {latestDraft.routeCode || '—'} • Step {latestDraft.currentStep + 1} of 8
+                </p>
+                <div className="h-1 rounded-full bg-white/20 w-full overflow-hidden mt-2 max-w-xs">
+                  <div className="h-full bg-white rounded-full transition-all" style={{ width: `${stepPercent}%` }} />
                 </div>
               </div>
-
-              {loading ? (
-                <Skeleton className="h-6 w-10 md:h-7 md:w-16" />
-              ) : (
-                <div className="space-y-0.5">
-                  <div className="text-[24px] md:text-[26px] font-bold leading-none tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                    {kpi.value}
-                  </div>
-                  <div>
-                    <div className="text-[11px] font-bold" style={{ color: 'var(--text-primary)' }}>{kpi.label}</div>
-                    <div className="text-[9px] text-[var(--text-muted)] mt-0.5">{kpi.sub}</div>
-                  </div>
-                </div>
-              )}
+              <button
+                className="flex items-center justify-center gap-1.5 px-3 h-8 bg-white text-[#4F46E5] rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95 flex-shrink-0 relative z-10"
+              >
+                <span>Resume</span>
+                <ChevronRight className="h-3 w-3" />
+              </button>
             </div>
           );
-        })}
-      </div>
+        })()}
 
-      {/* ── Continue Banner ─────────────────────────────── */}
-      {drafts.length > 0 && (() => {
-        const latestDraft = drafts[0];
-        const stepPercent = ((latestDraft.currentStep + 1) / 8) * 100;
-        return (
-          <div
-            className="rounded-2xl p-5 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer overflow-hidden animate-slide-up relative"
-            style={{
-              background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
-              boxShadow: '0 8px 24px rgba(79, 70, 229, 0.22)',
-            }}
-            onClick={() => router.push(`/supervisor/visit?resumeId=${latestDraft.visitId}`)}
-          >
-            {/* Map Pin background decoration */}
-            <div className="absolute right-4 bottom-[-15px] opacity-10 pointer-events-none">
-              <MapPin className="w-24 h-24 stroke-[1.5]" />
+          {/* Dropdown Filters */}
+          <div className="filters">
+            <div className="fld">
+              <label>Time Period</label>
+              <select value={fTime} onChange={(e) => setFTime(e.target.value)}>
+                <option value="">All Periods</option>
+                <option value="recent">Recent (W5-W8)</option>
+                <option value="earlier">Earlier (W1-W4)</option>
+              </select>
             </div>
 
-            <div className="space-y-1.5 min-w-0 flex-grow relative z-10">
-              <div className="flex items-center gap-1.5 text-[11px] font-bold tracking-wide uppercase opacity-90">
-                <Clock className="h-3.5 w-3.5" />
-                <span>Continue where you left off</span>
-              </div>
-              <h3 className="text-[17px] font-extrabold leading-none mt-1">Pending Draft Audit</h3>
-              <p className="font-mono text-[10px] opacity-80 mt-1">
-                Visit ID: {latestDraft.visitId} • Route: {latestDraft.routeCode || '—'}
-              </p>
-              {/* Progress Bar */}
-              <div className="h-1.5 rounded-full bg-white/20 w-full overflow-hidden mt-3 max-w-xs">
-                <div
-                  className="h-full bg-white rounded-full transition-all duration-500"
-                  style={{ width: `${stepPercent}%` }}
-                />
-              </div>
+          <div className="fld">
+            <label>Channel</label>
+            <select value={fChannel} onChange={(e) => setFChannel(e.target.value)}>
+              <option value="">All Channels</option>
+              <option value="TT">TT</option>
+              <option value="MT">MT</option>
+              <option value="INST">INST</option>
+              <option value="EXPORT">EXPORT</option>
+            </select>
+          </div>
+
+          <div className="fld">
+            <label>Outlet / Customer</label>
+            <select value={fCust} onChange={(e) => setFCust(e.target.value)}>
+              <option value="">All Outlets</option>
+              {custOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          <button className="reset" onClick={resetFilters}>Reset</button>
+        </div>
+
+        {/* Active description */}
+        <div className="active-note" dangerouslySetInnerHTML={{ __html: activeNote }} />
+
+        {/* KPI Cards */}
+        <div className="kpis">
+          <div className="kpi b">
+            <div className="lbl">Total Visits</div>
+            <div className="val">{filtered.length}</div>
+            <div className="delta">visits logged</div>
+          </div>
+          <div className="kpi g">
+            <div className="lbl">Outlets Covered</div>
+            <div className="val">{outletsCount}</div>
+            <div className="delta">unique outlets</div>
+          </div>
+          <div className="kpi a">
+            <div className="lbl">Assets Checked</div>
+            <div className="val">{filtered.length}</div>
+            <div className="delta">chillers/freezers</div>
+          </div>
+          <div className="kpi r">
+            <div className="lbl">Temp Breaches</div>
+            <div className="val">{breachesCount}</div>
+            <div className="delta">{breachPct}</div>
+          </div>
+          <div className="kpi g">
+            <div className="lbl">FEFO Compliance</div>
+            <div className="val">{fefoPct}</div>
+            <div className="delta">assets following FEFO</div>
+          </div>
+        </div>
+
+        {/* Row 1 Grid */}
+        <div className="grid">
+          <div className="panel">
+            <h3>Visits Over Time</h3>
+            <div className="psub">Weekly visits (filtered)</div>
+            <div className="chart-box">
+              <canvas ref={canvasTrendRef}></canvas>
             </div>
-
-            <button
-              className="flex items-center justify-center gap-1.5 px-4 h-9 bg-white text-[#4F46E5] rounded-xl text-[12px] font-bold shadow-sm transition-all active:scale-95 flex-shrink-0 relative z-10"
-            >
-              <span>Continue</span>
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
           </div>
-        );
-      })()}
-
-      {/* ── Pending Drafts ──────────────────────────────── */}
-      <SectionCard
-        title={`Pending Drafts (${drafts.length})`}
-        icon={Clock}
-        iconColor="var(--warning)"
-        action={
-          <button onClick={() => router.push('/supervisor')} className="text-[11px] font-bold transition-colors hover:underline" style={{ color: 'var(--accent)' }}>
-            View all
-          </button>
-        }
-        noPad
-      >
-        {drafts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-8">
-            <Clock className="h-8 w-8" style={{ color: 'var(--border)' }} />
-            <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>No pending drafts. Start a new audit.</p>
+          <div className="panel">
+            <h3>Visits by Channel</h3>
+            <div className="psub">Share across MT / TT / INST / Export</div>
+            <div className="chart-sm">
+              <canvas ref={canvasChannelRef}></canvas>
+            </div>
           </div>
-        ) : (
-          <div className="divide-y divide-[var(--border-soft)]">
-            {drafts.map(draft => (
-              <div
-                key={draft.visitId}
-                onClick={() => router.push(`/supervisor/visit?resumeId=${draft.visitId}`)}
-                className="p-4 cursor-pointer group flex items-center justify-between gap-3 hover:bg-[var(--surface-2)] transition-colors"
-              >
-                <div className="flex items-center gap-3.5 min-w-0 flex-grow">
-                  {/* File icon container */}
-                  <div className="h-11 w-11 rounded-xl flex items-center justify-center flex-shrink-0 animate-fade-in" style={{ background: 'var(--accent-light)' }}>
-                    <FileText className="h-5 w-5" style={{ color: 'var(--accent)' }} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-mono text-[10px] font-bold" style={{ color: 'var(--accent)' }}>
-                      {draft.visitId}
-                    </p>
-                    <h4 className="text-[14px] font-bold mt-0.5 leading-snug truncate text-[var(--text-primary)]">
-                      {draft.customerName || draft.customerCode || 'No customer selected'}
-                    </h4>
-                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                      Route: {draft.routeCode || '—'} • Step {draft.currentStep + 1} of 8
-                    </p>
-                  </div>
-                </div>
+        </div>
 
-                <div className="flex items-center gap-3.5 flex-shrink-0">
-                  <span className="badge text-[10px] font-bold px-2 py-0.5 rounded-lg" style={{ background: '#FFFBEB', color: '#D97706' }}>
-                    Step {draft.currentStep + 1}
-                  </span>
-                  <div className="h-8 w-8 rounded-full border border-[var(--border)] flex items-center justify-center bg-[var(--surface)] transition-colors group-hover:border-[var(--accent)] group-hover:bg-[var(--accent-light)]">
-                    <ChevronRight className="h-4 w-4 text-[var(--text-secondary)] transition-colors group-hover:text-[var(--accent)]" />
-                  </div>
-                </div>
-              </div>
-            ))}
+        {/* Row 2 Grid */}
+        <div className="grid">
+          <div className="panel">
+            <h3>Supervisor Scorecard</h3>
+            <div className="psub">Visits per supervisor (filtered)</div>
+            <div className="chart-box">
+              <canvas ref={canvasSuperRef}></canvas>
+            </div>
           </div>
-        )}
-      </SectionCard>
+          <div className="panel">
+            <h3>Cold Chain Status</h3>
+            <div className="psub">Asset temperature readings</div>
+            <div className="chart-sm">
+              <canvas ref={canvasTempRef}></canvas>
+            </div>
+          </div>
+        </div>
 
-      {/* ── Completed Audits ────────────────────────────── */}
-      <SectionCard
-        title={`Submitted Audits (${submittedVisits.length})`}
-        icon={CheckCircle2}
-        iconColor="var(--success)"
-        action={
-          <button onClick={() => router.push('/supervisor/my-visits')} className="text-[11px] font-bold transition-colors hover:underline" style={{ color: 'var(--accent)' }}>
-            View all
-          </button>
-        }
-        noPad
-      >
-        {/* Desktop Table */}
-        <div className="hidden md:block overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-2)' }}>
-                  {['Visit ID', 'Date', 'Route', 'Customer', 'Temperature', 'Action'].map((h, i) => (
-                    <th
-                      key={h}
-                      className={`px-5 py-3 ${i === 5 ? 'text-right' : 'text-left'}`}
-                      style={{
-                        fontSize: '10px',
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.06em',
-                        color: 'var(--text-muted)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  Array.from({ length: 4 }).map((_, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                      {Array.from({ length: 6 }).map((_, j) => (
-                        <td key={j} className="px-5 py-3.5"><Skeleton className="h-4 w-20" /></td>
-                      ))}
+        {/* Row 3 Grid */}
+        <div className="grid3">
+          <div className="panel">
+            <h3>NPD Availability</h3>
+            <div className="psub">New-product presence</div>
+            <div className="chart-sm">
+              <canvas ref={canvasNpdRef}></canvas>
+            </div>
+          </div>
+          <div className="panel">
+            <h3>Power SKU Availability</h3>
+            <div className="psub">Focus SKU presence</div>
+            <div className="chart-sm">
+              <canvas ref={canvasPskuRef}></canvas>
+            </div>
+          </div>
+          <div className="panel">
+            <h3>Outlets by Classification</h3>
+            <div className="psub">Visit distribution A–E</div>
+            <div className="chart-sm">
+              <canvas ref={canvasClassRef}></canvas>
+            </div>
+          </div>
+        </div>
+
+        {/* Operational Cards Row (Pending Drafts & Submitted Audits List to fully retain components) */}
+        <div className="grid" style={{ gridTemplateColumns: drafts.length > 0 ? '1fr 1fr' : '1fr' }}>
+          
+          {/* Pending Drafts Panel */}
+          {drafts.length > 0 && (
+            <div className="panel tbl">
+              <h3>Pending Drafts ({drafts.length})</h3>
+              <div className="psub">Saved local drafts that require completion</div>
+              <div className="tbl-wrap" style={{ maxHeight: '240px' }}>
+                <table className="w-full">
+                  <thead>
+                    <tr>
+                      <th>Draft ID</th>
+                      <th>Customer / Outlet</th>
+                      <th>Step</th>
+                      <th style={{ textAlign: 'right' }}>Actions</th>
                     </tr>
-                  ))
-                ) : submittedVisits.length === 0 ? (
+                  </thead>
+                  <tbody>
+                    {drafts.map((d) => (
+                      <tr key={d.visitId} onClick={() => router.push(`/supervisor/visit?resumeId=${d.visitId}`)} style={{ cursor: 'pointer' }}>
+                        <td className="font-mono text-xs text-[#4F46E5] font-semibold">{d.visitId}</td>
+                        <td className="font-bold">{d.customerName || d.customerCode || '—'}</td>
+                        <td><span className="badge text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-50 text-amber-600">Step {d.currentStep + 1}</span></td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button
+                            onClick={(e) => handleDeleteDraft(d.visitId, e)}
+                            className="p-1 text-red-500 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 className="h-4.5 w-4.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Submitted Audits Panel */}
+          <div className="panel tbl">
+            <h3>Submitted Audits Log ({submittedVisits.length})</h3>
+            <div className="psub">List of submitted supervisor visit audits</div>
+            <div className="tbl-wrap" style={{ maxHeight: '240px' }}>
+              <table className="w-full">
+                <thead>
                   <tr>
-                    <td colSpan={6} className="px-5 py-14 text-center" style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-                      You haven&apos;t submitted any audits yet.
-                    </td>
+                    <th>Visit ID</th>
+                    <th>Date</th>
+                    <th>Customer</th>
+                    <th>Route</th>
+                    <th>Status</th>
                   </tr>
-                ) : (
-                  submittedVisits.map(v => (
-                    <tr
-                      key={v.visitId}
-                      style={{ borderBottom: '1px solid var(--border-soft)' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                      className="transition-colors"
-                    >
-                      <td className="px-5 py-3.5">
-                        <span className="font-mono text-[12px] font-semibold" style={{ color: 'var(--accent)' }}>{v.visitId}</span>
-                      </td>
-                      <td className="px-5 py-3.5 text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                        {new Date(v.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className="font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>{v.routeCode}</span>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>{v.customerCode}</span>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className={`badge ${v.tempInRange ? 'badge-success' : 'badge-danger'}`}>
+                </thead>
+                <tbody>
+                  {submittedVisits.slice(0, 20).map((v) => (
+                    <tr key={v.visitId} onClick={() => handleOpenReview(v.visitId)} style={{ cursor: 'pointer' }}>
+                      <td className="font-mono text-xs text-[#4F46E5] font-semibold">{v.visitId}</td>
+                      <td>{new Date(v.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</td>
+                      <td className="font-bold">{v.customerCode}</td>
+                      <td className="font-mono">{v.routeCode}</td>
+                      <td>
+                        <span className={`pill ${v.tempInRange ? 'g' : 'r'}`}>
                           {v.temperature}°C {v.tempInRange ? '✓' : '⚠'}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-right">
-                        <button
-                          onClick={() => handleOpenReview(v.visitId)}
-                          className="btn-ghost"
-                          style={{ height: '30px', padding: '0 12px', fontSize: '12px' }}
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          View
-                        </button>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Manager Table */}
+        <div className="panel tbl" style={{ marginBottom: '12px' }}>
+          <h3>Manager Performance Summary</h3>
+          <div className="psub">Visits, coverage & compliance per manager (filtered)</div>
+          <div className="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Manager</th>
+                  <th>Visits</th>
+                  <th>Outlets</th>
+                  <th>Temp Breach</th>
+                  <th>FEFO %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mgrTableData.length > 0 ? (
+                  mgrTableData.map(([m, x]: any) => (
+                    <tr key={m}>
+                      <td style={{ fontWeight: 700 }}>{m}</td>
+                      <td>{x.v}</td>
+                      <td>{x.o.size}</td>
+                      <td>
+                        {x.b ? (
+                          <span className="pill r">{x.b}</span>
+                        ) : (
+                          <span className="pill g">0</span>
+                        )}
                       </td>
+                      <td>{x.v ? Math.round((x.f / x.v) * 100) : 0}%</td>
                     </tr>
                   ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', color: '#5a7085', padding: '20px' }}>
+                      No data for this filter
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Mobile List */}
-        <div className="md:hidden divide-y divide-[var(--border-soft)]">
-          {loading ? (
-            Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="py-4 px-4 space-y-2">
-                <Skeleton className="h-4 w-1/3" />
-                <Skeleton className="h-6 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
-              </div>
-            ))
-          ) : submittedVisits.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-              {/* Clipboard Checkmark Illustration */}
-              <svg className="w-16 h-16 mb-3 text-emerald-500 opacity-90" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="22" y="16" width="36" height="48" rx="6" fill="var(--surface)" stroke="var(--border)" strokeWidth="2" />
-                <rect x="32" y="12" width="16" height="6" rx="1.5" fill="#9BA3B2" />
-                <line x1="30" y1="28" x2="50" y2="28" stroke="var(--border-soft)" strokeWidth="2" strokeLinecap="round" />
-                <line x1="30" y1="38" x2="44" y2="38" stroke="var(--border-soft)" strokeWidth="2" strokeLinecap="round" />
-                <line x1="30" y1="48" x2="38" y2="48" stroke="var(--border-soft)" strokeWidth="2" strokeLinecap="round" />
-                <circle cx="50" cy="50" r="10" fill="#10B981" />
-                <path d="M46 50L49 53L55 47" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <h4 className="text-[14px] font-bold text-[var(--text-primary)]">No submitted audits yet</h4>
-              <p className="text-[12px] text-[var(--text-muted)] mt-1">Once you submit audits, they&apos;ll appear here.</p>
-            </div>
-          ) : (
-            submittedVisits.map(v => (
-              <div
-                key={v.visitId}
-                onClick={() => handleOpenReview(v.visitId)}
-                className="py-3.5 px-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)] transition-colors"
-              >
-                <div className="min-w-0 flex-grow">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[11px] font-bold text-[var(--accent)]">{v.visitId}</span>
-                    <span className="text-[10px] text-[var(--text-muted)]">
-                      {new Date(v.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    </span>
-                  </div>
-                  <p className="text-[13px] font-bold mt-1.5 truncate text-[var(--text-primary)]">
-                    {v.customerCode}
-                  </p>
-                  <p className="font-mono text-[10px] text-[var(--text-muted)] mt-0.5">
-                    Route: {v.routeCode}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2.5 flex-shrink-0">
-                  <span className={`badge ${v.tempInRange ? 'badge-success' : 'badge-danger'}`}>
-                    {v.temperature}°C
-                  </span>
-                  <ChevronRight className="h-4 w-4 text-[var(--text-muted)]" />
-                </div>
-              </div>
-            ))
-          )}
+        {/* Visit Details Table */}
+        <div className="panel tbl" style={{ marginBottom: '12px' }}>
+          <h3>Visit Details</h3>
+          <div className="psub">Outlet-level records (filtered) — Click row to view details</div>
+          <div className="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Manager</th>
+                  <th>Supervisor</th>
+                  <th>Outlet</th>
+                  <th>Ch</th>
+                  <th>Class</th>
+                  <th>Asset</th>
+                  <th>Temp</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length > 0 ? (
+                  filtered.slice(0, 40).map((r, idx) => (
+                    <tr
+                      key={idx}
+                      onClick={() => handleOpenReview(r.visitId)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td>{r.mgr}</td>
+                      <td>{r.sup}</td>
+                      <td>{r.cust}</td>
+                      <td>{r.ch}</td>
+                      <td>
+                        <span
+                          className="grade"
+                          style={{ background: GCOL[r.gr] || '#9aa9b4' }}
+                        >
+                          {r.gr}
+                        </span>
+                      </td>
+                      <td>{r.atype}</td>
+                      <td>{r.temp}°C</td>
+                      <td>
+                        {r.ok ? (
+                          <span className="pill g">OK</span>
+                        ) : (
+                          <span className="pill r">Breach</span>
+                        )}
+                      </td>
+                      <td>{r.action || '—'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', color: '#5a7085', padding: '20px' }}>
+                      No data for this filter
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </SectionCard>
 
-      {/* ── Detail Modal ─────────────────────────────────── */}
+        {/* Footer */}
+        <div className="foot">
+          <b>Real database visits live sync.</b> Recalculates compliance & scorecard data dynamically.
+        </div>
+      </div>
+
+      {/* Detailed Review Modal overlay */}
       {reviewId && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setReviewId(null); setReviewData(null); }} />
-          <div
-            className="relative w-full md:max-w-3xl flex flex-col animate-slide-up"
-            style={{
-              background: 'var(--surface)',
-              borderTopLeftRadius: '20px',
-              borderTopRightRadius: '20px',
-              borderBottomLeftRadius: '0',
-              borderBottomRightRadius: '0',
-              border: '1px solid var(--border)',
-              boxShadow: 'var(--shadow-dropdown)',
-              maxHeight: '92vh',
-            }}
-          >
-            {/* Mobile drag handle */}
-            <div className="md:hidden pt-3 pb-1 flex justify-center flex-shrink-0">
-              <div className="h-1 w-10 rounded-full" style={{ background: 'var(--border)' }} />
-            </div>
-
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 flex-shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
-              <div className="flex items-center gap-3">
-                <FileText className="h-4 w-4" style={{ color: 'var(--accent)' }} />
-                <div>
-                  <p className="text-[14px] font-bold" style={{ color: 'var(--text-primary)' }}>Visit Details</p>
-                  <p className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>{reviewId}</p>
-                </div>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl animate-scale-up">
+            
+            <div className="px-5 py-4 flex items-center justify-between flex-shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div>
+                <h3 className="text-[16px] font-extrabold text-[var(--text-primary)]">Visit Review Details</h3>
+                <p className="font-mono text-[11px] text-[var(--text-muted)] mt-0.5">ID: {reviewId}</p>
               </div>
-              <button
-                onClick={() => { setReviewId(null); setReviewData(null); }}
-                className="btn-ghost"
-                style={{ height: '32px', width: '32px', padding: 0, justifyContent: 'center' }}
-              >
-                <X className="h-4 w-4" />
+              <button onClick={() => { setReviewId(null); setReviewData(null); }} className="p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-2)] rounded-lg">
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="flex-grow overflow-y-auto p-5 space-y-4">
+            <div className="p-5 overflow-y-auto space-y-5 flex-grow">
               {detailLoading ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}
+                <div className="space-y-4 py-8">
+                  <Skeleton className="h-8 w-2/3" />
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-32 w-full" />
                 </div>
               ) : reviewData ? (
                 <>
-                  {/* Info Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {[
-                      {
-                        label: 'Supervisor', content: (
-                          <>
-                            <p className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>{reviewData.visit.supervisorId}</p>
-                            <p className="text-[11px] mt-1 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                              <Calendar className="h-3 w-3" />{new Date(reviewData.visit.createdAt).toLocaleString()}
-                            </p>
-                          </>
-                        )
-                      },
-                      {
-                        label: 'Outlet', content: (
-                          <>
-                            <p className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>{reviewData.visit.customerCode}</p>
-                            <p className="text-[11px] mt-1 font-mono" style={{ color: 'var(--text-muted)' }}>Route: {reviewData.visit.routeCode}</p>
-                          </>
-                        )
-                      },
-                      {
-                        label: 'GPS Location', content: (
-                          <>
-                            <p className="text-[11px] font-mono flex items-center gap-1" style={{ color: 'var(--text-primary)' }}>
-                              <MapPin className="h-3 w-3" style={{ color: 'var(--accent)' }} />
-                              {reviewData.visit.latitude.toFixed(4)}, {reviewData.visit.longitude.toFixed(4)}
-                            </p>
-                            <a
-                              href={`https://www.google.com/maps?q=${reviewData.visit.latitude},${reviewData.visit.longitude}`}
-                              target="_blank" rel="noreferrer"
-                              className="text-[11px] font-semibold mt-1 block hover:underline"
-                              style={{ color: 'var(--accent)' }}
-                            >
-                              Open Maps ↗
-                            </a>
-                          </>
-                        )
-                      }
-                    ].map(({ label, content }) => (
-                      <div key={label} className="p-3.5 rounded-xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
-                        <p className="form-label mb-1.5">{label}</p>
-                        {content}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Temp + Action */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="p-3.5 rounded-xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
-                      <p className="form-label mb-2">Asset & Temperature</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[13px] font-bold uppercase" style={{ color: 'var(--text-primary)' }}>{reviewData.visit.assetType}</span>
-                        <span className={`badge ${reviewData.visit.tempInRange ? 'badge-success' : 'badge-danger'}`}>
-                          {reviewData.visit.temperature}°C {reviewData.visit.tempInRange ? '✓' : '⚠ Breach'}
-                        </span>
-                      </div>
-                      {!reviewData.visit.tempInRange && (
-                        <p className="flex items-center gap-1 text-[11px] mt-2" style={{ color: 'var(--danger)' }}>
-                          <AlertTriangle className="h-3.5 w-3.5" />Temperature breach!
-                        </p>
-                      )}
+                  <div className="grid grid-cols-2 gap-4 bg-[var(--surface-2)] p-4 rounded-xl border border-[var(--border-soft)]">
+                    <div>
+                      <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Customer Code</p>
+                      <p className="text-[13px] font-semibold mt-0.5 text-[var(--text-primary)]">{reviewData.visit.customerCode}</p>
                     </div>
-                    <div className="p-3.5 rounded-xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
-                      <p className="form-label mb-2">Action & Observation</p>
-                      <p className="text-[12px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        Action: <span style={{ color: 'var(--accent)' }}>{reviewData.visit.actionRequired}</span>
-                      </p>
-                      <p className="text-[11px] italic mt-1.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                        "{reviewData.visit.observation || 'No observations recorded.'}"
+                    <div>
+                      <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Route Code</p>
+                      <p className="text-[13px] font-semibold mt-0.5 text-[var(--text-primary)]">{reviewData.visit.routeCode}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Asset Checked</p>
+                      <p className="text-[13px] font-semibold mt-0.5 text-[var(--text-primary)]">{reviewData.visit.assetType}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Temperature reading</p>
+                      <p className={`text-[13px] font-bold mt-0.5 ${reviewData.visit.tempInRange ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {reviewData.visit.temperature}°C ({reviewData.visit.tempInRange ? 'Safe' : 'Breach'})
                       </p>
                     </div>
                   </div>
 
-                  {/* Photos */}
+                  <div>
+                    <p className="form-label mb-2">Remarks & Observations</p>
+                    <div className="p-3 bg-[var(--surface-2)] rounded-xl border border-[var(--border-soft)]">
+                      <p className="text-[13px] text-[var(--text-secondary)] italic leading-relaxed">
+                        {reviewData.visit.observation || 'No remarks provided.'}
+                      </p>
+                    </div>
+                    {reviewData.visit.actionRequired !== 'None' && (
+                      <div className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-red-500 bg-red-50 border border-red-100 p-2 rounded-lg">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span>Action Triggered: {reviewData.visit.actionRequired}</span>
+                      </div>
+                    )}
+                  </div>
+
                   <div>
                     <p className="form-label mb-2">Photos ({reviewData.photos.length})</p>
                     {reviewData.photos.length === 0 ? (
-                      <p className="text-[12px] italic" style={{ color: 'var(--text-muted)' }}>No photos attached.</p>
+                      <p className="text-[12px] italic text-[var(--text-muted)]">No photos attached.</p>
                     ) : (
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {reviewData.photos.map(photo => (
@@ -613,17 +1174,16 @@ export default function SupervisorDashboard() {
                     )}
                   </div>
 
-                  {/* NPD */}
                   <div>
                     <p className="form-label mb-2">NPD Checklist ({reviewData.npdResponses.length})</p>
                     {reviewData.npdResponses.length === 0 ? (
-                      <p className="text-[12px] italic" style={{ color: 'var(--text-muted)' }}>No SKU responses.</p>
+                      <p className="text-[12px] italic text-[var(--text-muted)]">No SKU responses.</p>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {reviewData.npdResponses.map(npd => (
                           <div key={npd.responseId} className="flex items-center justify-between px-3.5 py-2.5 rounded-lg"
                             style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
-                            <span className="font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>{npd.skuCode}</span>
+                            <span className="font-mono text-[12px] text-[var(--text-secondary)]">{npd.skuCode}</span>
                             <span className={`badge ${npd.status === 'Available' ? 'badge-success' : npd.status === 'Not Available' ? 'badge-danger' : 'badge-info'}`}>
                               {npd.status}
                             </span>
@@ -634,7 +1194,7 @@ export default function SupervisorDashboard() {
                   </div>
                 </>
               ) : (
-                <div className="py-12 text-center" style={{ color: 'var(--text-muted)' }}>Failed to load data.</div>
+                <div className="py-12 text-center text-[var(--text-muted)]">Failed to load data.</div>
               )}
             </div>
 

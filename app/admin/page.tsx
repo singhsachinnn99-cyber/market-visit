@@ -1,765 +1,913 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import nextDynamic from 'next/dynamic';
-import { useSession } from 'next-auth/react';
-import { useToast } from '@/components/ui/toast';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  CalendarDays,
-  Users,
-  MapPin,
-  Thermometer,
-  FileText,
-  RefreshCw,
-  AlertTriangle,
-  UserCheck,
-  TrendingUp,
-  Clock,
-  Filter,
-  RotateCcw,
-  ChevronDown,
-  ChevronUp,
-  ArrowUpRight,
-  ArrowDownRight,
-  Minus,
-  CheckCircle2,
-  XCircle,
-  Activity,
-  Target,
-  Zap,
-  Map,
-  BarChart3,
-} from 'lucide-react';
-import { DashboardStats, Route } from '@/types';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Chart } from 'chart.js/auto';
 
-// Recharts — SSR disabled
-const AreaChart      = nextDynamic(() => import('recharts').then(m => m.AreaChart), { ssr: false });
-const Area           = nextDynamic(() => import('recharts').then(m => m.Area), { ssr: false });
-const BarChart       = nextDynamic(() => import('recharts').then(m => m.BarChart), { ssr: false });
-const Bar            = nextDynamic(() => import('recharts').then(m => m.Bar), { ssr: false });
-const XAxis          = nextDynamic(() => import('recharts').then(m => m.XAxis), { ssr: false });
-const YAxis          = nextDynamic(() => import('recharts').then(m => m.YAxis), { ssr: false });
-const CartesianGrid  = nextDynamic(() => import('recharts').then(m => m.CartesianGrid), { ssr: false });
-const Tooltip        = nextDynamic(() => import('recharts').then(m => m.Tooltip), { ssr: false });
-const ResponsiveContainer = nextDynamic(() => import('recharts').then(m => m.ResponsiveContainer), { ssr: false });
-const Cell           = nextDynamic(() => import('recharts').then(m => m.Cell), { ssr: false });
-
-// ─── Helpers ──────────────────────────────────────────────────
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-}
-
-function Trend({ value }: { value: number }) {
-  if (value === 0) return <span className="flex items-center gap-0.5 text-[11px]" style={{ color: 'var(--text-muted)' }}><Minus className="h-3 w-3" />0%</span>;
-  if (value > 0)  return <span className="flex items-center gap-0.5 text-[11px]" style={{ color: 'var(--success)' }}><ArrowUpRight className="h-3 w-3" />{value}%</span>;
-  return <span className="flex items-center gap-0.5 text-[11px]" style={{ color: 'var(--danger)' }}><ArrowDownRight className="h-3 w-3" />{Math.abs(value)}%</span>;
-}
-
-const TOOLTIP_STYLE = {
-  backgroundColor: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: '10px',
-  color: 'var(--text-primary)',
-  fontSize: '12px',
-  boxShadow: 'var(--shadow-dropdown)',
+const SUPERVISOR_TO_MANAGER: Record<string, string> = {
+  'YASAR': 'KHALID',
+  'JAHID': 'ASHFAQ',
+  'MUSAVEER': 'KHALID',
+  'RIZVI': 'KHALID',
+  'WALI': 'ASHFAQ',
+  'DANISH': 'KHALID',
+  'SAIF': 'ASHFAQ',
+  'ZEESHAN': 'ASHFAQ',
+  'SAIFULLAH': 'ADNAN',
+  'RASHWIN': 'ADNAN',
+  'MOHSIN': 'ADNAN',
+  'JAVED': 'ADNAN',
+  'ASAD': 'ADNAN',
+  'KISHAN': 'ADNAN',
+  'WASIM': 'INST MANAGER',
+  'SAMRA': 'EXP MANAGER',
 };
 
-// ─── Sub-components ───────────────────────────────────────────
+const GCOL: Record<string, string> = {
+  A: '#0b7a4c',
+  B: '#2b9c62',
+  C: '#c8801a',
+  D: '#d9663a',
+  E: '#c0392b',
+};
 
-function SectionCard({ title, icon: Icon, iconColor, action, children, noPad = false }: {
-  title: string;
-  icon: React.ElementType;
-  iconColor?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-  noPad?: boolean;
-}) {
-  return (
-    <div className="card h-full flex flex-col">
-      <div className="section-header flex-shrink-0">
-        <span className="section-title">
-          <Icon className="h-4 w-4" style={{ color: iconColor || 'var(--accent)' }} />
-          {title}
-        </span>
-        {action}
-      </div>
-      <div className={noPad ? 'flex-grow overflow-hidden' : 'p-5 flex-grow'}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, message }: { icon: React.ElementType; message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-2 h-full min-h-[120px]">
-      <Icon className="h-8 w-8" style={{ color: 'var(--border)' }} />
-      <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>{message}</p>
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────
 export default function AdminDashboardPage() {
-  const { data: session } = useSession();
-  const { showToast } = useToast();
+  const [rows, setRows] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [selectedSupervisor, setSelectedSupervisor] = useState('');
-  const [selectedRoute, setSelectedRoute] = useState('');
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Filter States
+  const [fTime, setFTime] = useState('');
+  const [fMgr, setFMgr] = useState('');
+  const [fSuper, setFSuper] = useState('');
+  const [fChannel, setFChannel] = useState('');
+  const [fCust, setFCust] = useState('');
 
-  const user = session?.user as any;
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  // Canvas Refs
+  const canvasTrendRef = useRef<HTMLCanvasElement>(null);
+  const canvasChannelRef = useRef<HTMLCanvasElement>(null);
+  const canvasSuperRef = useRef<HTMLCanvasElement>(null);
+  const canvasTempRef = useRef<HTMLCanvasElement>(null);
+  const canvasNpdRef = useRef<HTMLCanvasElement>(null);
+  const canvasPskuRef = useRef<HTMLCanvasElement>(null);
+  const canvasClassRef = useRef<HTMLCanvasElement>(null);
 
-  // Queries
-  const { data: routes = [] } = useQuery<Route[]>({
-    queryKey: ['routes'],
-    queryFn: () => fetch('/api/routes').then(r => r.json()),
-  });
+  // Chart instances
+  const chartsRef = useRef<Record<string, any>>({});
 
-  const { data: supervisors = [] } = useQuery<any[]>({
-    queryKey: ['supervisors'],
-    queryFn: () => fetch('/api/supervisors').then(r => r.json()).then(d => d.filter((u: any) => u.role === 'Supervisor')),
-  });
+  // Fetch real data on mount
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const res = await fetch('/api/dashboard');
+        const data = await res.json();
+        if (data.success) {
+          setRows(data.rows);
+        }
+      } catch (err) {
+        console.error('Failed to load dashboard data:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
-  const {
-    data: stats,
-    isLoading,
-    isRefetching,
-    refetch,
-  } = useQuery<DashboardStats>({
-    queryKey: ['dashboard-stats', startDate, endDate, selectedSupervisor, selectedRoute],
-    queryFn: async () => {
-      const p = new URLSearchParams();
-      if (startDate)          p.append('startDate', startDate);
-      if (endDate)            p.append('endDate', endDate);
-      if (selectedSupervisor) p.append('supervisorId', selectedSupervisor);
-      if (selectedRoute)      p.append('routeCode', selectedRoute);
-      const res = await fetch(`/api/dashboard?${p}`);
-      if (!res.ok) throw new Error('Failed to load dashboard');
-      return res.json();
-    },
-  });
+  // Compute dropdown values from unfiltered rows
+  const mgrOptions = useMemo(() => {
+    return Array.from(new Set(rows.map((r) => r.mgr))).sort();
+  }, [rows]);
 
-  const activeFilters = [startDate, endDate, selectedSupervisor, selectedRoute].filter(Boolean).length;
+  const supOptions = useMemo(() => {
+    return Array.from(new Set(rows.map((r) => r.sup))).sort();
+  }, [rows]);
 
-  const handleReset = () => {
-    setStartDate('');
-    setEndDate('');
-    setSelectedSupervisor('');
-    setSelectedRoute('');
-    showToast('Filters cleared', 'info');
+  // Outlets filtered dynamically based on upstream manager/supervisor/channel selections
+  const custOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        rows
+          .filter(
+            (r) =>
+              (!fChannel || r.ch === fChannel) &&
+              (!fMgr || r.mgr === fMgr) &&
+              (!fSuper || r.sup === fSuper)
+          )
+          .map((r) => r.cust)
+      )
+    ).sort();
+  }, [rows, fChannel, fMgr, fSuper]);
+
+  // Reset helper
+  const resetFilters = () => {
+    setFTime('');
+    setFMgr('');
+    setFSuper('');
+    setFChannel('');
+    setFCust('');
   };
 
-  // Derived data
-  const lowCoverageRoutes = useMemo(
-    () => (stats?.coveragePerRoute ?? []).filter(r => r.coverage < 60).sort((a, b) => a.coverage - b.coverage),
-    [stats]
+  // Filtered rows matching selection
+  const filtered = useMemo(() => {
+    return rows.filter(
+      (r) =>
+        (!fMgr || r.mgr === fMgr) &&
+        (!fSuper || r.sup === fSuper) &&
+        (!fChannel || r.ch === fChannel) &&
+        (!fCust || r.cust === fCust) &&
+        (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4))
+    );
+  }, [rows, fTime, fMgr, fSuper, fChannel, fCust]);
+
+  // Compute KPI values
+  const outletsCount = useMemo(() => new Set(filtered.map((r) => r.cust)).size, [filtered]);
+  const breachesCount = useMemo(() => filtered.filter((r) => !r.ok).length, [filtered]);
+  const fefoCount = useMemo(() => filtered.filter((r) => r.fefo).length, [filtered]);
+  const breachPct = useMemo(
+    () => (filtered.length ? ((breachesCount / filtered.length) * 100).toFixed(1) + '% of assets' : '–'),
+    [filtered, breachesCount]
   );
-  const repairVisits = useMemo(
-    () => (stats?.temperatureBreaches ?? []).filter((_, i) => i < 5),
-    [stats]
+  const fefoPct = useMemo(
+    () => (filtered.length ? Math.round((fefoCount / filtered.length) * 100) + '%' : '–'),
+    [filtered, fefoCount]
   );
 
-  // KPI definitions
-  const kpis = [
-    {
-      label: 'Total Visits',
-      value: stats?.totalVisits ?? 0,
-      sub: 'All time visits',
-      icon: FileText,
-      color: 'var(--accent)',
-      bg: 'var(--accent-light)',
-      trend: 0,
-    },
-    {
-      label: "Today's Visits",
-      value: stats?.todayVisits ?? 0,
-      sub: 'Logged today',
-      icon: CalendarDays,
-      color: '#8B5CF6',
-      bg: '#F5F3FF',
-      trend: 0,
-    },
-    {
-      label: 'Coverage',
-      value: `${stats?.coveragePercent ?? 0}%`,
-      sub: 'Route coverage',
-      icon: Target,
-      color: '#059669',
-      bg: '#ECFDF5',
-      trend: 0,
-      progress: stats?.coveragePercent ?? 0,
-      progressColor: '#059669',
-    },
-    {
-      label: 'Breach Rate',
-      value: `${stats?.tempBreachPercent ?? 0}%`,
-      sub: 'Temp breaches',
-      icon: Thermometer,
-      color: (stats?.tempBreachPercent ?? 0) > 15 ? 'var(--danger)' : 'var(--text-muted)',
-      bg: (stats?.tempBreachPercent ?? 0) > 15 ? 'var(--danger-light)' : 'var(--surface-2)',
-      trend: 0,
-      progress: stats?.tempBreachPercent ?? 0,
-      progressColor: (stats?.tempBreachPercent ?? 0) > 15 ? 'var(--danger)' : '#94a3b8',
-    },
-    {
-      label: 'Active Supervisors',
-      value: stats?.totalSupervisors ?? 0,
-      sub: 'Field personnel',
-      icon: Users,
-      color: '#0EA5E9',
-      bg: '#F0F9FF',
-      trend: 0,
-    },
-    {
-      label: 'Pending Visits',
-      value: Math.max(0, (stats?.totalVisits ?? 0) - (stats?.todayVisits ?? 0)),
-      sub: 'Outside today',
-      icon: Clock,
-      color: '#D97706',
-      bg: '#FFFBEB',
-      trend: 0,
-    },
-  ];
+  // Compute Manager scorecard metrics
+  const mgrTableData = useMemo(() => {
+    const mgrs: Record<string, { v: number; o: Set<string>; b: number; f: number }> = {};
+    filtered.forEach((r) => {
+      if (!mgrs[r.mgr]) {
+        mgrs[r.mgr] = { v: 0, o: new Set(), b: 0, f: 0 };
+      }
+      const m = mgrs[r.mgr];
+      m.v++;
+      m.o.add(r.cust);
+      if (!r.ok) m.b++;
+      if (r.fefo) m.f++;
+    });
+    return Object.entries(mgrs).sort((a, b) => b[1].v - a[1].v);
+  }, [filtered]);
+
+  // Render active note description
+  const activeNote = useMemo(() => {
+    const parts = [];
+    if (fTime) parts.push(`Period: <b>${fTime === 'recent' ? 'Recent' : 'Earlier'}</b>`);
+    if (fMgr) parts.push(`Manager: <b>${fMgr}</b>`);
+    if (fSuper) parts.push(`Supervisor: <b>${fSuper}</b>`);
+    if (fChannel) parts.push(`Channel: <b>${fChannel}</b>`);
+    if (fCust) parts.push(`Outlet: <b>${fCust}</b>`);
+    return parts.length ? 'Filtered by ' + parts.join(' · ') : 'Showing all visits';
+  }, [fTime, fMgr, fSuper, fChannel, fCust]);
+
+  // Chart Rendering Hook
+  useEffect(() => {
+    if (isLoading || !filtered) return;
+
+    const BLUE = '#4F46E5', BLUE_DEEP = '#4338CA', GREEN = '#0f9d63', AMBER = '#d08a12', RED = '#d63d2e', GREY = '#c3d2de';
+
+    const countFreq = (arr: any[], fn: (r: any) => string | number) => {
+      const m: Record<string, number> = {};
+      arr.forEach((r) => {
+        const k = fn(r);
+        m[k] = (m[k] || 0) + 1;
+      });
+      return m;
+    };
+
+    // 1. Trend Line Chart
+    if (canvasTrendRef.current) {
+      if (chartsRef.current.cTrend) chartsRef.current.cTrend.destroy();
+      const wk = countFreq(filtered, (r) => r.week);
+      const weeks = [1, 2, 3, 4, 5, 6, 7, 8];
+      chartsRef.current.cTrend = new Chart(canvasTrendRef.current, {
+        type: 'line',
+        data: {
+          labels: weeks.map((w) => 'W' + w),
+          datasets: [
+            {
+              label: 'Visits',
+              data: weeks.map((w) => wk[w] || 0),
+              borderColor: BLUE,
+              backgroundColor: 'rgba(79,70,229,.12)',
+              fill: true,
+              tension: 0.35,
+              pointRadius: 3,
+              borderWidth: 2.5,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+    }
+
+    // 2. Channel Doughnut Chart
+    if (canvasChannelRef.current) {
+      if (chartsRef.current.cChannel) chartsRef.current.cChannel.destroy();
+      const ch = countFreq(filtered, (r) => r.ch);
+      const chL = ['TT', 'MT', 'INST', 'EXPORT'];
+      chartsRef.current.cChannel = new Chart(canvasChannelRef.current, {
+        type: 'doughnut',
+        data: {
+          labels: chL,
+          datasets: [
+            {
+              data: chL.map((c) => ch[c] || 0),
+              backgroundColor: [BLUE, GREEN, AMBER, BLUE_DEEP],
+              borderWidth: 0,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          cutout: '62%',
+          plugins: { legend: { position: 'bottom' } },
+        },
+      });
+    }
+
+    // 3. Supervisor Scorecard Bar Chart
+    if (canvasSuperRef.current) {
+      if (chartsRef.current.cSuper) chartsRef.current.cSuper.destroy();
+      const sc = countFreq(filtered, (r) => r.sup);
+      const topSup = Object.entries(sc)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8);
+      chartsRef.current.cSuper = new Chart(canvasSuperRef.current, {
+        type: 'bar',
+        data: {
+          labels: topSup.map((x) => x[0]),
+          datasets: [
+            {
+              label: 'Visits',
+              data: topSup.map((x) => x[1]),
+              backgroundColor: BLUE,
+              borderRadius: 6,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+    }
+
+    // 4. Cold Chain Doughnut Chart
+    if (canvasTempRef.current) {
+      if (chartsRef.current.cTemp) chartsRef.current.cTemp.destroy();
+      const ok = filtered.filter((r) => r.ok).length;
+      const breaches = filtered.filter((r) => !r.ok).length;
+      chartsRef.current.cTemp = new Chart(canvasTempRef.current, {
+        type: 'doughnut',
+        data: {
+          labels: ['Within range', 'Breach'],
+          datasets: [
+            {
+              data: [ok, breaches],
+              backgroundColor: [GREEN, RED],
+              borderWidth: 0,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          cutout: '62%',
+          plugins: { legend: { position: 'bottom' } },
+        },
+      });
+    }
+
+    // 5. NPD Availability Bar Chart
+    if (canvasNpdRef.current) {
+      if (chartsRef.current.cNpd) chartsRef.current.cNpd.destroy();
+      const npd = countFreq(filtered, (r) => r.npd);
+      chartsRef.current.cNpd = new Chart(canvasNpdRef.current, {
+        type: 'bar',
+        data: {
+          labels: ['Available', 'Not avail.', 'Not req.'],
+          datasets: [
+            {
+              data: [npd.A || 0, npd.N || 0, npd.X || 0],
+              backgroundColor: [GREEN, RED, GREY],
+              borderRadius: 6,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+    }
+
+    // 6. Focus SKU Availability Bar Chart
+    if (canvasPskuRef.current) {
+      if (chartsRef.current.cPsku) chartsRef.current.cPsku.destroy();
+      const psku = countFreq(filtered, (r) => r.psku);
+      chartsRef.current.cPsku = new Chart(canvasPskuRef.current, {
+        type: 'bar',
+        data: {
+          labels: ['Available', 'Not avail.', 'Not req.'],
+          datasets: [
+            {
+              data: [psku.A || 0, psku.N || 0, psku.X || 0],
+              backgroundColor: [GREEN, RED, GREY],
+              borderRadius: 6,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+    }
+
+    // 7. Classification Bar Chart
+    if (canvasClassRef.current) {
+      if (chartsRef.current.cClass) chartsRef.current.cClass.destroy();
+      const cl = countFreq(filtered, (r) => r.gr);
+      const grades = ['A', 'B', 'C', 'D', 'E'];
+      chartsRef.current.cClass = new Chart(canvasClassRef.current, {
+        type: 'bar',
+        data: {
+          labels: grades,
+          datasets: [
+            {
+              label: 'Visits',
+              data: grades.map((g) => cl[g] || 0),
+              backgroundColor: grades.map((g) => GCOL[g]),
+              borderRadius: 6,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+    }
+  }, [filtered, isLoading]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[var(--bg)]">
+        <p className="text-sm font-bold text-[var(--text-secondary)]">Loading Executive Dashboard...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-5">
+    <div className="dandy-dashboard-body">
+      <style dangerouslySetInnerHTML={{ __html: `
+        .dandy-dashboard-body {
+          --ink:#0d2136; --soft:#5a7085; --line:#e2e9f0; --card:#fff; --bg:#eef3f8;
+          --blue:#4F46E5; --blue-deep:#4338CA; --green:#0f9d63; --amber:#d08a12; --red:#d63d2e;
+          --shadow:0 2px 8px rgba(13,33,54,.06),0 8px 24px rgba(13,33,54,.05);
+          font-family: var(--font-sans), 'Inter', system-ui, sans-serif;
+          background:var(--bg);
+          color:var(--ink);
+          -webkit-font-smoothing:antialiased;
+          padding-bottom:20px;
+          margin:-20px; /* offset standard padding */
+        }
+        .top {
+          background:linear-gradient(135deg,#6366F1,#4F46E5);
+          color:#fff;
+          padding:12px 18px;
+          display:flex;
+          align-items:center;
+          gap:12px;
+          box-shadow:var(--shadow);
+        }
+        .top .logo {
+          width:36px;
+          height:36px;
+          border-radius:9px;
+          background:#fff;
+          display:grid;
+          place-items:center;
+          font-weight:800;
+          color:#4F46E5;
+          font-size:16px;
+        }
+        .top h1 {
+          font-size:17px;
+          font-weight:800;
+          letter-spacing:-.3px;
+        }
+        .top .sub {
+          font-size:11px;
+          opacity:.85;
+          font-weight:500;
+          margin-top:2px;
+        }
+        .demo-tag {
+          margin-left:auto;
+          background:rgba(255,255,255,.18);
+          padding:4px 10px;
+          border-radius:99px;
+          font-size:10px;
+          font-weight:700;
+          letter-spacing:.03em;
+        }
+        .wrap {
+          max-width:100%;
+          padding:14px 14px;
+        }
+        .filters {
+          display:flex;
+          gap:8px;
+          flex-wrap:wrap;
+          margin-bottom:8px;
+          align-items:flex-end;
+        }
+        .fld {
+          display:flex;
+          flex-direction:column;
+          gap:4px;
+        }
+        .fld label {
+          font-size:10.5px;
+          font-weight:800;
+          text-transform:uppercase;
+          letter-spacing:.05em;
+          color:var(--soft);
+          padding-left:4px;
+        }
+        .filters select {
+          padding:8px 11px;
+          border:1.5px solid var(--line);
+          border-radius:11px;
+          background:#fff;
+          font-family:inherit;
+          font-size:12px;
+          font-weight:600;
+          color:var(--ink);
+          cursor:pointer;
+          min-width:120px;
+        }
+        .filters select:focus {
+          outline:none;
+          border-color:var(--blue);
+        }
+        .reset {
+          padding:8px 12px;
+          border:1.5px solid var(--line);
+          border-radius:11px;
+          background:#fff;
+          font-family:inherit;
+          font-size:12px;
+          font-weight:700;
+          color:var(--blue-deep);
+          cursor:pointer;
+        }
+        .active-note {
+          font-size:11px;
+          color:var(--soft);
+          font-weight:600;
+          margin-bottom:12px;
+          padding-left:2px;
+          min-height:16px;
+        }
+        .active-note b {
+          color:var(--blue-deep);
+        }
+        .kpis {
+          display:grid;
+          grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+          gap:10px;
+          margin-bottom:14px;
+        }
+        .kpi {
+          background:var(--card);
+          border-radius:12px;
+          padding:12px 14px;
+          box-shadow:var(--shadow);
+          border:1px solid var(--line);
+        }
+        .kpi .lbl {
+          font-size:10px;
+          color:var(--soft);
+          font-weight:700;
+          text-transform:uppercase;
+          letter-spacing:.04em;
+        }
+        .kpi .val {
+          font-size:24px;
+          font-weight:800;
+          letter-spacing:-1px;
+          margin-top:4px;
+        }
+        .kpi .delta {
+          font-size:11px;
+          font-weight:700;
+          margin-top:2px;
+          color:var(--soft);
+        }
+        .kpi.b .val { color:var(--blue-deep); }
+        .kpi.g .val { color:var(--green); }
+        .kpi.a .val { color:var(--amber); }
+        .kpi.r .val { color:var(--red); }
+        .grid {
+          display:grid;
+          grid-template-columns:2fr 1fr;
+          gap:12px;
+          margin-bottom:12px;
+        }
+        .grid3 {
+          display:grid;
+          grid-template-columns:1fr 1fr 1fr;
+          gap:12px;
+          margin-bottom:12px;
+        }
+        @media(max-width:820px){
+          .grid, .grid3 { grid-template-columns:1fr; }
+        }
+        .panel {
+          background:var(--card);
+          border-radius:12px;
+          padding:12px 14px 6px;
+          box-shadow:var(--shadow);
+          border:1px solid var(--line);
+        }
+        .panel.tbl { padding-bottom:12px; }
+        .panel h3 {
+          font-size:13px;
+          font-weight:800;
+          margin-bottom:3px;
+        }
+        .panel .psub {
+          font-size:10px;
+          color:var(--soft);
+          font-weight:600;
+          margin-bottom:8px;
+        }
+        .chart-box { position:relative; height:180px; }
+        .chart-sm { position:relative; height:150px; }
+        table {
+          width:100%;
+          border-collapse:collapse;
+          font-size:11.5px;
+        }
+        th {
+          text-align:left;
+          font-size:10px;
+          text-transform:uppercase;
+          letter-spacing:.03em;
+          color:var(--soft);
+          padding:6px 8px;
+          border-bottom:2px solid var(--line);
+          font-weight:800;
+          position:sticky;
+          top:0;
+          background:#fff;
+        }
+        td {
+          padding:6px 8px;
+          border-bottom:1px solid var(--line);
+        }
+        tr:hover td { background:#f6fafc; }
+        .tbl-wrap {
+          max-height:240px;
+          overflow-y:auto;
+          overflow-x:auto;
+          border-radius:12px;
+          border:1px solid var(--line);
+          -webkit-overflow-scrolling:touch;
+        }
+        .pill {
+          display:inline-block;
+          padding:2px 9px;
+          border-radius:99px;
+          font-size:11px;
+          font-weight:800;
+        }
+        .pill.g { background:#e3f6ec; color:#0b7a4c; }
+        .pill.r { background:#fdebe9; color:var(--red); }
+        .grade {
+          width:24px;
+          height:24px;
+          border-radius:6px;
+          display:inline-grid;
+          place-items:center;
+          color:#fff;
+          font-weight:800;
+          font-size:11px;
+        }
+        .foot {
+          text-align:center;
+          color:var(--soft);
+          font-size:11px;
+          margin-top:14px;
+          line-height:1.6;
+        }
+        @media(max-width: 640px) {
+          .top {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 12px;
+          }
+          .top .demo-tag {
+            margin-left: 0;
+            margin-top: 4px;
+          }
+        }
+        @media(max-width: 480px) {
+          .filters {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+          }
+          .fld {
+            width: 100%;
+          }
+          .filters select {
+            width: 100%;
+            min-height: 40px;
+          }
+          .reset {
+            width: 100%;
+            min-height: 40px;
+            text-align: center;
+          }
+        }
+      ` }} />
 
-      {/* ── ROW 0: Page Header ──────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Header Banner */}
+      <div className="top">
+        <div className="logo">D</div>
         <div>
-          <p className="text-[12px] font-medium mb-0.5" style={{ color: 'var(--text-muted)' }}>
-            {greeting}, {user?.name?.split(' ')[0] || 'Admin'} 👋
-          </p>
-          <h1 className="text-[22px] font-bold tracking-tight leading-none" style={{ color: 'var(--text-primary)' }}>
-            Executive Dashboard
-          </h1>
-          <p className="text-[12px] mt-1" style={{ color: 'var(--text-muted)' }}>
-            Real-time field coverage, temperature breaches, and supervisor performance.
-          </p>
+          <h1>Dandy Market Visit — Management Dashboard</h1>
+          <div className="sub">Field-force visit compliance & execution · Dandy Company Ltd</div>
         </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Filter Toggle */}
-          <button
-            className="btn-ghost relative"
-            onClick={() => setFiltersOpen(!filtersOpen)}
-          >
-            <Filter className="h-3.5 w-3.5" />
-            Filters
-            {activeFilters > 0 && (
-              <span
-                className="absolute -top-1 -right-1 h-4 w-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
-                style={{ background: 'var(--accent)' }}
-              >
-                {activeFilters}
-              </span>
-            )}
-          </button>
-
-          {/* Refresh */}
-          <button className="btn-primary" onClick={() => refetch()}>
-            <RefreshCw className={`h-3.5 w-3.5 ${isRefetching ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-        </div>
+        <div className="demo-tag">LIVE DATABASE DATA</div>
       </div>
 
-      {/* ── Filter Panel ────────────────────────────────────── */}
-      {filtersOpen && (
-        <div
-          className="card p-4 animate-slide-up"
-          style={{ borderColor: 'var(--accent-light)' }}
-        >
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div>
-              <label className="form-label">Start Date</label>
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="form-input" />
+      <div className="wrap">
+        {/* Filters Panel */}
+        <div className="filters">
+          <div className="fld">
+            <label>Time Period</label>
+            <select value={fTime} onChange={(e) => setFTime(e.target.value)}>
+              <option value="">All Periods</option>
+              <option value="recent">Recent (W5-W8)</option>
+              <option value="earlier">Earlier (W1-W4)</option>
+            </select>
+          </div>
+
+          <div className="fld">
+            <label>Manager</label>
+            <select value={fMgr} onChange={(e) => setFMgr(e.target.value)}>
+              <option value="">All Managers</option>
+              {mgrOptions.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="fld">
+            <label>Supervisor</label>
+            <select value={fSuper} onChange={(e) => setFSuper(e.target.value)}>
+              <option value="">All Supervisors</option>
+              {supOptions.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="fld">
+            <label>Channel</label>
+            <select value={fChannel} onChange={(e) => setFChannel(e.target.value)}>
+              <option value="">All Channels</option>
+              <option value="TT">TT</option>
+              <option value="MT">MT</option>
+              <option value="INST">INST</option>
+              <option value="EXPORT">EXPORT</option>
+            </select>
+          </div>
+
+          <div className="fld">
+            <label>Outlet / Customer</label>
+            <select value={fCust} onChange={(e) => setFCust(e.target.value)}>
+              <option value="">All Outlets</option>
+              {custOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          <button className="reset" onClick={resetFilters}>Reset</button>
+        </div>
+
+        {/* Active Filter description */}
+        <div className="active-note" dangerouslySetInnerHTML={{ __html: activeNote }} />
+
+        {/* KPI Row */}
+        <div className="kpis">
+          <div className="kpi b">
+            <div className="lbl">Total Visits</div>
+            <div className="val">{filtered.length}</div>
+            <div className="delta">visits logged</div>
+          </div>
+          <div className="kpi g">
+            <div className="lbl">Outlets Covered</div>
+            <div className="val">{outletsCount}</div>
+            <div className="delta">unique outlets</div>
+          </div>
+          <div className="kpi a">
+            <div className="lbl">Assets Checked</div>
+            <div className="val">{filtered.length}</div>
+            <div className="delta">chillers/freezers</div>
+          </div>
+          <div className="kpi r">
+            <div className="lbl">Temp Breaches</div>
+            <div className="val">{breachesCount}</div>
+            <div className="delta">{breachPct}</div>
+          </div>
+          <div className="kpi g">
+            <div className="lbl">FEFO Compliance</div>
+            <div className="val">{fefoPct}</div>
+            <div className="delta">assets following FEFO</div>
+          </div>
+        </div>
+
+        {/* Chart Row 1 */}
+        <div className="grid">
+          <div className="panel">
+            <h3>Visits Over Time</h3>
+            <div className="psub">Weekly visits (filtered)</div>
+            <div className="chart-box">
+              <canvas ref={canvasTrendRef}></canvas>
             </div>
-            <div>
-              <label className="form-label">End Date</label>
-              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="form-input" />
-            </div>
-            <div>
-              <label className="form-label">Supervisor</label>
-              <select value={selectedSupervisor} onChange={e => setSelectedSupervisor(e.target.value)} className="form-input">
-                <option value="">All Supervisors</option>
-                {supervisors.map(s => (
-                  <option key={s.id} value={s.employeeCode}>{s.name} ({s.employeeCode})</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="form-label">Route</label>
-              <select value={selectedRoute} onChange={e => setSelectedRoute(e.target.value)} className="form-input">
-                <option value="">All Routes</option>
-                {routes.map(r => (
-                  <option key={r.routeCode} value={r.routeCode}>{r.routeCode} – {r.routeName}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-end">
-              <button className="btn-ghost w-full justify-center" onClick={handleReset}>
-                <RotateCcw className="h-3.5 w-3.5" />
-                Reset
-              </button>
+          </div>
+          <div className="panel">
+            <h3>Visits by Channel</h3>
+            <div className="psub">Share across MT / TT / INST / Export</div>
+            <div className="chart-sm">
+              <canvas ref={canvasChannelRef}></canvas>
             </div>
           </div>
         </div>
-      )}
 
-      {/* ── ROW 1: KPI Cards ────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        {kpis.map((kpi, i) => {
-          const Icon = kpi.icon;
-          return (
-            <div
-              key={i}
-              className="card card-hover p-4 flex flex-col gap-3"
-              style={{ animationDelay: `${i * 40}ms` }}
-            >
-              {/* Icon + trend */}
-              <div className="flex items-center justify-between">
-                <div
-                  className="icon-wrap h-8 w-8"
-                  style={{ background: kpi.bg }}
-                >
-                  <Icon className="h-4 w-4" style={{ color: kpi.color }} />
-                </div>
-                <Trend value={kpi.trend} />
-              </div>
-
-              {/* Value */}
-              {isLoading ? (
-                <Skeleton className="h-7 w-16" />
-              ) : (
-                <div>
-                  <div className="kpi-value">{kpi.value}</div>
-                  <div className="kpi-sub">{kpi.sub}</div>
-                </div>
-              )}
-
-              {/* Label + progress */}
-              <div>
-                <div className="kpi-label">{kpi.label}</div>
-                {kpi.progress !== undefined && (
-                  <div className="progress-bar mt-1.5">
-                    <div
-                      className="progress-fill"
-                      style={{
-                        width: `${Math.min(kpi.progress, 100)}%`,
-                        background: kpi.progressColor,
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
+        {/* Chart Row 2 */}
+        <div className="grid">
+          <div className="panel">
+            <h3>Supervisor Scorecard</h3>
+            <div className="psub">Visits per supervisor (filtered)</div>
+            <div className="chart-box">
+              <canvas ref={canvasSuperRef}></canvas>
             </div>
-          );
-        })}
-      </div>
-
-      {/* ── ROW 2: Charts ───────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-
-        {/* Visits Trend — wider */}
-        <div className="xl:col-span-3">
-          <SectionCard
-            title="Visits Trend"
-            icon={TrendingUp}
-            action={
-              <span className="badge badge-accent">Daily</span>
-            }
-          >
-            {isLoading ? (
-              <Skeleton className="h-52 w-full" />
-            ) : !stats?.visitsPerDay?.length ? (
-              <EmptyState icon={CalendarDays} message="No visits in selected range" />
-            ) : (
-              <div className="h-52 w-full -mx-1">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={stats.visitsPerDay} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="vGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#4F46E5" stopOpacity={0.18} />
-                        <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-soft)" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={v => {
-                        const d = new Date(v);
-                        return `${d.getDate()}/${d.getMonth() + 1}`;
-                      }}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
-                      axisLine={false}
-                      tickLine={false}
-                      allowDecimals={false}
-                    />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ stroke: '#4F46E5', strokeWidth: 1, strokeDasharray: '4 4' }} />
-                    <Area
-                      type="monotone"
-                      dataKey="count"
-                      stroke="#4F46E5"
-                      strokeWidth={2.5}
-                      fill="url(#vGrad)"
-                      dot={false}
-                      activeDot={{ r: 4, fill: '#4F46E5', strokeWidth: 0 }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </SectionCard>
+          </div>
+          <div className="panel">
+            <h3>Cold Chain Status</h3>
+            <div className="psub">Asset temperature readings</div>
+            <div className="chart-sm">
+              <canvas ref={canvasTempRef}></canvas>
+            </div>
+          </div>
         </div>
 
-        {/* Route Coverage Bar */}
-        <div className="xl:col-span-2">
-          <SectionCard
-            title="Route Coverage"
-            icon={BarChart3}
-            iconColor="#059669"
-            action={
-              <span className="badge badge-success">% Covered</span>
-            }
-          >
-            {isLoading ? (
-              <Skeleton className="h-52 w-full" />
-            ) : !stats?.coveragePerRoute?.length ? (
-              <EmptyState icon={Map} message="No routes tracked" />
-            ) : (
-              <div className="h-52 w-full -mx-1">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={stats.coveragePerRoute}
-                    margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-soft)" />
-                    <XAxis
-                      dataKey="routeCode"
-                      tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      domain={[0, 100]}
-                      tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      contentStyle={TOOLTIP_STYLE}
-                      formatter={(v: any) => [`${v}%`, 'Coverage']}
-                    />
-                    <Bar dataKey="coverage" radius={[4, 4, 0, 0]} maxBarSize={28}>
-                      {(stats?.coveragePerRoute ?? []).map((entry, i) => (
-                        <Cell
-                          key={i}
-                          fill={entry.coverage >= 80 ? '#059669' : entry.coverage >= 50 ? '#F59E0B' : '#EF4444'}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </SectionCard>
+        {/* Chart Row 3 */}
+        <div className="grid3">
+          <div className="panel">
+            <h3>NPD Availability</h3>
+            <div className="psub">New-product presence</div>
+            <div className="chart-sm">
+              <canvas ref={canvasNpdRef}></canvas>
+            </div>
+          </div>
+          <div className="panel">
+            <h3>Power SKU Availability</h3>
+            <div className="psub">Focus SKU presence</div>
+            <div className="chart-sm">
+              <canvas ref={canvasPskuRef}></canvas>
+            </div>
+          </div>
+          <div className="panel">
+            <h3>Outlets by Classification</h3>
+            <div className="psub">Visit distribution A–E</div>
+            <div className="chart-sm">
+              <canvas ref={canvasClassRef}></canvas>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* ── ROW 3: Supervisor Table + Recent Visits ─────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-
-        {/* Supervisor Performance Table */}
-        <div className="xl:col-span-2">
-          <SectionCard title="Supervisor Performance" icon={UserCheck} iconColor="var(--success)" noPad>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-2)' }}>
-                    {['Supervisor', 'Visits', 'Outlets', 'Coverage', 'Breaches'].map(h => (
-                      <th
-                        key={h}
-                        className="px-5 py-3 text-left"
-                        style={{
-                          fontSize: '10px',
-                          fontWeight: 700,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.06em',
-                          color: 'var(--text-muted)',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoading ? (
-                    Array.from({ length: 4 }).map((_, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                        <td className="px-5 py-3.5"><Skeleton className="h-4 w-32" /></td>
-                        {[1,2,3,4].map(j => (
-                          <td key={j} className="px-5 py-3.5"><Skeleton className="h-4 w-12" /></td>
-                        ))}
-                      </tr>
-                    ))
-                  ) : !stats?.supervisorPerformance?.length ? (
-                    <tr>
-                      <td colSpan={5} className="px-5 py-10 text-center text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                        No supervisor data available.
+        {/* Manager Table */}
+        <div className="panel tbl" style={{ marginBottom: '16px' }}>
+          <h3>Manager Performance Summary</h3>
+          <div className="psub">Visits, coverage & compliance per manager (filtered)</div>
+          <div className="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Manager</th>
+                  <th>Visits</th>
+                  <th>Outlets</th>
+                  <th>Temp Breach</th>
+                  <th>FEFO %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mgrTableData.length > 0 ? (
+                  mgrTableData.map(([m, x]: any) => (
+                    <tr key={m}>
+                      <td style={{ fontWeight: 700 }}>{m}</td>
+                      <td>{x.v}</td>
+                      <td>{x.o.size}</td>
+                      <td>
+                        {x.b ? (
+                          <span className="pill r">{x.b}</span>
+                        ) : (
+                          <span className="pill g">0</span>
+                        )}
                       </td>
+                      <td>{x.v ? Math.round((x.f / x.v) * 100) : 0}%</td>
                     </tr>
-                  ) : (
-                    stats.supervisorPerformance.map((sup, i) => (
-                      <tr
-                        key={i}
-                        style={{ borderBottom: '1px solid var(--border-soft)' }}
-                        className="transition-colors"
-                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-2.5">
-                            <div
-                              className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0"
-                              style={{ background: 'var(--accent)' }}
-                            >
-                              {sup.supervisorName?.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <div className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>
-                                {sup.supervisorName}
-                              </div>
-                              <div className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
-                                {sup.supervisorId}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3.5 font-medium" style={{ color: 'var(--text-secondary)' }}>
-                          {sup.visitsCount}
-                        </td>
-                        <td className="px-5 py-3.5 font-medium" style={{ color: 'var(--text-secondary)' }}>
-                          {sup.uniqueOutlets}
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-2">
-                            <div className="progress-bar w-16">
-                              <div
-                                className="progress-fill"
-                                style={{
-                                  width: `${sup.coveragePercent}%`,
-                                  background: sup.coveragePercent >= 80
-                                    ? 'var(--success)'
-                                    : sup.coveragePercent >= 50
-                                    ? 'var(--warning)'
-                                    : 'var(--danger)',
-                                }}
-                              />
-                            </div>
-                            <span
-                              className="text-[12px] font-semibold"
-                              style={{
-                                color: sup.coveragePercent >= 80
-                                  ? 'var(--success)'
-                                  : sup.coveragePercent >= 50
-                                  ? 'var(--warning)'
-                                  : 'var(--danger)',
-                              }}
-                            >
-                              {sup.coveragePercent}%
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          {sup.breaches > 0 ? (
-                            <span className="badge badge-danger">{sup.breaches}</span>
-                          ) : (
-                            <span className="badge badge-success">None</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </SectionCard>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', color: '#5a7085', padding: '20px' }}>
+                      No data for this filter
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        {/* Recent Visits / Breach List */}
-        <div>
-          <SectionCard title="Recent Activity" icon={Activity} iconColor="#8B5CF6" noPad>
-            <div className="overflow-y-auto max-h-72">
-              {isLoading ? (
-                <div className="p-4 space-y-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
-                </div>
-              ) : !stats?.temperatureBreaches?.length ? (
-                <EmptyState icon={CheckCircle2} message="No recent alerts" />
-              ) : (
-                stats.temperatureBreaches.map((b, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-3 px-5 py-3.5 transition-colors"
-                    style={{ borderBottom: '1px solid var(--border-soft)' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <div
-                      className="h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                      style={{ background: 'var(--danger-light)' }}
-                    >
-                      <Thermometer className="h-3 w-3" style={{ color: 'var(--danger)' }} />
-                    </div>
-                    <div className="min-w-0 flex-grow">
-                      <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                        {b.customerName}
-                      </p>
-                      <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                        {b.supervisorName} · {fmtDate(b.visitDate)}
-                      </p>
-                    </div>
-                    <span className="badge badge-danger flex-shrink-0">{b.temperature}°C</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </SectionCard>
+        {/* Visit Details Table */}
+        <div className="panel tbl">
+          <h3>Visit Details</h3>
+          <div className="psub">Outlet-level records (filtered) — GM drill-down view</div>
+          <div className="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Manager</th>
+                  <th>Supervisor</th>
+                  <th>Outlet</th>
+                  <th>Ch</th>
+                  <th>Class</th>
+                  <th>Asset</th>
+                  <th>Temp</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length > 0 ? (
+                  filtered.slice(0, 40).map((r, idx) => (
+                    <tr key={idx}>
+                      <td>{r.mgr}</td>
+                      <td>{r.sup}</td>
+                      <td>{r.cust}</td>
+                      <td>{r.ch}</td>
+                      <td>
+                        <span
+                          className="grade"
+                          style={{ background: GCOL[r.gr] || '#9aa9b4' }}
+                        >
+                          {r.gr}
+                        </span>
+                      </td>
+                      <td>{r.atype}</td>
+                      <td>{r.temp}°C</td>
+                      <td>
+                        {r.ok ? (
+                          <span className="pill g">OK</span>
+                        ) : (
+                          <span className="pill r">Breach</span>
+                        )}
+                      </td>
+                      <td>{r.action || '—'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', color: '#5a7085', padding: '20px' }}>
+                      No data for this filter
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
 
-      {/* ── ROW 4: Alerts Triptych ──────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-        {/* Temperature Alerts */}
-        <SectionCard title="Temperature Alerts" icon={Thermometer} iconColor="var(--danger)">
-          {isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-            </div>
-          ) : !stats?.temperatureBreaches?.length ? (
-            <div className="flex flex-col items-center gap-2 py-6">
-              <CheckCircle2 className="h-8 w-8" style={{ color: 'var(--success)' }} />
-              <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>All temperatures normal</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {stats.temperatureBreaches.slice(0, 5).map((b, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg"
-                  style={{ background: 'var(--danger-light)', border: '1px solid rgba(220,38,38,0.12)' }}
-                >
-                  <div className="min-w-0">
-                    <p className="text-[12px] font-semibold truncate" style={{ color: 'var(--danger)' }}>{b.customerName}</p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{b.assetType} · {fmtDate(b.visitDate)}</p>
-                  </div>
-                  <span
-                    className="text-[12px] font-bold flex-shrink-0"
-                    style={{ color: 'var(--danger)' }}
-                  >
-                    {b.temperature}°C
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-
-        {/* Repair Required */}
-        <SectionCard title="Repair Required" icon={Zap} iconColor="var(--warning)">
-          {isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-            </div>
-          ) : !repairVisits?.length ? (
-            <div className="flex flex-col items-center gap-2 py-6">
-              <CheckCircle2 className="h-8 w-8" style={{ color: 'var(--success)' }} />
-              <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>No repairs needed</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {repairVisits.map((b, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg"
-                  style={{ background: 'var(--warning-light)', border: '1px solid rgba(217,119,6,0.12)' }}
-                >
-                  <div className="min-w-0">
-                    <p className="text-[12px] font-semibold truncate" style={{ color: 'var(--warning)' }}>{b.customerName}</p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{b.supervisorName} · {fmtDate(b.visitDate)}</p>
-                  </div>
-                  <span className="badge badge-warning">Action</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-
-        {/* Low Coverage Routes */}
-        <SectionCard title="Low Coverage Routes" icon={MapPin} iconColor="var(--info)">
-          {isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-            </div>
-          ) : !lowCoverageRoutes?.length ? (
-            <div className="flex flex-col items-center gap-2 py-6">
-              <CheckCircle2 className="h-8 w-8" style={{ color: 'var(--success)' }} />
-              <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>All routes on track</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {lowCoverageRoutes.slice(0, 5).map((r, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg"
-                  style={{ background: 'var(--info-light)', border: '1px solid rgba(14,165,233,0.12)' }}
-                >
-                  <div className="min-w-0">
-                    <p className="text-[12px] font-semibold truncate" style={{ color: 'var(--info)' }}>
-                      {r.routeCode}
-                    </p>
-                    <div className="progress-bar mt-1" style={{ width: '80px' }}>
-                      <div
-                        className="progress-fill"
-                        style={{
-                          width: `${r.coverage}%`,
-                          background: r.coverage < 30 ? 'var(--danger)' : 'var(--warning)',
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <span
-                    className="text-[12px] font-bold flex-shrink-0"
-                    style={{ color: r.coverage < 30 ? 'var(--danger)' : 'var(--warning)' }}
-                  >
-                    {r.coverage}%
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
+        {/* Footer */}
+        <div className="foot">
+          <b>Real database visits live sync.</b> All five filters above are active — selections recalculate compliance & scorecard data dynamically.
+        </div>
       </div>
     </div>
   );
 }
-
-export const dynamic = 'force-dynamic';

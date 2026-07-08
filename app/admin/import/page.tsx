@@ -7,14 +7,14 @@ import {
   UploadCloud, FileSpreadsheet, CheckCircle2,
   AlertTriangle, ArrowRight, RefreshCw, Database,
   ArrowLeft, Map, Users, Package, Link2,
-  CheckCheck,
+  CheckCheck, Info, X
 } from 'lucide-react';
 import { Route, Customer, CustomerRouteMapping, SKU, ImportSummary } from '@/types';
 
 type ImportStep = 'UPLOAD' | 'VALIDATE' | 'IMPORTING' | 'SUMMARY';
 
 const STEPS = [
-  { key: 'UPLOAD',    num: 1, label: 'Select File' },
+  { key: 'UPLOAD',    num: 1, label: 'Select Files' },
   { key: 'VALIDATE',  num: 2, label: 'Review & Check' },
   { key: 'IMPORTING', num: 3, label: 'Sync Database' },
   { key: 'SUMMARY',   num: 4, label: 'Summary' },
@@ -25,7 +25,22 @@ const STEP_ORDER: ImportStep[] = ['UPLOAD', 'VALIDATE', 'IMPORTING', 'SUMMARY'];
 export default function MasterImportPage() {
   const { showToast } = useToast();
   const [step, setStep] = useState<ImportStep>('UPLOAD');
-  const [file, setFile] = useState<File | null>(null);
+  
+  // Files selection state
+  const [files, setFiles] = useState<{
+    routeMaster: File | null;
+    custMaster: File | null;
+    skuMaster: File | null;
+    classification: File | null;
+    powerSkuMaster: File | null;
+  }>({
+    routeMaster: null,
+    custMaster: null,
+    skuMaster: null,
+    classification: null,
+    powerSkuMaster: null,
+  });
+
   const [loading, setLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState<{ row: number; error: string }[]>([]);
   const [routesPreview, setRoutesPreview]       = useState<Route[]>([]);
@@ -35,29 +50,66 @@ export default function MasterImportPage() {
   const [counts, setCounts] = useState({ routes: 0, customers: 0, mappings: 0, skus: 0 });
   const [importPayload, setImportPayload] = useState<{ routes: Route[]; customers: Customer[]; mappings: CustomerRouteMapping[]; skus: SKU[] } | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
-  const dropRef = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) setFile(e.target.files[0]);
+  // Individual file input refs
+  const routeMasterRef = useRef<HTMLInputElement>(null);
+  const custMasterRef = useRef<HTMLInputElement>(null);
+  const skuMasterRef = useRef<HTMLInputElement>(null);
+  const classificationRef = useRef<HTMLInputElement>(null);
+  const powerSkuMasterRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (key: keyof typeof files, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      const selectedFile = e.target.files[0];
+      setFiles(prev => ({ ...prev, [key]: selectedFile }));
+    }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    const f = e.dataTransfer.files[0];
-    if (f && (f.name.endsWith('.xlsx') || f.name.endsWith('.xls'))) setFile(f);
-    else showToast('Please drop an Excel file (.xlsx or .xls)', 'error');
+  const removeFile = (key: keyof typeof files, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFiles(prev => ({ ...prev, [key]: null }));
+    if (key === 'routeMaster' && routeMasterRef.current) routeMasterRef.current.value = '';
+    if (key === 'custMaster' && custMasterRef.current) custMasterRef.current.value = '';
+    if (key === 'skuMaster' && skuMasterRef.current) skuMasterRef.current.value = '';
+    if (key === 'classification' && classificationRef.current) classificationRef.current.value = '';
+    if (key === 'powerSkuMaster' && powerSkuMasterRef.current) powerSkuMasterRef.current.value = '';
   };
+
+  const canValidate = files.routeMaster && files.custMaster && files.skuMaster && files.classification;
 
   const handleValidate = async () => {
-    if (!file) { showToast('Please select a file first.', 'warning'); return; }
+    if (!canValidate) {
+      showToast('Please select all required files first.', 'warning');
+      return;
+    }
     setLoading(true);
     const fd = new FormData();
-    fd.append('file', file);
+    if (files.routeMaster) fd.append('routeMaster', files.routeMaster);
+    if (files.custMaster) fd.append('custMaster', files.custMaster);
+    if (files.skuMaster) fd.append('skuMaster', files.skuMaster);
+    if (files.classification) fd.append('classification', files.classification);
+    if (files.powerSkuMaster) fd.append('powerSkuMaster', files.powerSkuMaster);
+
     try {
-      const res = await validateExcelAction(fd);
+      const response = await fetch('/api/validate', {
+        method: 'POST',
+        body: fd,
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Validation server returned ${response.status}`);
+      }
+      const res = await response.json();
+      if (res.error) {
+        throw new Error(res.error);
+      }
       if (res.success) {
-        setCounts({ routes: res.routesCount, customers: res.customersCount, mappings: res.mappingsCount, skus: res.skusCount });
+        setCounts({
+          routes: res.routesCount,
+          customers: res.customersCount,
+          mappings: res.mappingsCount,
+          skus: res.skusCount
+        });
         setRoutesPreview(res.routesPreview as Route[]);
         setCustomersPreview(res.customersPreview as Customer[]);
         setMappingsPreview(res.mappingsPreview as CustomerRouteMapping[]);
@@ -65,11 +117,13 @@ export default function MasterImportPage() {
         setValidationErrors(res.errors as any[]);
         setImportPayload(res.payload);
         setStep('VALIDATE');
-        showToast('Spreadsheet validated.', 'success');
+        showToast('All spreadsheets parsed and validated.', 'success');
       }
     } catch (err: any) {
       showToast(err.message || 'Validation failed.', 'error');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleImport = async () => {
@@ -79,28 +133,98 @@ export default function MasterImportPage() {
     try {
       setSummary(await importExcelAction(importPayload));
       setStep('SUMMARY');
-      showToast('Sync complete.', 'success');
+      showToast('Database synchronization complete.', 'success');
     } catch (err: any) {
-      showToast(err.message || 'Sync failed.', 'error');
+      showToast(err.message || 'Synchronization failed.', 'error');
       setStep('VALIDATE');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleReset = () => {
-    setFile(null); setValidationErrors([]); setImportPayload(null); setSummary(null); setStep('UPLOAD');
+    setFiles({
+      routeMaster: null,
+      custMaster: null,
+      skuMaster: null,
+      classification: null,
+      powerSkuMaster: null,
+    });
+    setValidationErrors([]);
+    setImportPayload(null);
+    setSummary(null);
+    setStep('UPLOAD');
   };
 
   const currentIdx = STEP_ORDER.indexOf(step);
+
+  const fileDefinitions = [
+    {
+      key: 'routeMaster' as const,
+      name: 'ROUTE MASTER.xlsx',
+      label: 'Route Master File',
+      description: 'Contains RouteCode and RouteName columns.',
+      required: true,
+      ref: routeMasterRef,
+      icon: Map,
+      color: 'var(--accent)',
+      bg: 'var(--accent-light)',
+    },
+    {
+      key: 'custMaster' as const,
+      name: 'CUSTMASTER.xlsx',
+      label: 'Customer Mappings File',
+      description: 'Contains CustomerCode, CustomerName, and RouteCode columns.',
+      required: true,
+      ref: custMasterRef,
+      icon: Users,
+      color: '#8B5CF6',
+      bg: '#F5F3FF',
+    },
+    {
+      key: 'skuMaster' as const,
+      name: 'SKUMASTER.xlsx',
+      label: 'SKU Master File',
+      description: 'Contains SKUCode and SKUName columns.',
+      required: true,
+      ref: skuMasterRef,
+      icon: Package,
+      color: 'var(--success)',
+      bg: 'var(--success-light)',
+    },
+    {
+      key: 'classification' as const,
+      name: 'Customer_Classification_DUMMY.xlsx',
+      label: 'Customer Classification File',
+      description: 'Contains CustomerCode, Classification, and Channel columns.',
+      required: true,
+      ref: classificationRef,
+      icon: Link2,
+      color: 'var(--warning)',
+      bg: 'var(--warning-light)',
+    },
+    {
+      key: 'powerSkuMaster' as const,
+      name: 'PowerSku_Master_DUMMY.xlsx',
+      label: 'Power SKU Master File (Optional)',
+      description: 'Contains additional Power SKU codes and names.',
+      required: false,
+      ref: powerSkuMasterRef,
+      icon: Package,
+      color: '#EC4899',
+      bg: '#FDF2F8',
+    },
+  ];
 
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
       {/* Header */}
       <div>
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-          Master Data Excel Sync
+          Master Data Import Panel
         </h1>
         <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-          Upload and synchronize Routes, Customers, Mappings, and SKU lists from Excel.
+          Upload separate Route, Customer Mappings, SKU lists, and Classification files to synchronize the database.
         </p>
       </div>
 
@@ -139,56 +263,85 @@ export default function MasterImportPage() {
         </div>
       </div>
 
-      {/* ── STEP 1: Upload ──────────────────────────────────── */}
+      {/* ── STEP 1: Upload (Select Files) ─────────────────────── */}
       {step === 'UPLOAD' && (
-        <div className="card p-6 space-y-5">
-          <div
-            ref={dropRef}
-            onDragOver={e => e.preventDefault()}
-            onDrop={handleDrop}
-            onClick={() => fileRef.current?.click()}
-            className="flex flex-col items-center justify-center gap-4 p-10 rounded-xl border-2 border-dashed cursor-pointer transition-all"
-            style={{
-              borderColor: file ? 'var(--success)' : 'var(--border)',
-              background: file ? 'var(--success-light)' : 'var(--surface-2)',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = file ? 'var(--success)' : 'var(--border)')}
-          >
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFileChange} className="hidden" />
-            {file ? (
-              <>
-                <FileSpreadsheet className="h-10 w-10" style={{ color: 'var(--success)' }} />
-                <div className="text-center">
-                  <p className="text-[14px] font-bold" style={{ color: 'var(--text-primary)' }}>{file.name}</p>
-                  <p className="text-[12px] mt-1" style={{ color: 'var(--text-muted)' }}>{(file.size / 1024).toFixed(1)} KB · Ready to validate</p>
-                </div>
-                <button
-                  onClick={e => { e.stopPropagation(); setFile(null); }}
-                  className="btn-ghost text-[12px]"
-                  style={{ height: '30px' }}
-                >
-                  Remove file
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="icon-wrap h-14 w-14 rounded-2xl" style={{ background: 'var(--accent-light)' }}>
-                  <UploadCloud className="h-7 w-7" style={{ color: 'var(--accent)' }} />
-                </div>
-                <div className="text-center">
-                  <p className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>Drop Excel file here or click to browse</p>
-                  <p className="text-[12px] mt-1" style={{ color: 'var(--text-muted)' }}>Accepts .xlsx and .xls</p>
-                  <p className="text-[11px] mt-2" style={{ color: 'var(--text-muted)' }}>Required sheets: Routes · Customers · CustomerRouteMapping · SKUs</p>
-                </div>
-              </>
-            )}
+        <div className="card p-6 space-y-6">
+          <div className="flex items-start gap-3 p-3 rounded-lg" style={{ background: 'var(--accent-light)', border: '1px solid rgba(59,130,246,0.1)' }}>
+            <Info className="h-4.5 w-4.5 text-accent mt-0.5 flex-shrink-0" />
+            <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+              <strong>Upload Requirements:</strong> Select the separate master files. The system will dynamically validate columns. The <strong>first 4 files</strong> are mandatory.
+            </p>
           </div>
 
-          <div className="flex justify-end">
-            <button onClick={handleValidate} disabled={!file || loading} className="btn-primary" style={{ opacity: !file || loading ? 0.6 : 1 }}>
+          <div className="space-y-3.5">
+            {fileDefinitions.map((fdDef) => {
+              const selectedFile = files[fdDef.key];
+              const Icon = fdDef.icon;
+              return (
+                <div
+                  key={fdDef.key}
+                  onClick={() => fdDef.ref.current?.click()}
+                  className="flex items-center justify-between p-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-accent"
+                  style={{
+                    borderColor: selectedFile ? 'var(--success)' : 'var(--border)',
+                    background: selectedFile ? 'var(--success-light)' : 'var(--surface-2)',
+                  }}
+                >
+                  <input
+                    ref={fdDef.ref}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(e) => handleFileChange(fdDef.key, e)}
+                    className="hidden"
+                  />
+                  <div className="flex items-center gap-3.5">
+                    <div className="icon-wrap h-10 w-10 rounded-lg flex-shrink-0" style={{ background: fdDef.bg }}>
+                      <Icon className="h-5 w-5" style={{ color: fdDef.color }} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>
+                          {fdDef.label}
+                        </span>
+                        {fdDef.required ? (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider bg-red-100 text-red-600">
+                            Required
+                          </span>
+                        ) : (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider bg-gray-200 text-gray-600">
+                            Optional
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        {selectedFile ? `${selectedFile.name} · ${(selectedFile.size / 1024).toFixed(1)} KB` : fdDef.description}
+                      </p>
+                    </div>
+                  </div>
+                  {selectedFile ? (
+                    <button
+                      onClick={(e) => removeFile(fdDef.key, e)}
+                      className="h-7 w-7 rounded-full flex items-center justify-center transition-all hover:bg-red-100"
+                    >
+                      <X className="h-4 w-4 text-red-500" />
+                    </button>
+                  ) : (
+                    <UploadCloud className="h-4.5 w-4.5" style={{ color: 'var(--text-muted)' }} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={handleValidate}
+              disabled={!canValidate || loading}
+              className="btn-primary"
+              style={{ opacity: !canValidate || loading ? 0.6 : 1 }}
+            >
               {loading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : null}
-              {loading ? 'Parsing…' : 'Parse & Validate'}
+              {loading ? 'Processing Files…' : 'Parse & Validate All'}
               {!loading && <ArrowRight className="h-3.5 w-3.5" />}
             </button>
           </div>
@@ -198,7 +351,7 @@ export default function MasterImportPage() {
       {/* ── STEP 2: Validate ──────────────────────────────────── */}
       {step === 'VALIDATE' && importPayload && (
         <div className="space-y-5">
-          {/* Alert banner */}
+          {/* Validation Alert */}
           <div
             className="flex items-start gap-3.5 p-4 rounded-xl"
             style={{
@@ -213,30 +366,32 @@ export default function MasterImportPage() {
             )}
             <div>
               <p className="text-[13px] font-bold" style={{ color: validationErrors.length ? 'var(--danger)' : 'var(--success)' }}>
-                {validationErrors.length ? `${validationErrors.length} Validation Error(s) Found` : 'All Checks Passed'}
+                {validationErrors.length ? `${validationErrors.length} Validation Error(s) Found` : 'All Checks Passed Successfully'}
               </p>
               <p className="text-[12px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>
                 {validationErrors.length
-                  ? 'Fix the following errors in your Excel file before importing.'
-                  : 'All records passed schema validation. Ready to sync to database.'}
+                  ? 'Aborted. Fix the following row-level errors in your Excel files and re-upload.'
+                  : 'All structures and constraints validated. Data is ready to sync.'}
               </p>
               {validationErrors.length > 0 && (
                 <ul className="mt-2 space-y-1 max-h-32 overflow-y-auto">
                   {validationErrors.map((e, i) => (
-                    <li key={i} className="font-mono text-[11px]" style={{ color: 'var(--danger)' }}>Row {e.row}: {e.error}</li>
+                    <li key={i} className="font-mono text-[11px]" style={{ color: 'var(--danger)' }}>
+                      Row {e.row}: {e.error}
+                    </li>
                   ))}
                 </ul>
               )}
             </div>
           </div>
 
-          {/* Count cards */}
+          {/* Count Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: 'Routes', value: counts.routes, icon: Map, color: 'var(--accent)', bg: 'var(--accent-light)' },
-              { label: 'Customers', value: counts.customers, icon: Users, color: '#8B5CF6', bg: '#F5F3FF' },
-              { label: 'Mappings', value: counts.mappings, icon: Link2, color: 'var(--warning)', bg: 'var(--warning-light)' },
-              { label: 'SKUs', value: counts.skus, icon: Package, color: 'var(--success)', bg: 'var(--success-light)' },
+              { label: 'Routes Detected', value: counts.routes, icon: Map, color: 'var(--accent)', bg: 'var(--accent-light)' },
+              { label: 'Customers Constructed', value: counts.customers, icon: Users, color: '#8B5CF6', bg: '#F5F3FF' },
+              { label: 'Mappings Extracted', value: counts.mappings, icon: Link2, color: 'var(--warning)', bg: 'var(--warning-light)' },
+              { label: 'SKUs Extracted', value: counts.skus, icon: Package, color: 'var(--success)', bg: 'var(--success-light)' },
             ].map(k => {
               const Icon = k.icon;
               return (
@@ -253,7 +408,7 @@ export default function MasterImportPage() {
             })}
           </div>
 
-          {/* Preview tables */}
+          {/* Preview Tables */}
           <div className="card">
             <div className="section-header">
               <span className="section-title">
@@ -269,7 +424,7 @@ export default function MasterImportPage() {
                   heads: ['Code', 'Name'],
                 },
                 {
-                  label: 'Customers', rows: customersPreview,
+                  label: 'Customers (Merged Classification)', rows: customersPreview,
                   cols: ['customerCode', 'customerName', 'classification', 'channel'],
                   heads: ['Code', 'Name', 'Class', 'Channel'],
                 },
@@ -279,7 +434,7 @@ export default function MasterImportPage() {
                   heads: ['Customer', 'Route'],
                 },
                 {
-                  label: 'SKUs', rows: skusPreview,
+                  label: 'SKUs (Merged)', rows: skusPreview,
                   cols: ['skuCode', 'skuName'],
                   heads: ['SKU Code', 'SKU Name'],
                 },
@@ -336,7 +491,7 @@ export default function MasterImportPage() {
         </div>
       )}
 
-      {/* ── STEP 3: Importing ─────────────────────────────────── */}
+      {/* ── STEP 3: Syncing ───────────────────────────────────── */}
       {step === 'IMPORTING' && (
         <div className="card p-16 flex flex-col items-center gap-5 text-center">
           <div className="icon-wrap h-16 w-16 rounded-2xl" style={{ background: 'var(--accent-light)' }}>
@@ -345,7 +500,7 @@ export default function MasterImportPage() {
           <div>
             <p className="text-[16px] font-bold" style={{ color: 'var(--text-primary)' }}>Synchronizing Database…</p>
             <p className="text-[13px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
-              Writing master records and removing obsolete entries. Please wait.
+              Performing atomic sync write and pruning obsolete master entries.
             </p>
           </div>
         </div>
@@ -360,7 +515,7 @@ export default function MasterImportPage() {
           <div>
             <p className="text-[20px] font-bold" style={{ color: 'var(--text-primary)' }}>Sync Complete!</p>
             <p className="text-[13px] mt-1.5 max-w-sm" style={{ color: 'var(--text-muted)' }}>
-              Master data updated successfully. Changes are live across all supervisor devices.
+              Database updated successfully. Master lists synchronized and changes are live.
             </p>
           </div>
 
@@ -378,7 +533,7 @@ export default function MasterImportPage() {
           </div>
 
           <button onClick={handleReset} className="btn-ghost">
-            Sync Another File
+            Import New Masters
           </button>
         </div>
       )}

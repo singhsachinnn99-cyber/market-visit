@@ -1,66 +1,52 @@
-import { mockDb } from '@/services/mock-db';
 import { User } from '@/types';
+import pool from '@/lib/db';
 
-const isSharePoint = () => {
-  return !!(
-    process.env.GRAPH_CLIENT_ID &&
-    process.env.GRAPH_CLIENT_SECRET &&
-    process.env.GRAPH_TENANT_ID &&
-    process.env.GRAPH_SITE_ID
-  );
-};
+// Maps raw database rows to the typed User domain model
+function mapRowToUser(row: any): User {
+  return {
+    id: row.id,
+    name: row.name,
+    employeeCode: row.employeeCode,
+    email: row.email,
+    passwordHash: row.passwordHash,
+    mobile: row.mobile,
+    role: row.role as any,
+    status: row.status as any,
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
+  };
+}
 
 export const userRepository = {
   async getUserByEmail(email: string): Promise<User | null> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointUsers } = require('@/services/sharepoint/users');
-        return await sharepointUsers.getByEmail(email);
-      } catch (error) {
-        console.error('SharePoint users error, falling back to mock:', error);
-        return mockDb.getUsers().find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
-      }
-    }
-    return mockDb.getUsers().find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
+    const [rows]: any = await pool.execute(
+      'SELECT * FROM `User` WHERE LOWER(`email`) = LOWER(?) LIMIT 1',
+      [email]
+    );
+    if (rows.length === 0) return null;
+    return mapRowToUser(rows[0]);
   },
 
   async getUserByEmployeeCode(code: string): Promise<User | null> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointUsers } = require('@/services/sharepoint/users');
-        return await sharepointUsers.getByEmployeeCode(code);
-      } catch (error) {
-        console.error('SharePoint users error, falling back to mock:', error);
-        return mockDb.getUsers().find(u => u.employeeCode === code) || null;
-      }
-    }
-    return mockDb.getUsers().find(u => u.employeeCode === code) || null;
+    const [rows]: any = await pool.execute(
+      'SELECT * FROM `User` WHERE `employeeCode` = ? LIMIT 1',
+      [code]
+    );
+    if (rows.length === 0) return null;
+    return mapRowToUser(rows[0]);
   },
 
   async getUserById(id: string): Promise<User | null> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointUsers } = require('@/services/sharepoint/users');
-        return await sharepointUsers.getById(id);
-      } catch (error) {
-        console.error('SharePoint users error, falling back to mock:', error);
-        return mockDb.getUsers().find(u => u.id === id) || null;
-      }
-    }
-    return mockDb.getUsers().find(u => u.id === id) || null;
+    const [rows]: any = await pool.execute(
+      'SELECT * FROM `User` WHERE `id` = ? LIMIT 1',
+      [id]
+    );
+    if (rows.length === 0) return null;
+    return mapRowToUser(rows[0]);
   },
 
   async getAllUsers(): Promise<User[]> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointUsers } = require('@/services/sharepoint/users');
-        return await sharepointUsers.getAll();
-      } catch (error) {
-        console.error('SharePoint users error, falling back to mock:', error);
-        return mockDb.getUsers();
-      }
-    }
-    return mockDb.getUsers();
+    const [rows]: any = await pool.execute('SELECT * FROM `User`');
+    return rows.map(mapRowToUser);
   },
 
   async createUser(user: Omit<User, 'id' | 'createdAt'>): Promise<User> {
@@ -70,46 +56,65 @@ export const userRepository = {
       createdAt: new Date().toISOString(),
     };
 
-    if (isSharePoint()) {
-      try {
-        const { sharepointUsers } = require('@/services/sharepoint/users');
-        return await sharepointUsers.create(newUser);
-      } catch (error) {
-        console.error('SharePoint users error, falling back to mock:', error);
-        const users = mockDb.getUsers();
-        users.push(newUser);
-        mockDb.saveUsers(users);
-        return newUser;
-      }
-    } else {
-      const users = mockDb.getUsers();
-      users.push(newUser);
-      mockDb.saveUsers(users);
-      return newUser;
-    }
+    await pool.execute(
+      `INSERT INTO \`User\` (id, name, employeeCode, email, passwordHash, mobile, role, status, createdAt) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        newUser.id,
+        newUser.name,
+        newUser.employeeCode,
+        newUser.email,
+        newUser.passwordHash,
+        newUser.mobile,
+        newUser.role,
+        newUser.status,
+        new Date(newUser.createdAt),
+      ]
+    );
+    return newUser;
   },
 
   async updateUser(id: string, updates: Partial<Omit<User, 'id' | 'createdAt'>>): Promise<User> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointUsers } = require('@/services/sharepoint/users');
-        return await sharepointUsers.update(id, updates);
-      } catch (error) {
-        console.error('SharePoint users error, falling back to mock:', error);
-        const users = mockDb.getUsers();
-        const index = users.findIndex(u => u.id === id);
-        if (index === -1) throw new Error('User not found');
-        users[index] = { ...users[index], ...updates };
-        mockDb.saveUsers(users);
-        return users[index];
-      }
-    } else {
-      const users = mockDb.getUsers();
-      const index = users.findIndex(u => u.id === id);
-      if (index === -1) throw new Error('User not found');
-      users[index] = { ...users[index], ...updates };
-      mockDb.saveUsers(users);
-      return users[index];
+    const setClauses: string[] = [];
+    const values: any[] = [];
+
+    if (updates.name !== undefined) {
+      setClauses.push('`name` = ?');
+      values.push(updates.name);
     }
+    if (updates.employeeCode !== undefined) {
+      setClauses.push('`employeeCode` = ?');
+      values.push(updates.employeeCode);
+    }
+    if (updates.email !== undefined) {
+      setClauses.push('`email` = ?');
+      values.push(updates.email);
+    }
+    if (updates.passwordHash !== undefined) {
+      setClauses.push('`passwordHash` = ?');
+      values.push(updates.passwordHash);
+    }
+    if (updates.mobile !== undefined) {
+      setClauses.push('`mobile` = ?');
+      values.push(updates.mobile);
+    }
+    if (updates.role !== undefined) {
+      setClauses.push('`role` = ?');
+      values.push(updates.role);
+    }
+    if (updates.status !== undefined) {
+      setClauses.push('`status` = ?');
+      values.push(updates.status);
+    }
+
+    if (setClauses.length > 0) {
+      values.push(id);
+      const sql = `UPDATE \`User\` SET ${setClauses.join(', ')} WHERE \`id\` = ?`;
+      await pool.execute(sql, values);
+    }
+
+    const updatedUser = await this.getUserById(id);
+    if (!updatedUser) throw new Error('User not found after update');
+    return updatedUser;
   }
 };

@@ -1,75 +1,54 @@
-import { mockDb } from '@/services/mock-db';
 import { Route } from '@/types';
+import pool from '@/lib/db';
 
-const isSharePoint = () => {
-  return !!(
-    process.env.GRAPH_CLIENT_ID &&
-    process.env.GRAPH_CLIENT_SECRET &&
-    process.env.GRAPH_SITE_ID
-  );
-};
+function mapRowToRoute(row: any): Route {
+  return {
+    routeCode: row.routeCode,
+    routeName: row.routeName,
+  };
+}
 
 export const routeRepository = {
   async getAllRoutes(): Promise<Route[]> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointRoutes } = require('@/services/sharepoint/routes');
-        return await sharepointRoutes.getAll();
-      } catch (error) {
-        console.error('SharePoint routes error, falling back to mock:', error);
-        return mockDb.getRoutes();
-      }
-    }
-    return mockDb.getRoutes();
+    const [rows]: any = await pool.execute('SELECT * FROM `Route`');
+    return rows.map(mapRowToRoute);
   },
 
   async upsertRoutes(routes: Route[]): Promise<{ inserted: number; updated: number }> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointRoutes } = require('@/services/sharepoint/routes');
-        return await sharepointRoutes.upsertMany(routes);
-      } catch (error) {
-        console.error('SharePoint routes error, falling back to mock:', error);
-      }
-    }
+    const [rows]: any = await pool.execute('SELECT `routeCode` FROM `Route`');
+    const existingCodes = new Set<string>(rows.map((r: any) => r.routeCode));
 
-    // Mock implementation
-    const existing = mockDb.getRoutes();
     let inserted = 0;
     let updated = 0;
 
-    const routeMap = new Map(existing.map((r) => [r.routeCode, r]));
-
-    routes.forEach((route) => {
-      if (routeMap.has(route.routeCode)) {
-        routeMap.set(route.routeCode, { ...routeMap.get(route.routeCode)!, ...route });
+    for (const route of routes) {
+      if (existingCodes.has(route.routeCode)) {
+        await pool.execute(
+          'UPDATE `Route` SET `routeName` = ? WHERE `routeCode` = ?',
+          [route.routeName, route.routeCode]
+        );
         updated++;
       } else {
-        routeMap.set(route.routeCode, route);
+        await pool.execute(
+          'INSERT INTO `Route` (`routeCode`, `routeName`) VALUES (?, ?)',
+          [route.routeCode, route.routeName]
+        );
         inserted++;
       }
-    });
+    }
 
-    mockDb.saveRoutes(Array.from(routeMap.values()));
     return { inserted, updated };
   },
 
   async clearObsoleteRoutes(activeCodes: string[]): Promise<number> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointRoutes } = require('@/services/sharepoint/routes');
-        return await sharepointRoutes.deleteNotIn(activeCodes);
-      } catch (error) {
-        console.error('SharePoint routes error, falling back to mock:', error);
-      }
+    if (activeCodes.length === 0) {
+      const [result]: any = await pool.execute('DELETE FROM `Route`');
+      return result.affectedRows || 0;
+    } else {
+      const placeholders = activeCodes.map(() => '?').join(',');
+      const sql = `DELETE FROM \`Route\` WHERE \`routeCode\` NOT IN (${placeholders})`;
+      const [result]: any = await pool.execute(sql, activeCodes);
+      return result.affectedRows || 0;
     }
-
-    // Mock implementation
-    const existing = mockDb.getRoutes();
-    const beforeCount = existing.length;
-    const activeSet = new Set(activeCodes);
-    const kept = existing.filter((r) => activeSet.has(r.routeCode));
-    mockDb.saveRoutes(kept);
-    return beforeCount - kept.length;
   },
 };

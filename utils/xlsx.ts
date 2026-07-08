@@ -1,114 +1,405 @@
 import * as xlsx from 'xlsx';
+import fs from 'fs';
+import path from 'path';
 import { Route, Customer, CustomerRouteMapping, SKU } from '@/types';
-import {
-  routeImportSchema,
-  customerImportSchema,
-  customerRouteMappingImportSchema,
-  skuImportSchema,
-} from '@/schemas/import';
 
 export interface ParseExcelResult {
-  routes: { data: Route[]; errors: { row: number; error: string }[] };
-  customers: { data: Customer[]; errors: { row: number; error: string }[] };
-  mappings: { data: CustomerRouteMapping[]; errors: { row: number; error: string }[] };
-  skus: { data: SKU[]; errors: { row: number; error: string }[] };
+  routes: Route[];
+  customers: Customer[];
+  mappings: CustomerRouteMapping[];
+  skus: SKU[];
 }
 
-export const parseExcelFile = (buffer: Buffer): ParseExcelResult => {
-  const workbook = xlsx.read(buffer, { type: 'buffer' });
-  
-  const result: ParseExcelResult = {
-    routes: { data: [], errors: [] },
-    customers: { data: [], errors: [] },
-    mappings: { data: [], errors: [] },
-    skus: { data: [], errors: [] },
-  };
+export interface ParsedFileResult {
+  fileName: string;
+  sheetName: string;
+  type: 'routes' | 'custMappings' | 'skuMaster' | 'classification' | null;
+  data: any[];
+  headers: string[];
+  mapping: Record<string, string>;
+  errors: { row: number; error: string }[];
+}
 
-  // Helper to extract sheet data
-  const getSheetRows = (sheetName: string): any[] => {
-    const sheet = workbook.Sheets[sheetName];
-    if (!sheet) return [];
-    return xlsx.utils.sheet_to_json(sheet);
-  };
+const CONFIG_PATH = path.join(process.cwd(), 'data', 'import-mappings.json');
 
-  // 1. Parse Routes
-  const routeRows = getSheetRows('Routes');
-  routeRows.forEach((row, index) => {
-    const rowNum = index + 2; // header is row 1
-    const parsed = routeImportSchema.safeParse(row);
-    if (parsed.success) {
-      result.routes.data.push({
-        routeCode: parsed.data.RouteCode,
-        routeName: parsed.data.RouteName,
-      });
-    } else {
-      result.routes.errors.push({
-        row: rowNum,
-        error: `Routes: ${parsed.error.issues.map((e) => e.message).join(', ')}`,
-      });
-    }
-  });
-
-  // 2. Parse Customers
-  const customerRows = getSheetRows('Customers');
-  customerRows.forEach((row, index) => {
-    const rowNum = index + 2;
-    const parsed = customerImportSchema.safeParse(row);
-    if (parsed.success) {
-      result.customers.data.push({
-        customerCode: parsed.data.CustomerCode,
-        customerName: parsed.data.CustomerName,
-        classification: parsed.data.Classification,
-        channel: parsed.data.Channel,
-      });
-    } else {
-      result.customers.errors.push({
-        row: rowNum,
-        error: `Customers: ${parsed.error.issues.map((e) => e.message).join(', ')}`,
-      });
-    }
-  });
-
-  // 3. Parse Customer Route Mappings
-  const mappingRows = getSheetRows('CustomerRouteMapping');
-  mappingRows.forEach((row, index) => {
-    const rowNum = index + 2;
-    const parsed = customerRouteMappingImportSchema.safeParse(row);
-    if (parsed.success) {
-      const code = parsed.data.CustomerCode;
-      const route = parsed.data.RouteCode;
-      result.mappings.data.push({
-        id: `${code}_${route}`,
-        customerCode: code,
-        routeCode: route,
-      });
-    } else {
-      result.mappings.errors.push({
-        row: rowNum,
-        error: `CustomerRouteMapping: ${parsed.error.issues.map((e) => e.message).join(', ')}`,
-      });
-    }
-  });
-
-  // 4. Parse SKUs
-  const skuRows = getSheetRows('SKUs');
-  skuRows.forEach((row, index) => {
-    const rowNum = index + 2;
-    const parsed = skuImportSchema.safeParse(row);
-    if (parsed.success) {
-      result.skus.data.push({
-        skuCode: parsed.data.SKUCode,
-        skuName: parsed.data.SKUName,
-      });
-    } else {
-      result.skus.errors.push({
-        row: rowNum,
-        error: `SKUs: ${parsed.error.issues.map((e) => e.message).join(', ')}`,
-      });
-    }
-  });
-
-  return result;
+const DEFAULT_MAPPINGS: Record<string, string[]> = {
+  RouteCode: ['routecode', 'routeid', 'rtcode', 'code', 'routeno', 'route_code'],
+  RouteName: ['routename', 'routeid', 'rtname', 'name', 'description', 'routedesc', 'route_name'],
+  CustomerCode: ['customercode', 'customerid', 'custcode', 'custid', 'customer_code'],
+  CustomerName: ['customername', 'customerdesc', 'custname', 'outletname', 'outletdesc', 'customer_name'],
+  SKUCode: ['skucode', 'skuid', 'itemcode', 'itemid', 'materialcode', 'materialid', 'sku_code'],
+  SKUName: ['skuname', 'skudesc', 'itemname', 'itemdesc', 'materialname', 'materialdesc', 'sku_name'],
+  Classification: ['classification', 'class', 'grade', 'category', 'class_code'],
+  Channel: ['channel', 'subchannel', 'tradechannel', 'marketsegment', 'sub_channel'],
 };
-export type ParseExcelFile = typeof parseExcelFile;
-export type ParseExcelResultType = ParseExcelResult;
+
+/**
+ * Loads header mappings config from data/import-mappings.json or seeds defaults.
+ */
+export function loadMappingConfig(): Record<string, string[]> {
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      const content = fs.readFileSync(CONFIG_PATH, 'utf-8');
+      return JSON.parse(content);
+    }
+  } catch (error) {
+    console.error('Error reading mappings config, falling back to defaults:', error);
+  }
+
+  try {
+    const dataDir = path.dirname(CONFIG_PATH);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_MAPPINGS, null, 2), 'utf-8');
+  } catch (error) {
+    console.error('Error saving default mappings config:', error);
+  }
+  return DEFAULT_MAPPINGS;
+}
+
+/**
+ * Normalizes string for matching (lowercase, strips all spaces and non-alphanumeric chars)
+ */
+function cleanString(str: string): string {
+  return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Standard Levenshtein edit distance logic.
+ */
+function getLevenshteinDistance(a: string, b: string): number {
+  const matrix: number[][] = [];
+  for (let i = 0; i <= a.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= b.length; j++) {
+    matrix[0][j] = j;
+  }
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1, // deletion
+          matrix[i][j - 1] + 1, // insertion
+          matrix[i - 1][j - 1] + 1 // substitution
+        );
+      }
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
+/**
+ * Calculates a match score (0.0 to 1.0) between two strings using clean exact, substring, or fuzzy matching.
+ */
+function getSimilarity(a: string, b: string): number {
+  const cleanA = cleanString(a);
+  const cleanB = cleanString(b);
+  if (cleanA === cleanB) return 1.0;
+  if (cleanA.includes(cleanB) || cleanB.includes(cleanA)) return 0.8;
+
+  const distance = getLevenshteinDistance(cleanA, cleanB);
+  const maxLength = Math.max(cleanA.length, cleanB.length);
+  if (maxLength === 0) return 1.0;
+  return 1.0 - distance / maxLength;
+}
+
+/**
+ * Finds the sheet header that matches the field and its configured aliases with the highest confidence.
+ */
+export function findBestHeaderMatch(
+  headers: string[],
+  field: string,
+  aliases: string[]
+): { header: string | null; score: number } {
+  let bestHeader: string | null = null;
+  let bestScore = 0;
+
+  for (const header of headers) {
+    const fieldScore = getSimilarity(header, field);
+    if (fieldScore > bestScore) {
+      bestScore = fieldScore;
+      bestHeader = header;
+    }
+    for (const alias of aliases) {
+      const aliasScore = getSimilarity(header, alias);
+      if (aliasScore > bestScore) {
+        bestScore = aliasScore;
+        bestHeader = header;
+      }
+    }
+  }
+
+  return { header: bestHeader, score: bestScore };
+}
+
+/**
+ * Evaluates available columns in a sheet to detect what required fields are missing for a target model type.
+ */
+export function checkMissingFields(
+  headers: string[],
+  type: 'routes' | 'custMappings' | 'skuMaster' | 'classification'
+): { missing: string[]; foundMapping: Record<string, string> } {
+  const config = loadMappingConfig();
+  const fields = {
+    custMappings: ['CustomerCode', 'CustomerName', 'RouteCode'],
+    classification: ['CustomerCode', 'Classification', 'Channel'],
+    routes: ['RouteCode', 'RouteName'],
+    skuMaster: ['SKUCode', 'SKUName'],
+  }[type];
+
+  const missing: string[] = [];
+  const foundMapping: Record<string, string> = {};
+
+  for (const field of fields) {
+    const aliases = config[field] || [];
+    const { header, score } = findBestHeaderMatch(headers, field, aliases);
+    if (score >= 0.6 && header) {
+      foundMapping[field] = header;
+    } else {
+      missing.push(field);
+    }
+  }
+
+  return { missing, foundMapping };
+}
+
+/**
+ * Loops through workbook sheets to find the worksheet that best matches the expected columns format.
+ */
+export function parseSingleFile(
+  buffer: Buffer,
+  fileName: string,
+  expectedType: 'routes' | 'custMappings' | 'skuMaster' | 'classification'
+): ParsedFileResult {
+  try {
+    const workbook = xlsx.read(buffer, { type: 'buffer' });
+
+    let bestSheetName = workbook.SheetNames[0] || 'Unknown';
+    let bestMapping: Record<string, string> = {};
+    let minMissingCount = 999;
+    let bestMissingList: string[] = [];
+    let bestRows: any[] = [];
+    let bestHeaders: string[] = [];
+
+    // Evaluate columns of all sheets in workbook dynamically to find the correct sheet
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      const rows = xlsx.utils.sheet_to_json(sheet);
+      if (rows.length === 0) continue;
+
+      const headers = Object.keys(rows[0] as object);
+      const { missing, foundMapping } = checkMissingFields(headers, expectedType);
+
+      if (missing.length < minMissingCount) {
+        minMissingCount = missing.length;
+        bestSheetName = sheetName;
+        bestMapping = foundMapping;
+        bestMissingList = missing;
+        bestRows = rows;
+        bestHeaders = headers;
+      }
+    }
+
+    if (minMissingCount === 0) {
+      return {
+        fileName,
+        sheetName: bestSheetName,
+        type: expectedType,
+        data: bestRows,
+        headers: bestHeaders,
+        mapping: bestMapping,
+        errors: [],
+      };
+    }
+
+    // Detailed missing column schema description error
+    return {
+      fileName,
+      sheetName: bestSheetName,
+      type: null,
+      data: [],
+      headers: bestHeaders,
+      mapping: {},
+      errors: [
+        {
+          row: 1,
+          error: `${fileName} [Sheet: "${bestSheetName}"]: Missing required column(s): ${bestMissingList.join(', ')}. Available columns in sheet: ${bestHeaders.join(', ')}`,
+        },
+      ],
+    };
+  } catch (err: any) {
+    return {
+      fileName,
+      sheetName: 'Unknown',
+      type: null,
+      data: [],
+      headers: [],
+      mapping: {},
+      errors: [{ row: 0, error: `${fileName}: Error reading workbook - ${err.message}` }],
+    };
+  }
+}
+
+/**
+ * Synchronizes and merges all independent parsed master lists.
+ */
+export function mergeParsedData(parsedFiles: ParsedFileResult[]): { payload: ParseExcelResult; errors: { row: number; error: string }[] } {
+  const errors: { row: number; error: string }[] = [];
+  const payload: ParseExcelResult = {
+    routes: [],
+    customers: [],
+    mappings: [],
+    skus: [],
+  };
+
+  const filesByType = {
+    routes: [] as ParsedFileResult[],
+    custMappings: [] as ParsedFileResult[],
+    skuMaster: [] as ParsedFileResult[],
+    classification: [] as ParsedFileResult[],
+  };
+
+  parsedFiles.forEach(f => {
+    errors.push(...f.errors);
+    if (f.type) {
+      filesByType[f.type].push(f);
+    }
+  });
+
+  if (errors.length > 0) {
+    return { payload, errors };
+  }
+
+  // 1. Process Routes
+  filesByType.routes.forEach(f => {
+    const routeCodeCol = f.mapping['RouteCode'];
+    const routeNameCol = f.mapping['RouteName'];
+
+    f.data.forEach((row, index) => {
+      const rowNum = index + 2;
+      const routeCode = String(row[routeCodeCol] || '').trim();
+      const routeName = String(row[routeNameCol] || '').trim();
+
+      if (!routeCode) {
+        errors.push({ row: rowNum, error: `${f.fileName}: Row is missing RouteCode value.` });
+      }
+      if (!routeName) {
+        errors.push({ row: rowNum, error: `${f.fileName}: Row is missing RouteName value.` });
+      }
+
+      if (routeCode && routeName) {
+        payload.routes.push({ routeCode, routeName });
+      }
+    });
+  });
+
+  // 2. Process SKUs
+  const skuMap = new Map<string, string>();
+  filesByType.skuMaster.forEach(f => {
+    const skuCodeCol = f.mapping['SKUCode'];
+    const skuNameCol = f.mapping['SKUName'];
+
+    f.data.forEach((row, index) => {
+      const rowNum = index + 2;
+      const skuCode = String(row[skuCodeCol] || '').trim();
+      const skuName = String(row[skuNameCol] || '').trim();
+
+      if (!skuCode) {
+        errors.push({ row: rowNum, error: `${f.fileName}: Row is missing SKUCode value.` });
+      }
+      if (!skuName) {
+        errors.push({ row: rowNum, error: `${f.fileName}: Row is missing SKUName value.` });
+      }
+
+      if (skuCode && skuName) {
+        skuMap.set(skuCode, skuName);
+      }
+    });
+  });
+  skuMap.forEach((skuName, skuCode) => {
+    payload.skus.push({ skuCode, skuName });
+  });
+
+  // 3. Process Customer Classification Details
+  const classificationMap = new Map<string, { classification: string; channel: string }>();
+  filesByType.classification.forEach(f => {
+    const customerCodeCol = f.mapping['CustomerCode'];
+    const classificationCol = f.mapping['Classification'];
+    const channelCol = f.mapping['Channel'];
+
+    f.data.forEach((row, index) => {
+      const rowNum = index + 2;
+      const customerCode = String(row[customerCodeCol] || '').trim();
+      const classification = String(row[classificationCol] || '').trim();
+      const channel = String(row[channelCol] || '').trim();
+
+      if (!customerCode) {
+        errors.push({ row: rowNum, error: `${f.fileName}: Row is missing CustomerCode value.` });
+      }
+      if (!classification) {
+        errors.push({ row: rowNum, error: `${f.fileName}: Row is missing Classification value.` });
+      }
+      if (!channel) {
+        errors.push({ row: rowNum, error: `${f.fileName}: Row is missing Channel value.` });
+      }
+
+      if (customerCode && classification && channel) {
+        classificationMap.set(customerCode, { classification, channel });
+      }
+    });
+  });
+
+  // 4. Process CUSTMASTER Customer mappings
+  const customerNamesMap = new Map<string, string>();
+  filesByType.custMappings.forEach(f => {
+    const customerCodeCol = f.mapping['CustomerCode'];
+    const customerNameCol = f.mapping['CustomerName'];
+    const routeCodeCol = f.mapping['RouteCode'];
+
+    f.data.forEach((row, index) => {
+      const rowNum = index + 2;
+      const customerCode = String(row[customerCodeCol] || '').trim();
+      const customerName = String(row[customerNameCol] || '').trim();
+      const routeCode = String(row[routeCodeCol] || '').trim();
+
+      if (!customerCode) {
+        errors.push({ row: rowNum, error: `${f.fileName}: Row is missing CustomerCode value.` });
+      }
+      if (!customerName) {
+        errors.push({ row: rowNum, error: `${f.fileName}: Row is missing CustomerName value.` });
+      }
+      if (!routeCode) {
+        errors.push({ row: rowNum, error: `${f.fileName}: Row is missing RouteCode value.` });
+      }
+
+      if (customerCode && customerName && routeCode) {
+        customerNamesMap.set(customerCode, customerName);
+        payload.mappings.push({
+          id: `${customerCode}_${routeCode}`,
+          customerCode,
+          routeCode,
+        });
+      }
+    });
+  });
+
+  // Create final Customer domain entities
+  customerNamesMap.forEach((customerName, customerCode) => {
+    const classInfo = classificationMap.get(customerCode);
+    const classification = classInfo?.classification || 'D';
+    const channel = classInfo?.channel || 'General Trade';
+
+    payload.customers.push({
+      customerCode,
+      customerName,
+      classification,
+      channel,
+    });
+  });
+
+  return { payload, errors };
+}

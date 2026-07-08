@@ -1,136 +1,193 @@
-import { mockDb } from '@/services/mock-db';
 import { Visit, VisitPhoto, NPDResponse } from '@/types';
+import pool from '@/lib/db';
+import mysql from 'mysql2/promise';
 
-const isSharePoint = () => {
-  return !!(
-    process.env.GRAPH_CLIENT_ID &&
-    process.env.GRAPH_CLIENT_SECRET &&
-    process.env.GRAPH_SITE_ID
-  );
-};
+function mapRowToVisit(row: any): Visit {
+  return {
+    visitId: row.visitId,
+    supervisorId: row.supervisorId,
+    routeCode: row.routeCode,
+    customerCode: row.customerCode,
+    assetType: row.assetType as any,
+    temperature: row.temperature,
+    tempInRange: row.tempInRange === 1 || row.tempInRange === true,
+    actionRequired: row.actionRequired as any,
+    observation: row.observation,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    accuracy: row.accuracy,
+    status: row.status as any,
+    createdBy: row.createdBy,
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt,
+  };
+}
+
+function mapRowToPhoto(row: any): VisitPhoto {
+  return {
+    photoId: row.photoId,
+    visitId: row.visitId,
+    category: row.category as any,
+    cloudinaryUrl: row.cloudinaryUrl,
+    publicId: row.publicId,
+    uploadedAt: row.uploadedAt instanceof Date ? row.uploadedAt.toISOString() : row.uploadedAt,
+  };
+}
+
+function mapRowToNpd(row: any): NPDResponse {
+  return {
+    responseId: `${row.visitId}_${row.skuCode}`,
+    visitId: row.visitId,
+    skuCode: row.skuCode,
+    status: row.status as any,
+  };
+}
 
 export const visitRepository = {
   async getVisitById(visitId: string): Promise<Visit | null> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointVisits } = require('@/services/sharepoint/visits');
-        return await sharepointVisits.getById(visitId);
-      } catch (error) {
-        console.error('SharePoint visits error, falling back to mock:', error);
-      }
-    }
-    return mockDb.getVisits().find((v) => v.visitId === visitId) || null;
+    const [rows]: any = await pool.execute(
+      'SELECT * FROM `Visit` WHERE `visitId` = ? LIMIT 1',
+      [visitId]
+    );
+    if (rows.length === 0) return null;
+    return mapRowToVisit(rows[0]);
   },
 
   async getVisitsBySupervisor(supervisorId: string): Promise<Visit[]> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointVisits } = require('@/services/sharepoint/visits');
-        return await sharepointVisits.getBySupervisor(supervisorId);
-      } catch (error) {
-        console.error('SharePoint visits error, falling back to mock:', error);
-      }
-    }
-    return mockDb.getVisits().filter((v) => v.supervisorId === supervisorId);
+    const [rows]: any = await pool.execute(
+      'SELECT * FROM `Visit` WHERE `supervisorId` = ?',
+      [supervisorId]
+    );
+    return rows.map(mapRowToVisit);
   },
 
   async getAllVisits(): Promise<Visit[]> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointVisits } = require('@/services/sharepoint/visits');
-        return await sharepointVisits.getAll();
-      } catch (error) {
-        console.error('SharePoint visits error, falling back to mock:', error);
-      }
-    }
-    return mockDb.getVisits();
+    const [rows]: any = await pool.execute('SELECT * FROM `Visit`');
+    return rows.map(mapRowToVisit);
   },
 
   async getVisitPhotos(visitId: string): Promise<VisitPhoto[]> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointVisits } = require('@/services/sharepoint/visits');
-        return await sharepointVisits.getPhotos(visitId);
-      } catch (error) {
-        console.error('SharePoint visits error, falling back to mock:', error);
-      }
-    }
-    return mockDb.getPhotos().filter((p) => p.visitId === visitId);
+    const [rows]: any = await pool.execute(
+      'SELECT * FROM `VisitPhoto` WHERE `visitId` = ?',
+      [visitId]
+    );
+    return rows.map(mapRowToPhoto);
   },
 
   async getNpdResponses(visitId: string): Promise<NPDResponse[]> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointVisits } = require('@/services/sharepoint/visits');
-        return await sharepointVisits.getNpdResponses(visitId);
-      } catch (error) {
-        console.error('SharePoint visits error, falling back to mock:', error);
-      }
+    const [rows]: any = await pool.execute(
+      'SELECT * FROM `NPDResponse` WHERE `visitId` = ?',
+      [visitId]
+    );
+    return rows.map(mapRowToNpd);
+  },
+
+  async saveVisitRecord(visit: Visit, connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
+    const executor = connection || pool;
+    const tempInRange = visit.tempInRange ? 1 : 0;
+    const createdAt = visit.createdAt ? new Date(visit.createdAt) : new Date();
+    const updatedAt = visit.updatedAt ? new Date(visit.updatedAt) : new Date();
+
+    const sql = `
+      INSERT INTO \`Visit\` (
+        \`visitId\`, \`supervisorId\`, \`routeCode\`, \`customerCode\`, \`assetType\`, 
+        \`temperature\`, \`tempInRange\`, \`actionRequired\`, \`observation\`, 
+        \`latitude\`, \`longitude\`, \`accuracy\`, \`status\`, \`createdBy\`, \`createdAt\`, \`updatedAt\`
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        \`supervisorId\` = VALUES(\`supervisorId\`),
+        \`routeCode\` = VALUES(\`routeCode\`),
+        \`customerCode\` = VALUES(\`customerCode\`),
+        \`assetType\` = VALUES(\`assetType\`),
+        \`temperature\` = VALUES(\`temperature\`),
+        \`tempInRange\` = VALUES(\`tempInRange\`),
+        \`actionRequired\` = VALUES(\`actionRequired\`),
+        \`observation\` = VALUES(\`observation\`),
+        \`latitude\` = VALUES(\`latitude\`),
+        \`longitude\` = VALUES(\`longitude\`),
+        \`accuracy\` = VALUES(\`accuracy\`),
+        \`status\` = VALUES(\`status\`),
+        \`createdBy\` = VALUES(\`createdBy\`),
+        \`updatedAt\` = VALUES(\`updatedAt\`)
+    `;
+
+    await executor.execute(sql, [
+      visit.visitId,
+      visit.supervisorId,
+      visit.routeCode || null,
+      visit.customerCode || null,
+      visit.assetType,
+      visit.temperature,
+      tempInRange,
+      visit.actionRequired,
+      visit.observation,
+      visit.latitude,
+      visit.longitude,
+      visit.accuracy,
+      visit.status,
+      visit.createdBy,
+      createdAt,
+      updatedAt,
+    ]);
+  },
+
+  async deletePhotosForVisit(visitId: string, connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
+    const executor = connection || pool;
+    await executor.execute('DELETE FROM `VisitPhoto` WHERE `visitId` = ?', [visitId]);
+  },
+
+  async insertPhotos(photos: VisitPhoto[], connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
+    const executor = connection || pool;
+    for (const p of photos) {
+      const uploadedAt = p.uploadedAt ? new Date(p.uploadedAt) : new Date();
+      await executor.execute(
+        `INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`) 
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, uploadedAt]
+      );
     }
-    return mockDb.getNpdResponses().filter((n) => n.visitId === visitId);
+  },
+
+  async deleteNpdForVisit(visitId: string, connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
+    const executor = connection || pool;
+    await executor.execute('DELETE FROM `NPDResponse` WHERE `visitId` = ?', [visitId]);
+  },
+
+  async insertNpd(npdResponses: NPDResponse[], connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
+    const executor = connection || pool;
+    for (const n of npdResponses) {
+      await executor.execute(
+        'INSERT INTO `NPDResponse` (`visitId`, `skuCode`, `status`) VALUES (?, ?, ?)',
+        [n.visitId, n.skuCode, n.status]
+      );
+    }
   },
 
   async saveVisit(visit: Visit, photos: VisitPhoto[], npdResponses: NPDResponse[]): Promise<Visit> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointVisits } = require('@/services/sharepoint/visits');
-        return await sharepointVisits.save(visit, photos, npdResponses);
-      } catch (error) {
-        console.error('SharePoint visits error, falling back to mock:', error);
-      }
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      await this.saveVisitRecord(visit, connection);
+      await this.deletePhotosForVisit(visit.visitId, connection);
+      await this.insertPhotos(photos, connection);
+      await this.deleteNpdForVisit(visit.visitId, connection);
+      await this.insertNpd(npdResponses, connection);
+
+      await connection.commit();
+      const savedVisit = await this.getVisitById(visit.visitId);
+      if (!savedVisit) throw new Error('Visit not found after saving');
+      return savedVisit;
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
     }
-
-    // Mock DB implementation
-    const visits = mockDb.getVisits();
-    const index = visits.findIndex((v) => v.visitId === visit.visitId);
-
-    const now = new Date().toISOString();
-    const finalVisit = {
-      ...visit,
-      updatedAt: now,
-      createdAt: index !== -1 ? visits[index].createdAt : now,
-    };
-
-    if (index !== -1) {
-      visits[index] = finalVisit;
-    } else {
-      visits.push(finalVisit);
-    }
-    mockDb.saveVisits(visits);
-
-    // Save Photos (delete existing for this visit and replace)
-    let allPhotos = mockDb.getPhotos();
-    allPhotos = allPhotos.filter((p) => p.visitId !== visit.visitId);
-    allPhotos.push(...photos);
-    mockDb.savePhotos(allPhotos);
-
-    // Save NPD responses (delete existing for this visit and replace)
-    let allNpd = mockDb.getNpdResponses();
-    allNpd = allNpd.filter((n) => n.visitId !== visit.visitId);
-    allNpd.push(...npdResponses);
-    mockDb.saveNpdResponses(allNpd);
-
-    return finalVisit;
   },
 
   async deleteVisit(visitId: string): Promise<void> {
-    if (isSharePoint()) {
-      try {
-        const { sharepointVisits } = require('@/services/sharepoint/visits');
-        return await sharepointVisits.delete(visitId);
-      } catch (error) {
-        console.error('SharePoint visits error, falling back to mock:', error);
-      }
-    }
-
-    // Mock DB
-    const visits = mockDb.getVisits().filter((v) => v.visitId !== visitId);
-    mockDb.saveVisits(visits);
-
-    const photos = mockDb.getPhotos().filter((p) => p.visitId !== visitId);
-    mockDb.savePhotos(photos);
-
-    const npd = mockDb.getNpdResponses().filter((n) => n.visitId !== visitId);
-    mockDb.saveNpdResponses(npd);
+    // Native ON DELETE CASCADE automatically handles VisitPhoto and NPDResponse removal
+    await pool.execute('DELETE FROM `Visit` WHERE `visitId` = ?', [visitId]);
   },
 };

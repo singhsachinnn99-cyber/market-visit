@@ -4,7 +4,7 @@ import { auth } from '@/lib/auth';
 import { routeRepository } from '@/repositories/route-repository';
 import { customerRepository } from '@/repositories/customer-repository';
 import { skuRepository } from '@/repositories/sku-repository';
-import { parseExcelFile, ParseExcelResult } from '@/utils/xlsx';
+import { parseSingleFile, mergeParsedData } from '@/utils/xlsx';
 import { auditService } from '@/services/audit-service';
 import { Route, Customer, CustomerRouteMapping, SKU, ImportSummary } from '@/types';
 
@@ -25,41 +25,68 @@ const verifyAdminSession = async () => {
 
 export async function validateExcelAction(formData: FormData) {
   await verifyAdminSession();
-  const file = formData.get('file') as File;
-  if (!file) {
-    throw new Error('No file uploaded');
+
+  const fileKeys = [
+    { key: 'routeMaster', name: 'ROUTE MASTER.xlsx', type: 'routes' as const, required: true },
+    { key: 'custMaster', name: 'CUSTMASTER.xlsx', type: 'custMappings' as const, required: true },
+    { key: 'skuMaster', name: 'SKUMASTER.xlsx', type: 'skuMaster' as const, required: true },
+    { key: 'classification', name: 'Customer_Classification_DUMMY.xlsx', type: 'classification' as const, required: true },
+    { key: 'powerSkuMaster', name: 'PowerSku_Master_DUMMY.xlsx', type: 'skuMaster' as const, required: false },
+  ];
+
+  const parsedResults: any[] = [];
+  const errors: { row: number; error: string }[] = [];
+
+  for (const fk of fileKeys) {
+    const file = formData.get(fk.key) as File | null;
+    if (!file || file.size === 0) {
+      if (fk.required) {
+        errors.push({ row: 0, error: `Required file "${fk.name}" was not selected.` });
+      }
+      continue;
+    }
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const res = parseSingleFile(buffer, file.name, fk.type);
+      parsedResults.push(res);
+    } catch (error: any) {
+      errors.push({ row: 0, error: `${file.name}: Parsing failed - ${error.message}` });
+    }
   }
 
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const parsed = parseExcelFile(buffer);
+  if (errors.length > 0) {
     return {
       success: true,
-      routesCount: parsed.routes.data.length,
-      customersCount: parsed.customers.data.length,
-      mappingsCount: parsed.mappings.data.length,
-      skusCount: parsed.skus.data.length,
-      routesPreview: parsed.routes.data.slice(0, 5),
-      customersPreview: parsed.customers.data.slice(0, 5),
-      mappingsPreview: parsed.mappings.data.slice(0, 5),
-      skusPreview: parsed.skus.data.slice(0, 5),
-      errors: [
-        ...parsed.routes.errors,
-        ...parsed.customers.errors,
-        ...parsed.mappings.errors,
-        ...parsed.skus.errors,
-      ],
-      payload: {
-        routes: parsed.routes.data,
-        customers: parsed.customers.data,
-        mappings: parsed.mappings.data,
-        skus: parsed.skus.data,
-      },
+      routesCount: 0,
+      customersCount: 0,
+      mappingsCount: 0,
+      skusCount: 0,
+      routesPreview: [],
+      customersPreview: [],
+      mappingsPreview: [],
+      skusPreview: [],
+      errors,
+      payload: { routes: [], customers: [], mappings: [], skus: [] },
     };
-  } catch (error: any) {
-    throw new Error(`Failed to parse spreadsheet: ${error.message}`);
   }
+
+  const merged = mergeParsedData(parsedResults);
+
+  return {
+    success: true,
+    routesCount: merged.payload.routes.length,
+    customersCount: merged.payload.customers.length,
+    mappingsCount: merged.payload.mappings.length,
+    skusCount: merged.payload.skus.length,
+    routesPreview: merged.payload.routes.slice(0, 5),
+    customersPreview: merged.payload.customers.slice(0, 5),
+    mappingsPreview: merged.payload.mappings.slice(0, 5),
+    skusPreview: merged.payload.skus.slice(0, 5),
+    errors: merged.errors,
+    payload: merged.payload,
+  };
 }
 
 export async function importExcelAction(payload: {

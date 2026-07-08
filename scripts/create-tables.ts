@@ -1,0 +1,146 @@
+import pool from '../lib/db';
+
+async function createTables() {
+  console.log('Initializing MySQL Database Schema...');
+  const connection = await pool.getConnection();
+
+  const dropStatements = [
+    'DROP TABLE IF EXISTS `AuditLog`',
+    'DROP TABLE IF EXISTS `NPDResponse`',
+    'DROP TABLE IF EXISTS `VisitPhoto`',
+    'DROP TABLE IF EXISTS `Visit`',
+    'DROP TABLE IF EXISTS `CustomerRouteMapping`',
+    'DROP TABLE IF EXISTS `SKU`',
+    'DROP TABLE IF EXISTS `Customer`',
+    'DROP TABLE IF EXISTS `Route`',
+    'DROP TABLE IF EXISTS `User`'
+  ];
+
+  const ddlStatements = [
+    // 1. User
+    `CREATE TABLE IF NOT EXISTS \`User\` (
+      \`id\` VARCHAR(191) PRIMARY KEY,
+      \`name\` VARCHAR(191) NOT NULL,
+      \`employeeCode\` VARCHAR(191) UNIQUE NOT NULL,
+      \`email\` VARCHAR(191) UNIQUE NOT NULL,
+      \`passwordHash\` VARCHAR(191) NOT NULL,
+      \`mobile\` VARCHAR(191) NOT NULL,
+      \`role\` ENUM('Admin', 'Supervisor') NOT NULL,
+      \`status\` ENUM('Active', 'Inactive') NOT NULL,
+      \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      INDEX \`idx_user_email\` (\`email\`),
+      INDEX \`idx_user_employee_code\` (\`employeeCode\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    // 2. Route
+    `CREATE TABLE IF NOT EXISTS \`Route\` (
+      \`routeCode\` VARCHAR(191) PRIMARY KEY,
+      \`routeName\` VARCHAR(191) NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    // 3. Customer
+    `CREATE TABLE IF NOT EXISTS \`Customer\` (
+      \`customerCode\` VARCHAR(191) PRIMARY KEY,
+      \`customerName\` VARCHAR(191) NOT NULL,
+      \`classification\` VARCHAR(50) NOT NULL,
+      \`channel\` VARCHAR(191) NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    // 4. CustomerRouteMapping
+    `CREATE TABLE IF NOT EXISTS \`CustomerRouteMapping\` (
+      \`customerCode\` VARCHAR(191) NOT NULL,
+      \`routeCode\` VARCHAR(191) NOT NULL,
+      PRIMARY KEY (\`customerCode\`, \`routeCode\`),
+      FOREIGN KEY (\`customerCode\`) REFERENCES \`Customer\`(\`customerCode\`) ON DELETE CASCADE,
+      FOREIGN KEY (\`routeCode\`) REFERENCES \`Route\`(\`routeCode\`) ON DELETE CASCADE,
+      INDEX \`idx_mapping_route\` (\`routeCode\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    // 5. SKU
+    `CREATE TABLE IF NOT EXISTS \`SKU\` (
+      \`skuCode\` VARCHAR(191) PRIMARY KEY,
+      \`skuName\` VARCHAR(191) NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    // 6. Visit
+    `CREATE TABLE IF NOT EXISTS \`Visit\` (
+      \`visitId\` VARCHAR(191) PRIMARY KEY,
+      \`supervisorId\` VARCHAR(191) NOT NULL,
+      \`routeCode\` VARCHAR(191) NULL,
+      \`customerCode\` VARCHAR(191) NULL,
+      \`assetType\` ENUM('Chiller', 'Freezer') NOT NULL,
+      \`temperature\` DOUBLE NOT NULL,
+      \`tempInRange\` TINYINT(1) NOT NULL,
+      \`actionRequired\` ENUM('Cleaning', 'Repair', 'Replacement', 'Gas Filling', 'Other', 'None') NOT NULL,
+      \`observation\` TEXT NOT NULL,
+      \`latitude\` DOUBLE NOT NULL,
+      \`longitude\` DOUBLE NOT NULL,
+      \`accuracy\` DOUBLE NOT NULL,
+      \`status\` ENUM('Draft', 'Submitted') NOT NULL,
+      \`createdBy\` VARCHAR(191) NOT NULL,
+      \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      \`updatedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      FOREIGN KEY (\`routeCode\`) REFERENCES \`Route\`(\`routeCode\`),
+      FOREIGN KEY (\`customerCode\`) REFERENCES \`Customer\`(\`customerCode\`),
+      INDEX \`idx_visit_supervisor\` (\`supervisorId\`),
+      INDEX \`idx_visit_route\` (\`routeCode\`),
+      INDEX \`idx_visit_customer\` (\`customerCode\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    // 7. VisitPhoto
+    `CREATE TABLE IF NOT EXISTS \`VisitPhoto\` (
+      \`photoId\` VARCHAR(191) PRIMARY KEY,
+      \`visitId\` VARCHAR(191) NOT NULL,
+      \`category\` ENUM('Dairy', 'Beverages', 'Fruits', 'Vegetables') NOT NULL,
+      \`cloudinaryUrl\` TEXT NOT NULL,
+      \`publicId\` VARCHAR(191) NOT NULL,
+      \`uploadedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      FOREIGN KEY (\`visitId\`) REFERENCES \`Visit\`(\`visitId\`) ON DELETE CASCADE,
+      INDEX \`idx_photo_visit\` (\`visitId\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    // 8. NPDResponse
+    `CREATE TABLE IF NOT EXISTS \`NPDResponse\` (
+      \`visitId\` VARCHAR(191) NOT NULL,
+      \`skuCode\` VARCHAR(191) NOT NULL,
+      \`status\` ENUM('Available', 'Not Available', 'Not Required') NOT NULL,
+      PRIMARY KEY (\`visitId\`, \`skuCode\`),
+      FOREIGN KEY (\`visitId\`) REFERENCES \`Visit\`(\`visitId\`) ON DELETE CASCADE,
+      FOREIGN KEY (\`skuCode\`) REFERENCES \`SKU\`(\`skuCode\`),
+      INDEX \`idx_npd_sku\` (\`skuCode\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    // 9. AuditLog
+    `CREATE TABLE IF NOT EXISTS \`AuditLog\` (
+      \`logId\` VARCHAR(191) PRIMARY KEY,
+      \`user\` VARCHAR(191) NOT NULL,
+      \`action\` VARCHAR(191) NOT NULL,
+      \`entity\` VARCHAR(191) NOT NULL,
+      \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`
+  ];
+
+  try {
+    // Disable foreign key checks to drop smoothly
+    await connection.query('SET FOREIGN_KEY_CHECKS = 0');
+    for (const sql of dropStatements) {
+      console.log(`Executing: ${sql}...`);
+      await connection.query(sql);
+    }
+    await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+
+    for (const sql of ddlStatements) {
+      const tableName = sql.match(/`(\w+)`/)?.[1] || 'Unknown';
+      console.log(`Creating table ${tableName}...`);
+      await connection.query(sql);
+    }
+    console.log('All MySQL tables and constraints created successfully.');
+  } catch (error: any) {
+    console.error('Error creating database schema:', error.message);
+  } finally {
+    connection.release();
+    await pool.end();
+  }
+}
+
+createTables();

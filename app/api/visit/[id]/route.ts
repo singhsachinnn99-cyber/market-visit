@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { visitRepository } from '@/repositories/visit-repository';
+import { visitService } from '@/services/visit-service';
 import { visitSchema, visitDraftSchema } from '@/schemas/visit';
 import { auditService } from '@/services/audit-service';
 import { Visit, VisitPhoto, NPDResponse } from '@/types';
@@ -90,7 +91,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       status: status as any,
     }));
 
-    const updated = await visitRepository.saveVisit(visitRecord, photoRecords, npdResponses);
+    const updated = await visitService.saveVisit(visitRecord, photoRecords, npdResponses);
 
     await auditService.logAction(
       user.email,
@@ -117,7 +118,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return NextResponse.json({ error: 'Visit record not found' }, { status: 404 });
     }
 
-    await visitRepository.deleteVisit(id);
+    await visitService.deleteVisit(id);
 
     await auditService.logAction(
       user.email,

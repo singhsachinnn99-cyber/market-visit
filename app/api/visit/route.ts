@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { visitRepository } from '@/repositories/visit-repository';
+import { visitService } from '@/services/visit-service';
 import { visitSchema, visitDraftSchema } from '@/schemas/visit';
 import { auditService } from '@/services/audit-service';
 import { Visit, VisitPhoto, NPDResponse } from '@/types';
+
 
 export async function POST(req: NextRequest) {
   try {
@@ -84,7 +86,7 @@ export async function POST(req: NextRequest) {
       status: status as any,
     }));
 
-    const saved = await visitRepository.saveVisit(visitRecord, photoRecords, npdResponses);
+    const saved = await visitService.saveVisit(visitRecord, photoRecords, npdResponses);
 
     await auditService.logAction(
       user.email,

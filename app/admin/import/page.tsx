@@ -25,6 +25,7 @@ const STEP_ORDER: ImportStep[] = ['UPLOAD', 'VALIDATE', 'IMPORTING', 'SUMMARY'];
 export default function MasterImportPage() {
   const { showToast } = useToast();
   const [step, setStep] = useState<ImportStep>('UPLOAD');
+  const [activeImportKey, setActiveImportKey] = useState<keyof typeof files | 'ALL'>('ALL');
   
   // Files selection state
   const [files, setFiles] = useState<{
@@ -77,12 +78,70 @@ export default function MasterImportPage() {
 
   const canValidate = files.routeMaster && files.custMaster && files.skuMaster && files.classification;
 
+  const fdDefLabel = (key: keyof typeof files) => {
+    if (key === 'routeMaster') return 'Route Master File';
+    if (key === 'custMaster') return 'Customer Mappings File';
+    if (key === 'skuMaster') return 'SKU Master File';
+    if (key === 'classification') return 'Customer Classification File';
+    return 'Power SKU Master File';
+  };
+
+  const handleValidateSingle = async (key: keyof typeof files) => {
+    const selectedFile = files[key];
+    if (!selectedFile) {
+      showToast('Please select a file first.', 'warning');
+      return;
+    }
+    setLoading(true);
+    setActiveImportKey(key);
+    
+    const fd = new FormData();
+    fd.append(key, selectedFile);
+    fd.append('individual', 'true');
+
+    try {
+      const response = await fetch('/api/validate', {
+        method: 'POST',
+        body: fd,
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Validation server returned ${response.status}`);
+      }
+      const res = await response.json();
+      if (res.error) {
+        throw new Error(res.error);
+      }
+      if (res.success) {
+        setCounts({
+          routes: res.routesCount,
+          customers: res.customersCount,
+          mappings: res.mappingsCount,
+          skus: res.skusCount
+        });
+        setRoutesPreview(res.routesPreview as Route[]);
+        setCustomersPreview(res.customersPreview as Customer[]);
+        setMappingsPreview(res.mappingsPreview as CustomerRouteMapping[]);
+        setSkusPreview(res.skusPreview as SKU[]);
+        setValidationErrors(res.errors as any[]);
+        setImportPayload(res.payload);
+        setStep('VALIDATE');
+        showToast(`${fdDefLabel(key)} parsed and validated.`, 'success');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Validation failed.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleValidate = async () => {
     if (!canValidate) {
       showToast('Please select all required files first.', 'warning');
       return;
     }
     setLoading(true);
+    setActiveImportKey('ALL');
     const fd = new FormData();
     if (files.routeMaster) fd.append('routeMaster', files.routeMaster);
     if (files.custMaster) fd.append('custMaster', files.custMaster);
@@ -131,7 +190,11 @@ export default function MasterImportPage() {
     setLoading(true);
     setStep('IMPORTING');
     try {
-      setSummary(await importExcelAction(importPayload));
+      const summaryResult = await importExcelAction({
+        ...importPayload,
+        clearObsolete: activeImportKey === 'ALL',
+      });
+      setSummary(summaryResult);
       setStep('SUMMARY');
       showToast('Database synchronization complete.', 'success');
     } catch (err: any) {
@@ -153,6 +216,7 @@ export default function MasterImportPage() {
     setValidationErrors([]);
     setImportPayload(null);
     setSummary(null);
+    setActiveImportKey('ALL');
     setStep('UPLOAD');
   };
 
@@ -319,12 +383,24 @@ export default function MasterImportPage() {
                     </div>
                   </div>
                   {selectedFile ? (
-                    <button
-                      onClick={(e) => removeFile(fdDef.key, e)}
-                      className="h-7 w-7 rounded-full flex items-center justify-center transition-all hover:bg-red-100"
-                    >
-                      <X className="h-4 w-4 text-red-500" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleValidateSingle(fdDef.key);
+                        }}
+                        className="px-3 py-1.5 text-[11px] font-bold text-white rounded-lg bg-accent hover:bg-accent-hover transition-all flex items-center gap-1 shadow-sm"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        Import This
+                      </button>
+                      <button
+                        onClick={(e) => removeFile(fdDef.key, e)}
+                        className="h-7 w-7 rounded-full flex items-center justify-center transition-all hover:bg-red-100"
+                      >
+                        <X className="h-4 w-4 text-red-500" />
+                      </button>
+                    </div>
                   ) : (
                     <UploadCloud className="h-4.5 w-4.5" style={{ color: 'var(--text-muted)' }} />
                   )}

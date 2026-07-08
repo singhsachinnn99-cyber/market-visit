@@ -94,9 +94,11 @@ export async function importExcelAction(payload: {
   customers: Customer[];
   mappings: CustomerRouteMapping[];
   skus: SKU[];
+  clearObsolete?: boolean;
 }): Promise<ImportSummary> {
   const session = await verifyAdminSession();
-  const { routes, customers, mappings, skus } = payload;
+  const { routes, customers, mappings, skus, clearObsolete } = payload;
+  const shouldClear = clearObsolete !== false;
 
   let inserted = 0;
   let updated = 0;
@@ -110,10 +112,12 @@ export async function importExcelAction(payload: {
       const res = await routeRepository.upsertRoutes(routes);
       inserted += res.inserted;
       updated += res.updated;
-      // Remove routes not present in this import file
-      const activeCodes = routes.map((r) => r.routeCode);
-      const deletedCount = await routeRepository.clearObsoleteRoutes(activeCodes);
-      removed += deletedCount;
+      if (shouldClear) {
+        // Remove routes not present in this import file
+        const activeCodes = routes.map((r) => r.routeCode);
+        const deletedCount = await routeRepository.clearObsoleteRoutes(activeCodes);
+        removed += deletedCount;
+      }
     }
 
     // 2. Import Customers
@@ -121,10 +125,12 @@ export async function importExcelAction(payload: {
       const res = await customerRepository.upsertCustomers(customers);
       inserted += res.inserted;
       updated += res.updated;
-      // Remove customers not present
-      const activeCodes = customers.map((c) => c.customerCode);
-      const deletedCount = await customerRepository.clearObsoleteCustomers(activeCodes);
-      removed += deletedCount;
+      if (shouldClear) {
+        // Remove customers not present
+        const activeCodes = customers.map((c) => c.customerCode);
+        const deletedCount = await customerRepository.clearObsoleteCustomers(activeCodes);
+        removed += deletedCount;
+      }
     }
 
     // 3. Import Customer-Route Mappings
@@ -132,10 +138,12 @@ export async function importExcelAction(payload: {
       const res = await customerRepository.upsertMappings(mappings);
       inserted += res.inserted;
       updated += res.updated;
-      // Remove mappings not present
-      const activeIds = mappings.map((m) => m.id);
-      const deletedCount = await customerRepository.clearObsoleteMappings(activeIds);
-      removed += deletedCount;
+      if (shouldClear) {
+        // Remove mappings not present
+        const activeIds = mappings.map((m) => m.id);
+        const deletedCount = await customerRepository.clearObsoleteMappings(activeIds);
+        removed += deletedCount;
+      }
     }
 
     // 4. Import SKUs
@@ -143,10 +151,12 @@ export async function importExcelAction(payload: {
       const res = await skuRepository.upsertSkus(skus);
       inserted += res.inserted;
       updated += res.updated;
-      // Remove SKUs not present
-      const activeCodes = skus.map((s) => s.skuCode);
-      const deletedCount = await skuRepository.clearObsoleteSkus(activeCodes);
-      removed += deletedCount;
+      if (shouldClear) {
+        // Remove SKUs not present
+        const activeCodes = skus.map((s) => s.skuCode);
+        const deletedCount = await skuRepository.clearObsoleteSkus(activeCodes);
+        removed += deletedCount;
+      }
     }
 
     const adminUser = session.user?.email || 'Admin';

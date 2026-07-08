@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     }
 
     const formData = await req.formData();
+    const isIndividual = formData.get('individual') === 'true';
 
     const fileKeys = [
       { key: 'routeMaster', name: 'ROUTE MASTER.xlsx', type: 'routes' as const, required: true },
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
     for (const fk of fileKeys) {
       const file = formData.get(fk.key) as File | null;
       if (!file || file.size === 0) {
-        if (fk.required) {
+        if (fk.required && !isIndividual) {
           errors.push({ row: 0, error: `Required file "${fk.name}" was not selected.` });
         }
         continue;

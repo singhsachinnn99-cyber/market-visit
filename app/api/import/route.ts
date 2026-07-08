@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
     }
 
     const payload = await req.json();
-    const { routes, customers, mappings, skus } = payload;
+    const { routes, customers, mappings, skus, clearObsolete } = payload;
+    const shouldClear = clearObsolete !== false;
 
     let inserted = 0;
     let updated = 0;
@@ -31,9 +32,11 @@ export async function POST(req: NextRequest) {
       const res = await routeRepository.upsertRoutes(routes);
       inserted += res.inserted;
       updated += res.updated;
-      const activeCodes = routes.map((r: any) => r.routeCode);
-      const deletedCount = await routeRepository.clearObsoleteRoutes(activeCodes);
-      removed += deletedCount;
+      if (shouldClear) {
+        const activeCodes = routes.map((r: any) => r.routeCode);
+        const deletedCount = await routeRepository.clearObsoleteRoutes(activeCodes);
+        removed += deletedCount;
+      }
     }
 
     // 2. Import Customers
@@ -41,9 +44,11 @@ export async function POST(req: NextRequest) {
       const res = await customerRepository.upsertCustomers(customers);
       inserted += res.inserted;
       updated += res.updated;
-      const activeCodes = customers.map((c: any) => c.customerCode);
-      const deletedCount = await customerRepository.clearObsoleteCustomers(activeCodes);
-      removed += deletedCount;
+      if (shouldClear) {
+        const activeCodes = customers.map((c: any) => c.customerCode);
+        const deletedCount = await customerRepository.clearObsoleteCustomers(activeCodes);
+        removed += deletedCount;
+      }
     }
 
     // 3. Import mappings
@@ -51,9 +56,11 @@ export async function POST(req: NextRequest) {
       const res = await customerRepository.upsertMappings(mappings);
       inserted += res.inserted;
       updated += res.updated;
-      const activeIds = mappings.map((m: any) => m.id);
-      const deletedCount = await customerRepository.clearObsoleteMappings(activeIds);
-      removed += deletedCount;
+      if (shouldClear) {
+        const activeIds = mappings.map((m: any) => m.id);
+        const deletedCount = await customerRepository.clearObsoleteMappings(activeIds);
+        removed += deletedCount;
+      }
     }
 
     // 4. Import SKUs
@@ -61,9 +68,11 @@ export async function POST(req: NextRequest) {
       const res = await skuRepository.upsertSkus(skus);
       inserted += res.inserted;
       updated += res.updated;
-      const activeCodes = skus.map((s: any) => s.skuCode);
-      const deletedCount = await skuRepository.clearObsoleteSkus(activeCodes);
-      removed += deletedCount;
+      if (shouldClear) {
+        const activeCodes = skus.map((s: any) => s.skuCode);
+        const deletedCount = await skuRepository.clearObsoleteSkus(activeCodes);
+        removed += deletedCount;
+      }
     }
 
     await auditService.logAction(

@@ -457,7 +457,11 @@ export default function SupervisorDashboard() {
     <div className="dandy-dashboard-body animate-fade-in">
       <style dangerouslySetInnerHTML={{ __html: `
         .dandy-dashboard-body {
-          --ink:#0d2136; --soft:#5a7085; --line:#e2e9f0; --card:#fff; --bg:#eef3f8;
+          --ink: var(--text-primary);
+          --soft: var(--text-secondary);
+          --line: var(--border);
+          --card: var(--surface);
+          --bg: var(--bg);
           --blue:#4F46E5; --blue-deep:#4338CA; --green:#0f9d63; --amber:#d08a12; --red:#d63d2e;
           --shadow:0 2px 8px rgba(13,33,54,.06),0 8px 24px rgba(13,33,54,.05);
           font-family: var(--font-sans), 'Inter', system-ui, sans-serif;

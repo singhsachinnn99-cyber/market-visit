@@ -624,6 +624,27 @@ export default function SupervisorDashboard() {
         @media(max-width:820px){
           .grid, .grid3 { grid-template-columns:1fr; }
         }
+        @media(max-width:640px){
+          .top {
+            flex-direction:column;
+            align-items:flex-start;
+            gap:8px;
+          }
+          .top .flex {
+            width:100%;
+            justify-content:space-between;
+          }
+        }
+        @media(max-width:480px){
+          .filters {
+            flex-direction:column;
+            align-items:stretch;
+          }
+          .filters select, .reset {
+            width:100%;
+            min-height:40px;
+          }
+        }
         .panel {
           background:var(--card);
           border-radius:12px;

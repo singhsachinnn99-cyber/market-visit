@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Chart } from 'chart.js/auto';
+import { useTheme } from '@/providers/theme-provider';
 
 const SUPERVISOR_TO_MANAGER: Record<string, string> = {
   'YASAR': 'KHALID',
@@ -33,6 +34,7 @@ const GCOL: Record<string, string> = {
 export default function AdminDashboardPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { theme } = useTheme();
 
   // Filter States
   const [fTime, setFTime] = useState('');
@@ -162,6 +164,9 @@ export default function AdminDashboardPage() {
     if (isLoading || !filtered) return;
 
     const BLUE = '#4F46E5', BLUE_DEEP = '#4338CA', GREEN = '#0f9d63', AMBER = '#d08a12', RED = '#d63d2e', GREY = '#c3d2de';
+    const isDark = theme === 'dark';
+    const gridColor = isDark ? '#2A3A55' : '#E4E9F0';
+    const textColor = isDark ? '#94A3B8' : '#5A6478';
 
     const countFreq = (arr: any[], fn: (r: any) => string | number) => {
       const m: Record<string, number> = {};
@@ -197,7 +202,10 @@ export default function AdminDashboardPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
@@ -222,7 +230,7 @@ export default function AdminDashboardPage() {
         options: {
           maintainAspectRatio: false,
           cutout: '62%',
-          plugins: { legend: { position: 'bottom' } },
+          plugins: { legend: { position: 'bottom', labels: { color: textColor } } },
         },
       });
     }
@@ -250,7 +258,10 @@ export default function AdminDashboardPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
@@ -275,7 +286,7 @@ export default function AdminDashboardPage() {
         options: {
           maintainAspectRatio: false,
           cutout: '62%',
-          plugins: { legend: { position: 'bottom' } },
+          plugins: { legend: { position: 'bottom', labels: { color: textColor } } },
         },
       });
     }
@@ -299,7 +310,10 @@ export default function AdminDashboardPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
@@ -323,7 +337,10 @@ export default function AdminDashboardPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
@@ -349,11 +366,14 @@ export default function AdminDashboardPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
-  }, [filtered, isLoading]);
+  }, [filtered, isLoading, theme]);
 
   if (isLoading) {
     return (
@@ -367,7 +387,11 @@ export default function AdminDashboardPage() {
     <div className="dandy-dashboard-body">
       <style dangerouslySetInnerHTML={{ __html: `
         .dandy-dashboard-body {
-          --ink:#0d2136; --soft:#5a7085; --line:#e2e9f0; --card:#fff; --bg:#eef3f8;
+          --ink: var(--text-primary);
+          --soft: var(--text-secondary);
+          --line: var(--border);
+          --card: var(--surface);
+          --bg: var(--bg);
           --blue:#4F46E5; --blue-deep:#4338CA; --green:#0f9d63; --amber:#d08a12; --red:#d63d2e;
           --shadow:0 2px 8px rgba(13,33,54,.06),0 8px 24px rgba(13,33,54,.05);
           font-family: var(--font-sans), 'Inter', system-ui, sans-serif;
@@ -445,7 +469,7 @@ export default function AdminDashboardPage() {
           padding:8px 11px;
           border:1.5px solid var(--line);
           border-radius:11px;
-          background:#fff;
+          background:var(--card);
           font-family:inherit;
           font-size:12px;
           font-weight:600;
@@ -461,7 +485,7 @@ export default function AdminDashboardPage() {
           padding:8px 12px;
           border:1.5px solid var(--line);
           border-radius:11px;
-          background:#fff;
+          background:var(--card);
           font-family:inherit;
           font-size:12px;
           font-weight:700;
@@ -567,13 +591,13 @@ export default function AdminDashboardPage() {
           font-weight:800;
           position:sticky;
           top:0;
-          background:#fff;
+          background:var(--card);
         }
         td {
           padding:6px 8px;
           border-bottom:1px solid var(--line);
         }
-        tr:hover td { background:#f6fafc; }
+        tr:hover td { background:var(--surface-2); }
         .tbl-wrap {
           max-height:240px;
           overflow-y:auto;

@@ -164,6 +164,9 @@ export default function SupervisorReportsPage() {
     if (isLoading || !filtered) return;
 
     const BLUE = '#4F46E5', BLUE_DEEP = '#4338CA', GREEN = '#059669', AMBER = '#D97706', RED = '#DC2626', GREY = '#9BA3B2';
+    const isDark = theme === 'dark';
+    const gridColor = isDark ? '#2A3A55' : '#E4E9F0';
+    const textColor = isDark ? '#94A3B8' : '#5A6478';
 
     const countFreq = (arr: any[], fn: (r: any) => string | number) => {
       const m: Record<string, number> = {};
@@ -199,7 +202,10 @@ export default function SupervisorReportsPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
@@ -224,7 +230,7 @@ export default function SupervisorReportsPage() {
         options: {
           maintainAspectRatio: false,
           cutout: '62%',
-          plugins: { legend: { position: 'bottom' } },
+          plugins: { legend: { position: 'bottom', labels: { color: textColor } } },
         },
       });
     }
@@ -252,7 +258,10 @@ export default function SupervisorReportsPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
@@ -277,7 +286,7 @@ export default function SupervisorReportsPage() {
         options: {
           maintainAspectRatio: false,
           cutout: '62%',
-          plugins: { legend: { position: 'bottom' } },
+          plugins: { legend: { position: 'bottom', labels: { color: textColor } } },
         },
       });
     }
@@ -301,7 +310,10 @@ export default function SupervisorReportsPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
@@ -325,7 +337,10 @@ export default function SupervisorReportsPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
@@ -351,7 +366,10 @@ export default function SupervisorReportsPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }

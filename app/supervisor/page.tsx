@@ -234,6 +234,9 @@ export default function SupervisorDashboard() {
     const AMBER = '#d08a12';
     const RED = '#d63d2e';
     const GREY = '#c3d2de';
+    const isDark = theme === 'dark';
+    const gridColor = isDark ? '#2A3A55' : '#E4E9F0';
+    const textColor = isDark ? '#94A3B8' : '#5A6478';
 
     const countFreq = (arr: any[], fn: (r: any) => string | number) => {
       const m: Record<string, number> = {};
@@ -269,7 +272,10 @@ export default function SupervisorDashboard() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
@@ -294,7 +300,7 @@ export default function SupervisorDashboard() {
         options: {
           maintainAspectRatio: false,
           cutout: '62%',
-          plugins: { legend: { position: 'bottom' } },
+          plugins: { legend: { position: 'bottom', labels: { color: textColor } } },
         },
       });
     }
@@ -322,7 +328,10 @@ export default function SupervisorDashboard() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
@@ -347,7 +356,7 @@ export default function SupervisorDashboard() {
         options: {
           maintainAspectRatio: false,
           cutout: '62%',
-          plugins: { legend: { position: 'bottom' } },
+          plugins: { legend: { position: 'bottom', labels: { color: textColor } } },
         },
       });
     }
@@ -371,7 +380,10 @@ export default function SupervisorDashboard() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
@@ -395,7 +407,10 @@ export default function SupervisorDashboard() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
@@ -421,7 +436,10 @@ export default function SupervisorDashboard() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
         },
       });
     }
@@ -517,7 +535,7 @@ export default function SupervisorDashboard() {
           padding:8px 11px;
           border:1.5px solid var(--line);
           border-radius:11px;
-          background:#fff;
+          background:var(--card);
           font-family:inherit;
           font-size:12px;
           font-weight:600;
@@ -533,7 +551,7 @@ export default function SupervisorDashboard() {
           padding:8px 12px;
           border:1.5px solid var(--line);
           border-radius:11px;
-          background:#fff;
+          background:var(--card);
           font-family:inherit;
           font-size:12px;
           font-weight:700;
@@ -639,13 +657,13 @@ export default function SupervisorDashboard() {
           font-weight:800;
           position:sticky;
           top:0;
-          background:#fff;
+          background:var(--card);
         }
         td {
           padding:6px 8px;
           border-bottom:1px solid var(--line);
         }
-        tr:hover td { background:#f6fafc; }
+        tr:hover td { background:var(--surface-2); }
         .tbl-wrap {
           max-height:240px;
           overflow-y:auto;
@@ -911,7 +929,7 @@ export default function SupervisorDashboard() {
         </div>
 
         {/* Operational Cards Row (Pending Drafts & Submitted Audits List to fully retain components) */}
-        <div className="grid" style={{ gridTemplateColumns: drafts.length > 0 ? '1fr 1fr' : '1fr' }}>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
           
           {/* Pending Drafts Panel */}
           {drafts.length > 0 && (

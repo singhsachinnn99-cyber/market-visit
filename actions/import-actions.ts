@@ -4,9 +4,10 @@ import { auth } from '@/lib/auth';
 import { routeRepository } from '@/repositories/route-repository';
 import { customerRepository } from '@/repositories/customer-repository';
 import { skuRepository } from '@/repositories/sku-repository';
+import { userRepository } from '@/repositories/user-repository';
 import { parseSingleFile, mergeParsedData } from '@/utils/xlsx';
 import { auditService } from '@/services/audit-service';
-import { Route, Customer, CustomerRouteMapping, SKU, ImportSummary } from '@/types';
+import { Route, Customer, CustomerRouteMapping, SKU, ImportSummary, PowerSKU } from '@/types';
 
 const verifyAdminSession = async () => {
   const session = await auth();
@@ -31,7 +32,7 @@ export async function validateExcelAction(formData: FormData) {
     { key: 'custMaster', name: 'CUSTMASTER.xlsx', type: 'custMappings' as const, required: true },
     { key: 'skuMaster', name: 'SKUMASTER.xlsx', type: 'skuMaster' as const, required: true },
     { key: 'classification', name: 'Customer_Classification_DUMMY.xlsx', type: 'classification' as const, required: true },
-    { key: 'powerSkuMaster', name: 'PowerSku_Master_DUMMY.xlsx', type: 'skuMaster' as const, required: false },
+    { key: 'powerSkuMaster', name: 'PowerSku_Master_DUMMY.xlsx', type: 'powerSkus' as const, required: false },
   ];
 
   const parsedResults: any[] = [];
@@ -63,12 +64,14 @@ export async function validateExcelAction(formData: FormData) {
       customersCount: 0,
       mappingsCount: 0,
       skusCount: 0,
+      powerSkusCount: 0,
       routesPreview: [],
       customersPreview: [],
       mappingsPreview: [],
       skusPreview: [],
+      powerSkusPreview: [],
       errors,
-      payload: { routes: [], customers: [], mappings: [], skus: [] },
+      payload: { routes: [], customers: [], mappings: [], skus: [], powerSkus: [] },
     };
   }
 
@@ -80,10 +83,12 @@ export async function validateExcelAction(formData: FormData) {
     customersCount: merged.payload.customers.length,
     mappingsCount: merged.payload.mappings.length,
     skusCount: merged.payload.skus.length,
+    powerSkusCount: merged.payload.powerSkus.length,
     routesPreview: merged.payload.routes.slice(0, 5),
     customersPreview: merged.payload.customers.slice(0, 5),
     mappingsPreview: merged.payload.mappings.slice(0, 5),
     skusPreview: merged.payload.skus.slice(0, 5),
+    powerSkusPreview: merged.payload.powerSkus.slice(0, 5),
     errors: merged.errors,
     payload: merged.payload,
   };
@@ -94,84 +99,133 @@ export async function importExcelAction(payload: {
   customers: Customer[];
   mappings: CustomerRouteMapping[];
   skus: SKU[];
+  powerSkus?: PowerSKU[];
   clearObsolete?: boolean;
 }): Promise<ImportSummary> {
   const session = await verifyAdminSession();
-  const { routes, customers, mappings, skus, clearObsolete } = payload;
-  const shouldClear = clearObsolete !== false;
+  const { routes, customers, mappings, skus, powerSkus } = payload;
 
   let inserted = 0;
   let updated = 0;
-  let removed = 0;
+  let skipped = 0;
   const failed = 0;
   const errors: { row: number; error: string }[] = [];
+  const unmappedSupervisors = new Set<string>();
 
   try {
-    // 1. Import Routes
-    if (routes.length > 0) {
-      const res = await routeRepository.upsertRoutes(routes);
-      inserted += res.inserted;
-      updated += res.updated;
-      if (shouldClear) {
-        // Remove routes not present in this import file
-        const activeCodes = routes.map((r) => r.routeCode);
-        const deletedCount = await routeRepository.clearObsoleteRoutes(activeCodes);
-        removed += deletedCount;
-      }
+    // 1. Fetch all supervisors and check for duplicates in system database
+    const users = await userRepository.getAllUsers();
+    const supervisors = users.filter((u) => u.role === 'Supervisor');
+    
+    const supervisorNames = supervisors.map((u) => u.name.trim().toLowerCase());
+    const duplicates = supervisorNames.filter((name, i) => supervisorNames.indexOf(name) !== i);
+    if (duplicates.length > 0) {
+      throw new Error(`Import failed: Duplicate supervisor name(s) found in system database: ${Array.from(new Set(duplicates)).join(', ')}`);
     }
 
-    // 2. Import Customers
+    const poolConnection = require('@/lib/db').default;
+
+    // 2. Import Routes with Supervisor & Manager Mapping
+    if (routes.length > 0) {
+      const routesToImport: Route[] = [];
+
+      for (const r of routes) {
+        // Resolve Manager
+        const managerName = (r.managerName || '').trim();
+        let managerId = null;
+        if (managerName) {
+          const [mRows]: any = await poolConnection.execute(
+            'SELECT `id` FROM `Manager` WHERE LOWER(\`name\`) = LOWER(?) LIMIT 1',
+            [managerName]
+          );
+          if (mRows.length > 0) {
+            managerId = mRows[0].id;
+          } else {
+            managerId = 'mng_' + Math.random().toString(36).substring(2, 9);
+            await poolConnection.execute(
+              'INSERT INTO `Manager` (`id`, `name`) VALUES (?, ?)',
+              [managerId, managerName]
+            );
+          }
+        }
+
+        // Resolve Supervisor
+        const superName = (r.superName || '').trim();
+        let supervisorId = null;
+        if (superName) {
+          const cleanSuperName = superName.toLowerCase().replace(/\s+/g, '');
+          const matchedSuper = supervisors.find(
+            (u) => u.name.toLowerCase().replace(/\s+/g, '') === cleanSuperName
+          );
+          if (matchedSuper) {
+            supervisorId = matchedSuper.id;
+            // Establish One Manager -> Many Supervisors relationship
+            if (managerId) {
+              await poolConnection.execute(
+                'UPDATE `User` SET `managerId` = ? WHERE `id` = ?',
+                [managerId, supervisorId]
+              );
+            }
+          } else {
+            unmappedSupervisors.add(superName);
+          }
+        }
+
+        routesToImport.push({
+          ...r,
+          supervisorId,
+          managerId,
+        });
+      }
+
+      const res = await routeRepository.upsertRoutes(routesToImport);
+      inserted += res.inserted;
+      updated += res.updated;
+    }
+
+    // 3. Import Customers
     if (customers.length > 0) {
       const res = await customerRepository.upsertCustomers(customers);
       inserted += res.inserted;
       updated += res.updated;
-      if (shouldClear) {
-        // Remove customers not present
-        const activeCodes = customers.map((c) => c.customerCode);
-        const deletedCount = await customerRepository.clearObsoleteCustomers(activeCodes);
-        removed += deletedCount;
-      }
     }
 
-    // 3. Import Customer-Route Mappings
+    // 4. Import Customer-Route Mappings
     if (mappings.length > 0) {
       const res = await customerRepository.upsertMappings(mappings);
       inserted += res.inserted;
       updated += res.updated;
-      if (shouldClear) {
-        // Remove mappings not present
-        const activeIds = mappings.map((m) => m.id);
-        const deletedCount = await customerRepository.clearObsoleteMappings(activeIds);
-        removed += deletedCount;
-      }
     }
 
-    // 4. Import SKUs
+    // 5. Import SKUs
     if (skus.length > 0) {
       const res = await skuRepository.upsertSkus(skus);
       inserted += res.inserted;
       updated += res.updated;
-      if (shouldClear) {
-        // Remove SKUs not present
-        const activeCodes = skus.map((s) => s.skuCode);
-        const deletedCount = await skuRepository.clearObsoleteSkus(activeCodes);
-        removed += deletedCount;
-      }
+    }
+
+    // 6. Import Power SKUs
+    if (powerSkus && powerSkus.length > 0) {
+      const res = await skuRepository.upsertPowerSkus(powerSkus);
+      inserted += res.inserted;
+      updated += res.updated;
     }
 
     const adminUser = session.user?.email || 'Admin';
     await auditService.logAction(
       adminUser,
       'Excel Master Import',
-      `Imported masters. Totals: Inserted: ${inserted}, Updated: ${updated}, Removed: ${removed}`
+      `Imported/Upserted masters. Totals: Inserted: ${inserted}, Updated: ${updated}`
     );
 
     return {
       inserted,
       updated,
-      removed,
+      removed: 0, // UPSERT only, no deletions
       failed,
       errors,
+      skipped,
+      unmappedSupervisors: Array.from(unmappedSupervisors),
     };
   } catch (error: any) {
     console.error('Import action failed:', error);

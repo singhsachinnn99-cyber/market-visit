@@ -9,7 +9,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const skus = await skuRepository.getAllSkus();
+    const skus = await skuRepository.getSkusByType('NPD');
     return NextResponse.json(skus);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

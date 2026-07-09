@@ -17,22 +17,30 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   createdAt: string; // ISO string
+  managerId?: string | null;
 }
 
 export interface Route {
   routeCode: string;
   routeName: string;
+  channel: string;
+  supervisorId?: string | null;
+  managerId?: string | null;
+  superName?: string; // transient for UI/parsing
+  managerName?: string; // transient for UI/parsing
 }
 
 export interface Customer {
+  cust_rt_id: string;
   customerCode: string;
   customerName: string;
   classification: string; // A-E
   channel: string;
+  routeCode: string;
 }
 
 export interface CustomerRouteMapping {
-  id: string; // CustomerCode_RouteCode
+  cust_rt_id: string; // CustomerCode|RouteCode
   customerCode: string;
   routeCode: string;
 }
@@ -40,25 +48,43 @@ export interface CustomerRouteMapping {
 export interface SKU {
   skuCode: string;
   skuName: string;
+  type: string; // 'SKU', 'NPD'
+}
+
+export interface PowerSKU {
+  skuCode: string;
+  skuName: string;
+  channel: string;
 }
 
 export interface Visit {
   visitId: string;
-  supervisorId: string; // EmployeeCode or Email
-  routeCode: string;
-  customerCode: string;
-  assetType: AssetType;
-  temperature: number;
-  tempInRange: boolean;
-  actionRequired: ActionRequiredType;
-  observation: string;
+  supervisorId: string; // User.id
+  cust_rt_id: string;
   latitude: number;
   longitude: number;
   accuracy: number;
   status: VisitStatus;
   createdBy: string;
+  visit_datetime: string;
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
+  sosAsPerBda?: boolean | null;
+  routeCode: string; // Transient helper
+  customerCode: string; // Transient helper
+  temperature?: number;
+  tempInRange?: boolean;
+  assetType?: AssetType;
+}
+
+export interface VisitAsset {
+  assetId: string;
+  visitId: string;
+  assetType: AssetType;
+  temperature: number;
+  tempInRange: boolean;
+  actionRequired: ActionRequiredType;
+  observation: string;
 }
 
 export interface VisitPhoto {
@@ -76,6 +102,13 @@ export interface NPDResponse {
   skuCode: string;
   status: NPDStatus;
 }
+
+export interface VisitPowerSkuResult {
+  visitId: string;
+  skuCode: string;
+  status: NPDStatus;
+}
+
 
 export interface AuditLog {
   logId: string;
@@ -144,12 +177,15 @@ export interface VisitWizardState {
   observation?: string;
   photos: {
     photoId: string;
-    category: 'Dairy' | 'Beverages' | 'Ice Cream' | 'Assets';
+    category: 'Dairy' | 'Beverages' | 'Fruits' | 'Vegetables';
     cloudinaryUrl: string;
     publicId: string;
     uploadedAt: string;
   }[];
   npdResponses: Record<string, NPDStatus>; // SKUCode -> NPDStatus
+  powerSkuResults?: Record<string, NPDStatus>;
+  assets?: VisitAsset[];
+  sosAsPerBda?: boolean | null;
   latitude?: number;
   longitude?: number;
   accuracy?: number;
@@ -170,4 +206,6 @@ export interface ImportSummary {
   removed: number;
   failed: number;
   errors: { row: number; error: string }[];
+  skipped?: number;
+  unmappedSupervisors?: string[];
 }

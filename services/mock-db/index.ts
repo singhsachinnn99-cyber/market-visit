@@ -87,33 +87,33 @@ const initialUsers = (): User[] => [
 ];
 
 const initialRoutes = (): Route[] => [
-  { routeCode: 'R01', routeName: 'Downtown Route A' },
-  { routeCode: 'R02', routeName: 'Uptown Route B' },
-  { routeCode: 'R03', routeName: 'Suburban Route C' },
+  { routeCode: 'R01', routeName: 'Downtown Route A', channel: 'GT' },
+  { routeCode: 'R02', routeName: 'Uptown Route B', channel: 'MT' },
+  { routeCode: 'R03', routeName: 'Suburban Route C', channel: 'GT' },
 ];
 
 const initialCustomers = (): Customer[] => [
-  { customerCode: 'C001', customerName: 'Mart Superstore', classification: 'A', channel: 'Modern Trade' },
-  { customerCode: 'C002', customerName: 'Apex Grocery', classification: 'B', channel: 'General Trade' },
-  { customerCode: 'C003', customerName: 'Corner Store Daily', classification: 'C', channel: 'General Trade' },
-  { customerCode: 'C004', customerName: 'Metro Food Plaza', classification: 'A', channel: 'Modern Trade' },
-  { customerCode: 'C005', customerName: 'Highway Refreshments', classification: 'D', channel: 'QSR' },
+  { cust_rt_id: 'C001|R01', customerCode: 'C001', customerName: 'Mart Superstore', classification: 'A', channel: 'Modern Trade', routeCode: 'R01' },
+  { cust_rt_id: 'C002|R01', customerCode: 'C002', customerName: 'Apex Grocery', classification: 'B', channel: 'General Trade', routeCode: 'R01' },
+  { cust_rt_id: 'C003|R02', customerCode: 'C003', customerName: 'Corner Store Daily', classification: 'C', channel: 'General Trade', routeCode: 'R02' },
+  { cust_rt_id: 'C004|R02', customerCode: 'C004', customerName: 'Metro Food Plaza', classification: 'A', channel: 'Modern Trade', routeCode: 'R02' },
+  { cust_rt_id: 'C005|R03', customerCode: 'C005', customerName: 'Highway Refreshments', classification: 'D', channel: 'QSR', routeCode: 'R03' },
 ];
 
 const initialMappings = (): CustomerRouteMapping[] => [
-  { id: 'C001_R01', customerCode: 'C001', routeCode: 'R01' },
-  { id: 'C002_R01', customerCode: 'C002', routeCode: 'R01' },
-  { id: 'C003_R02', customerCode: 'C003', routeCode: 'R02' },
-  { id: 'C004_R02', customerCode: 'C004', routeCode: 'R02' },
-  { id: 'C005_R03', customerCode: 'C005', routeCode: 'R03' },
-  { id: 'C001_R03', customerCode: 'C001', routeCode: 'R03' }, // Customer 1 on Route 3 as well
+  { cust_rt_id: 'C001|R01', customerCode: 'C001', routeCode: 'R01' },
+  { cust_rt_id: 'C002|R01', customerCode: 'C002', routeCode: 'R01' },
+  { cust_rt_id: 'C003|R02', customerCode: 'C003', routeCode: 'R02' },
+  { cust_rt_id: 'C004|R02', customerCode: 'C004', routeCode: 'R02' },
+  { cust_rt_id: 'C005|R03', customerCode: 'C005', routeCode: 'R03' },
+  { cust_rt_id: 'C001|R03', customerCode: 'C001', routeCode: 'R03' }, // Customer 1 on Route 3 as well
 ];
 
 const initialSKUs = (): SKU[] => [
-  { skuCode: 'SKU01', skuName: 'Milk Shake Chocolate 250ml' },
-  { skuCode: 'SKU02', skuName: 'Premium Ice Cream Vanilla 1L' },
-  { skuCode: 'SKU03', skuName: 'Mango Juice Bottle 500ml' },
-  { skuCode: 'SKU04', skuName: 'Frozen Yogurt Cup 150ml' },
+  { skuCode: 'SKU01', skuName: 'Milk Shake Chocolate 250ml', type: 'SKU' },
+  { skuCode: 'SKU02', skuName: 'Premium Ice Cream Vanilla 1L', type: 'SKU' },
+  { skuCode: 'SKU03', skuName: 'Mango Juice Bottle 500ml', type: 'SKU' },
+  { skuCode: 'SKU04', skuName: 'Frozen Yogurt Cup 150ml', type: 'SKU' },
 ];
 
 export const mockDb = {

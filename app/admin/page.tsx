@@ -74,29 +74,41 @@ export default function AdminDashboardPage() {
   }, []);
 
   // Compute dropdown values from unfiltered rows
+  // 1. Manager Options: filtered by Time Period only
   const mgrOptions = useMemo(() => {
-    return Array.from(new Set(rows.map((r) => r.mgr))).sort();
-  }, [rows]);
+    const filteredByTime = rows.filter(r => !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4));
+    return Array.from(new Set(filteredByTime.map((r) => r.mgr))).sort();
+  }, [rows, fTime]);
 
+  // 2. Supervisor Options: filtered by Time Period and Manager
   const supOptions = useMemo(() => {
-    return Array.from(new Set(rows.map((r) => r.sup))).sort();
-  }, [rows]);
+    const filteredByTimeAndMgr = rows.filter(r => 
+      (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4)) &&
+      (!fMgr || r.mgr === fMgr)
+    );
+    return Array.from(new Set(filteredByTimeAndMgr.map((r) => r.sup))).sort();
+  }, [rows, fTime, fMgr]);
 
-  // Outlets filtered dynamically based on upstream manager/supervisor/channel selections
+  // 3. Channel Options: filtered by Time Period, Manager, and Supervisor
+  const channelOptions = useMemo(() => {
+    const filteredByTimeMgrSuper = rows.filter(r => 
+      (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4)) &&
+      (!fMgr || r.mgr === fMgr) &&
+      (!fSuper || r.sup === fSuper)
+    );
+    return Array.from(new Set(filteredByTimeMgrSuper.map((r) => r.ch))).sort();
+  }, [rows, fTime, fMgr, fSuper]);
+
+  // 4. Customer / Outlet Options: filtered by Time Period, Manager, Supervisor, and Channel
   const custOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        rows
-          .filter(
-            (r) =>
-              (!fChannel || r.ch === fChannel) &&
-              (!fMgr || r.mgr === fMgr) &&
-              (!fSuper || r.sup === fSuper)
-          )
-          .map((r) => r.cust)
-      )
-    ).sort();
-  }, [rows, fChannel, fMgr, fSuper]);
+    const filteredByAllUpstream = rows.filter(r => 
+      (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4)) &&
+      (!fMgr || r.mgr === fMgr) &&
+      (!fSuper || r.sup === fSuper) &&
+      (!fChannel || r.ch === fChannel)
+    );
+    return Array.from(new Set(filteredByAllUpstream.map((r) => r.cust))).sort();
+  }, [rows, fTime, fMgr, fSuper, fChannel]);
 
   // Reset helper
   const resetFilters = () => {
@@ -680,7 +692,13 @@ export default function AdminDashboardPage() {
         <div className="filters">
           <div className="fld">
             <label>Time Period</label>
-            <select value={fTime} onChange={(e) => setFTime(e.target.value)}>
+            <select value={fTime} onChange={(e) => {
+              setFTime(e.target.value);
+              setFMgr('');
+              setFSuper('');
+              setFChannel('');
+              setFCust('');
+            }}>
               <option value="">All Periods</option>
               <option value="recent">Recent (W5-W8)</option>
               <option value="earlier">Earlier (W1-W4)</option>
@@ -689,7 +707,12 @@ export default function AdminDashboardPage() {
 
           <div className="fld">
             <label>Manager</label>
-            <select value={fMgr} onChange={(e) => setFMgr(e.target.value)}>
+            <select value={fMgr} onChange={(e) => {
+              setFMgr(e.target.value);
+              setFSuper('');
+              setFChannel('');
+              setFCust('');
+            }}>
               <option value="">All Managers</option>
               {mgrOptions.map((m) => (
                 <option key={m} value={m}>{m}</option>
@@ -699,7 +722,11 @@ export default function AdminDashboardPage() {
 
           <div className="fld">
             <label>Supervisor</label>
-            <select value={fSuper} onChange={(e) => setFSuper(e.target.value)}>
+            <select value={fSuper} onChange={(e) => {
+              setFSuper(e.target.value);
+              setFChannel('');
+              setFCust('');
+            }}>
               <option value="">All Supervisors</option>
               {supOptions.map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -709,12 +736,14 @@ export default function AdminDashboardPage() {
 
           <div className="fld">
             <label>Channel</label>
-            <select value={fChannel} onChange={(e) => setFChannel(e.target.value)}>
+            <select value={fChannel} onChange={(e) => {
+              setFChannel(e.target.value);
+              setFCust('');
+            }}>
               <option value="">All Channels</option>
-              <option value="TT">TT</option>
-              <option value="MT">MT</option>
-              <option value="INST">INST</option>
-              <option value="EXPORT">EXPORT</option>
+              {channelOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </select>
           </div>
 

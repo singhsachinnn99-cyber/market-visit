@@ -17,18 +17,33 @@ import {
   ChevronRight,
   ShieldCheck,
   Trash2,
+  Plus,
+  Info,
 } from 'lucide-react';
-import { Route, Customer, SKU, VisitWizardState, VisitPhoto } from '@/types';
+import { Route, Customer, SKU, PowerSKU, VisitWizardState, VisitPhoto, VisitAsset } from '@/types';
+
+function generateVisitId(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const dateStr = `${year}${month}${day}${hours}${minutes}${seconds}`;
+  const randomStr = Math.random().toString(36).substring(2, 10).toUpperCase();
+  return `MV-${dateStr}-${randomStr}`;
+}
 
 const STEP_NAMES = [
   'Route Selection',
-  'Outlet Selection',
+  'Customer Selection',
+  'Power SKU Checklist',
+  'NPD Checklist',
+  'Capture Assets',
   'Capture Photos',
-  'Asset Parameters',
-  'Action Required',
-  'SKU Availability',
-  'GPS Coordinates',
-  'Audit Summary'
+  'GPS Sync',
+  'Review & Submit'
 ];
 
 function VisitWizardContent() {
@@ -43,17 +58,19 @@ function VisitWizardContent() {
 
   // Selections
   const [selectedRoute, setSelectedRoute] = useState('');
-  const [selectedCustomer, setSelectedCustomer] = useState('');
-  const [assetType, setAssetType] = useState<'Chiller' | 'Freezer'>('Chiller');
-  const [temperature, setTemperature] = useState<number | ''>('');
-  const [actionRequired, setActionRequired] = useState<any>('None');
-  const [observation, setObservation] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState(''); // Stores cust_rt_id
+  const [customerSearch, setCustomerSearch] = useState('');
+
+  // Multiple assets list
+  const [assets, setAssets] = useState<VisitAsset[]>([]);
+  const [sosAsPerBda, setSosAsPerBda] = useState<boolean | null>(null);
 
   // Photos category split
-  const [photos, setPhotos] = useState<any[]>([]);
+  const [photos, setPhotos] = useState<VisitPhoto[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  // NPD states
+  // SKU Checklists states
+  const [powerSkuResults, setPowerSkuResults] = useState<Record<string, any>>({});
   const [npdResponses, setNpdResponses] = useState<Record<string, any>>({});
 
   // Submitting loaders
@@ -63,25 +80,45 @@ function VisitWizardContent() {
   // 1. Load masters
   const { data: routes = [] } = useQuery<Route[]>({
     queryKey: ['routes'],
-    queryFn: () => fetch('/api/routes').then((res) => res.json()),
+    queryFn: () => fetch('/api/routes').then((res) => {
+      if (!res.ok) throw new Error('Failed to load routes');
+      return res.json();
+    }),
   });
 
   const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: ['customers', selectedRoute],
     queryFn: () => {
       if (!selectedRoute) return [];
-      return fetch(`/api/customers?routeCode=${selectedRoute}`).then((res) => res.json());
+      return fetch(`/api/customers?routeCode=${selectedRoute}`).then((res) => {
+        if (!res.ok) throw new Error('Failed to load customers');
+        return res.json();
+      });
     },
     enabled: !!selectedRoute,
   });
 
-  const { data: skus = [] } = useQuery<SKU[]>({
-    queryKey: ['skus'],
-    queryFn: () => fetch('/api/skus').then((res) => res.json()),
+  const { data: powerSkus = [] } = useQuery<PowerSKU[]>({
+    queryKey: ['powerSkus', selectedRoute],
+    queryFn: () => {
+      if (!selectedRoute) return [];
+      return fetch(`/api/powerskus?routeCode=${selectedRoute}`).then((res) => {
+        if (!res.ok) throw new Error('Failed to load Power SKUs');
+        return res.json();
+      });
+    },
+    enabled: !!selectedRoute,
   });
 
-  const custMap = new Map<string, Customer>(customers.map((c) => [c.customerCode, c]));
-  const activeCustomer = selectedCustomer ? custMap.get(selectedCustomer) : null;
+  const { data: npdSkus = [] } = useQuery<SKU[]>({
+    queryKey: ['npdSkus'],
+    queryFn: () => fetch('/api/skus').then((res) => {
+      if (!res.ok) throw new Error('Failed to load NPD SKUs');
+      return res.json();
+    }),
+  });
+
+  const activeCustomer = selectedCustomer ? customers.find((c) => c.cust_rt_id === selectedCustomer) : null;
 
   // Initialize a new Visit ID or resume existing
   useEffect(() => {
@@ -97,34 +134,44 @@ function VisitWizardContent() {
       if (localMatch) {
         setVisitId(localMatch.visitId);
         setSelectedRoute(localMatch.routeCode);
-        setSelectedCustomer(localMatch.customerCode);
-        setAssetType(localMatch.assetType || 'Chiller');
-        setTemperature(localMatch.temperature !== undefined ? localMatch.temperature : '');
-        setActionRequired(localMatch.actionRequired || 'None');
-        setObservation(localMatch.observation || '');
-        setPhotos(localMatch.photos || []);
+        setSelectedCustomer(localMatch.customerCode); // stores cust_rt_id
+        setAssets((localMatch.assets || []).map((a: any) => ({ ...a, visitId: resumeId })));
+        setPhotos((localMatch.photos || []).map((p: any) => ({ ...p, visitId: resumeId })));
+        setPowerSkuResults(localMatch.powerSkuResults || {});
         setNpdResponses(localMatch.npdResponses || {});
+        setSosAsPerBda(localMatch.sosAsPerBda !== undefined ? localMatch.sosAsPerBda : null);
         setCurrentStep(localMatch.currentStep || 0);
       } else {
-        setVisitId(`VISIT-${Date.now()}`);
+        setVisitId(generateVisitId());
       }
     } else {
-      setVisitId(`VISIT-${Date.now()}`);
+      setVisitId(generateVisitId());
     }
   }, [searchParams]);
+
+  // Pre-populate with 1 empty asset if assets array is empty
+  useEffect(() => {
+    if (visitId && assets.length === 0) {
+      setAssets([
+        {
+          assetId: 'ast_' + Math.random().toString(36).substring(2, 9),
+          visitId,
+          assetType: 'Chiller',
+          temperature: 0,
+          tempInRange: true,
+          actionRequired: 'None',
+          observation: '',
+        },
+      ]);
+    }
+  }, [visitId, assets]);
 
   useEffect(() => {
     getCoordinates();
   }, []);
 
-  const isTempInRange = () => {
-    if (temperature === '') return true;
-    const temp = Number(temperature);
-    if (assetType === 'Chiller') {
-      return temp >= 0 && temp <= 8;
-    } else {
-      return temp <= -15;
-    }
+  const getTempInRange = (type: 'Chiller' | 'Freezer', temp: number) => {
+    return type === 'Chiller' ? (temp >= 0 && temp <= 8) : (temp <= -15);
   };
 
   const saveStateToLocalStorage = (stepIndex: number) => {
@@ -137,14 +184,13 @@ function VisitWizardContent() {
       const updatedDraft: VisitWizardState = {
         visitId,
         routeCode: selectedRoute,
-        customerCode: selectedCustomer,
+        customerCode: selectedCustomer, // stores cust_rt_id
         customerName: activeCustomer?.customerName || '',
-        assetType,
-        temperature: temperature !== '' ? Number(temperature) : undefined,
-        actionRequired,
-        observation,
+        assets,
         photos,
+        powerSkuResults,
         npdResponses,
+        sosAsPerBda,
         currentStep: stepIndex,
         status: 'Draft',
       };
@@ -250,14 +296,15 @@ function VisitWizardContent() {
     try {
       const draftPayload = {
         visitId,
-        routeCode: selectedRoute,
-        customerCode: selectedCustomer,
-        assetType,
-        temperature: temperature !== '' ? Number(temperature) : undefined,
-        actionRequired,
-        observation,
+        cust_rt_id: selectedCustomer,
+        assets: assets.map(a => ({
+          ...a,
+          tempInRange: getTempInRange(a.assetType, a.temperature)
+        })),
         photos,
+        powerSkuResults,
         npdResponses,
+        sosAsPerBda,
         status: 'Draft' as const,
       };
 
@@ -281,35 +328,27 @@ function VisitWizardContent() {
         return;
       }
 
-      // Photos are now optional, no validation check required.
-
-      if (temperature === '') {
-        showToast('Temperature is mandatory to submit.', 'error');
+      if (assets.some(a => a.temperature === undefined || a.temperature === null)) {
+        showToast('Please record a temperature for all assets.', 'error');
         setSubmittingVisit(false);
         return;
       }
 
-      const checkListResponses = skus.map((sku) => ({
-        skuCode: sku.skuCode,
-        status: npdResponses[sku.skuCode] || 'Not Required',
-      }));
-
       const finalPayload = {
         visitId,
-        routeCode: selectedRoute,
-        customerCode: selectedCustomer,
-        assetType,
-        temperature: Number(temperature),
-        tempInRange: isTempInRange(),
-        actionRequired,
-        observation,
+        cust_rt_id: selectedCustomer,
+        assets: assets.map(a => ({
+          ...a,
+          tempInRange: getTempInRange(a.assetType, a.temperature)
+        })),
+        photos,
+        powerSkuResults,
+        npdResponses,
+        sosAsPerBda,
         latitude,
         longitude,
         accuracy: accuracy || 0,
         status: 'Submitted' as const,
-        photos,
-        checklist: checkListResponses,
-        npdResponses,
       };
 
       await submitVisitAction(finalPayload);
@@ -329,6 +368,38 @@ function VisitWizardContent() {
       setSubmittingVisit(false);
     }
   };
+
+  const addAsset = () => {
+    setAssets((prev) => [
+      ...prev,
+      {
+        assetId: 'ast_' + Math.random().toString(36).substring(2, 9),
+        visitId,
+        assetType: 'Chiller',
+        temperature: 0,
+        tempInRange: true,
+        actionRequired: 'None',
+        observation: '',
+      },
+    ]);
+  };
+
+  const removeAsset = (assetId: string) => {
+    if (assets.length <= 1) return;
+    setAssets((prev) => prev.filter((a) => a.assetId !== assetId));
+  };
+
+  const updateAssetField = (assetId: string, field: keyof VisitAsset, value: any) => {
+    setAssets((prev) =>
+      prev.map((a) => (a.assetId === assetId ? { ...a, [field]: value } : a))
+    );
+  };
+
+  // Filter customers by input search query
+  const filteredCustomers = customers.filter((c) =>
+    c.customerCode.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    c.customerName.toLowerCase().includes(customerSearch.toLowerCase())
+  );
 
   return (
     <div className="max-w-2xl mx-auto space-y-5 pb-28">
@@ -350,7 +421,7 @@ function VisitWizardContent() {
         </button>
       </div>
 
-      {/* Interactive Stepper Track - Premium Background Line Design */}
+      {/* Interactive Stepper Track */}
       <div className="space-y-4 card p-4">
         <div className="relative flex items-center justify-between w-full px-1 py-2">
           {/* Background track line */}
@@ -444,7 +515,7 @@ function VisitWizardContent() {
             >
               <option value="">— Choose Route —</option>
               {routes.map((r) => (
-                <option key={r.routeCode} value={r.routeCode}>{r.routeCode} – {r.routeName}</option>
+                <option key={r.routeCode} value={r.routeCode}>{r.routeCode} – {r.routeName} ({r.channel})</option>
               ))}
             </select>
           </div>
@@ -455,15 +526,31 @@ function VisitWizardContent() {
       {currentStep === 1 && (
         <div className="card p-5 space-y-4 animate-slide-up">
           <span className="badge badge-accent">Outlet Selection</span>
-          <div>
-            <label className="form-label mb-1">Customer Outlets on Route</label>
-            <select value={selectedCustomer} onChange={(e) => setSelectedCustomer(e.target.value)} className="form-input">
+          
+          <div className="space-y-2">
+            <label className="form-label">Search & Select Customer Outlet</label>
+            <input
+              type="text"
+              placeholder="Type customer code or name to search..."
+              value={customerSearch}
+              onChange={(e) => setCustomerSearch(e.target.value)}
+              className="form-input"
+            />
+            
+            <select 
+              value={selectedCustomer} 
+              onChange={(e) => setSelectedCustomer(e.target.value)} 
+              className="form-input"
+              size={5}
+              style={{ height: 'auto', maxHeight: '180px' }}
+            >
               <option value="">— Choose Customer —</option>
-              {customers.map((c) => (
-                <option key={c.customerCode} value={c.customerCode}>{c.customerCode} – {c.customerName}</option>
+              {filteredCustomers.map((c) => (
+                <option key={c.cust_rt_id} value={c.cust_rt_id}>{c.customerCode} – {c.customerName}</option>
               ))}
             </select>
           </div>
+
           {activeCustomer && (
             <div className="grid grid-cols-2 gap-3 p-4 rounded-xl animate-slide-up" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
               <div>
@@ -479,8 +566,227 @@ function VisitWizardContent() {
         </div>
       )}
 
-      {/* STEP 2: CAPTURE PHOTOS */}
+      {/* STEP 2: POWER SKU CHECKLIST */}
       {currentStep === 2 && (
+        <div className="card p-5 space-y-4 animate-slide-up">
+          <span className="badge badge-accent">Power SKU Checklist</span>
+          <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
+            {powerSkus.length === 0 ? (
+              <p className="text-[12px] italic text-center py-4" style={{ color: 'var(--text-muted)' }}>
+                No Power SKUs configured for channel &quot;{activeCustomer?.channel}&quot;.
+              </p>
+            ) : (
+              powerSkus.map((sku) => {
+                const currentStatus = powerSkuResults[sku.skuCode] || 'Not Required';
+                return (
+                  <div key={sku.skuCode} className="p-3.5 rounded-xl space-y-2.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
+                    <div>
+                      <p className="text-[12px] font-bold" style={{ color: 'var(--text-primary)' }}>{sku.skuName}</p>
+                      <p className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>{sku.skuCode}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {['Available', 'Not Available', 'Not Required'].map((opt) => {
+                        const isChecked = currentStatus === opt;
+                        const col = opt === 'Available' ? 'var(--success)' : opt === 'Not Available' ? 'var(--danger)' : 'var(--text-muted)';
+                        const bg = opt === 'Available' ? 'var(--success-light)' : opt === 'Not Available' ? 'var(--danger-light)' : 'var(--surface)';
+                        return (
+                          <button key={opt} type="button"
+                            onClick={() => setPowerSkuResults((prev) => ({ ...prev, [sku.skuCode]: opt }))}
+                            className="flex-grow h-9 text-[10px] font-bold rounded-lg transition-all cursor-pointer"
+                            style={{
+                              background: isChecked ? bg : 'transparent',
+                              color: isChecked ? col : 'var(--text-muted)',
+                              border: `1px solid ${isChecked ? col : 'var(--border)'}`,
+                            }}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* STEP 3: NPD CHECKLIST */}
+      {currentStep === 3 && (
+        <div className="card p-5 space-y-4 animate-slide-up">
+          <span className="badge badge-accent">NPD SKU Checklist</span>
+          <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
+            {npdSkus.length === 0 ? (
+              <p className="text-[12px] italic text-center py-4" style={{ color: 'var(--text-muted)' }}>No NPD SKUs configured.</p>
+            ) : (
+              npdSkus.map((sku) => {
+                const currentStatus = npdResponses[sku.skuCode] || 'Not Required';
+                return (
+                  <div key={sku.skuCode} className="p-3.5 rounded-xl space-y-2.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
+                    <div>
+                      <p className="text-[12px] font-bold" style={{ color: 'var(--text-primary)' }}>{sku.skuName}</p>
+                      <p className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>{sku.skuCode}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {['Available', 'Not Available', 'Not Required'].map((opt) => {
+                        const isChecked = currentStatus === opt;
+                        const col = opt === 'Available' ? 'var(--success)' : opt === 'Not Available' ? 'var(--danger)' : 'var(--text-muted)';
+                        const bg = opt === 'Available' ? 'var(--success-light)' : opt === 'Not Available' ? 'var(--danger-light)' : 'var(--surface)';
+                        return (
+                          <button key={opt} type="button"
+                            onClick={() => setNpdResponses((prev) => ({ ...prev, [sku.skuCode]: opt }))}
+                            className="flex-grow h-9 text-[10px] font-bold rounded-lg transition-all cursor-pointer"
+                            style={{
+                              background: isChecked ? bg : 'transparent',
+                              color: isChecked ? col : 'var(--text-muted)',
+                              border: `1px solid ${isChecked ? col : 'var(--border)'}`,
+                            }}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* STEP 4: CAPTURE ASSETS */}
+      {currentStep === 4 && (
+        <div className="card p-5 space-y-4 animate-slide-up">
+          <div className="flex items-center justify-between">
+            <span className="badge badge-accent">Asset Monitoring</span>
+            <button
+              type="button"
+              onClick={addAsset}
+              className="btn-ghost"
+              style={{ color: 'var(--accent)', height: '32px', padding: '0 12px' }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Add Asset</span>
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {assets.map((ast, idx) => {
+              const inRange = getTempInRange(ast.assetType, ast.temperature);
+              return (
+                <div key={ast.assetId} className="p-4 rounded-xl space-y-4" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-bold" style={{ color: 'var(--text-primary)' }}>Asset #{idx + 1}</span>
+                    {assets.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeAsset(ast.assetId)}
+                        className="p-1 text-[var(--danger)] hover:bg-[var(--danger-light)] rounded-lg transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {(['Chiller', 'Freezer'] as const).map(type => (
+                      <button key={type} type="button" onClick={() => updateAssetField(ast.assetId, 'assetType', type)}
+                        className="h-10 text-[11px] font-bold rounded-lg transition-all cursor-pointer"
+                        style={{
+                          background: ast.assetType === type ? 'var(--accent-light)' : 'var(--surface)',
+                          color: ast.assetType === type ? 'var(--accent)' : 'var(--text-muted)',
+                          border: `1px solid ${ast.assetType === type ? 'var(--accent)' : 'var(--border)'}`,
+                        }}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="form-label mb-1">Temp (°C)</label>
+                      <input type="number" step="0.1" placeholder="e.g. 4.2" value={ast.temperature}
+                        onChange={(e) => updateAssetField(ast.assetId, 'temperature', e.target.value !== '' ? Number(e.target.value) : 0)}
+                        className="form-input font-mono h-9 text-[12px]" />
+                    </div>
+                    <div>
+                      <label className="form-label mb-1">Mandatory Action Required</label>
+                      <select value={ast.actionRequired} onChange={(e) => updateAssetField(ast.assetId, 'actionRequired', e.target.value)} className="form-input h-9 text-[12px]">
+                        <option value="None">None</option>
+                        <option value="Cleaning">Cleaning</option>
+                        <option value="Repair">Repair</option>
+                        <option value="Replacement">Replacement</option>
+                        <option value="Gas Filling">Gas Filling</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="form-label mb-1">Observations / Notes</label>
+                    <input type="text" placeholder="Write observation details…" value={ast.observation}
+                      onChange={(e) => updateAssetField(ast.assetId, 'observation', e.target.value)}
+                      className="form-input h-9 text-[12px]" />
+                  </div>
+
+                  {/* Temperature Warning banner */}
+                  {!inRange && (
+                    <div className="flex gap-2 p-3 rounded-lg animate-slide-up" style={{ background: 'var(--danger-light)', border: '1px solid rgba(220,38,38,0.15)' }}>
+                      <AlertTriangle className="h-4 w-4 text-[var(--danger)] mt-0.5" />
+                      <div>
+                        <p className="text-[11px] font-bold" style={{ color: 'var(--danger)' }}>Temperature Breach Warning</p>
+                        <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>Rule: Chiller [0 to 8°C] | Freezer [Below -15°C]</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="p-3 rounded-xl text-[11px]" style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border-soft)' }}>
+            <strong style={{ color: 'var(--text-primary)' }}>Range Rules:</strong> Chiller: <span style={{ color: 'var(--accent)' }}>0°C to 8°C</span> · Freezer: <span style={{ color: '#7C3AED' }}>Below -15°C</span>
+          </div>
+
+          {/* SOS option if MT */}
+          {activeCustomer && activeCustomer.channel.toUpperCase() === 'MT' && (
+            <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[12px] font-bold" style={{ color: 'var(--text-primary)' }}>Modern Trade SOS Check</p>
+                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Is Share of Shelf (SOS) compliant with BDA guidelines?</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {[true, false].map((v) => {
+                    const isChecked = sosAsPerBda === v;
+                    const label = v ? 'Compliant' : 'Non-Compliant';
+                    const col = v ? 'var(--success)' : 'var(--danger)';
+                    const bg = v ? 'var(--success-light)' : 'var(--danger-light)';
+                    return (
+                      <button key={label} type="button" onClick={() => setSosAsPerBda(v)}
+                        className="h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer transition-all"
+                        style={{
+                          background: isChecked ? bg : 'var(--surface)',
+                          color: isChecked ? col : 'var(--text-muted)',
+                          border: `1px solid ${isChecked ? col : 'var(--border)'}`
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* STEP 5: CAPTURE PHOTOS */}
+      {currentStep === 5 && (
         <div className="card p-5 space-y-4 animate-slide-up">
           <span className="badge badge-accent">Camera Capture</span>
           <div className="space-y-3">
@@ -527,114 +833,7 @@ function VisitWizardContent() {
         </div>
       )}
 
-      {/* STEP 3: ASSET TEMPERATURE */}
-      {currentStep === 3 && (
-        <div className="card p-5 space-y-4 animate-slide-up">
-          <span className="badge badge-accent">Asset Parameters</span>
-          <div className="grid grid-cols-2 gap-3">
-            {(['Chiller', 'Freezer'] as const).map(type => (
-              <button key={type} type="button" onClick={() => setAssetType(type)}
-                className="h-12 text-[13px] font-bold rounded-xl transition-all cursor-pointer"
-                style={{
-                  background: assetType === type ? 'var(--accent-light)' : 'var(--surface-2)',
-                  color: assetType === type ? 'var(--accent)' : 'var(--text-muted)',
-                  border: `1px solid ${assetType === type ? 'var(--accent)' : 'var(--border)'}`,
-                }}
-              >
-                {type}
-              </button>
-            ))}
-          </div>
-          <div>
-            <label className="form-label mb-1">Recorded Temperature (°C)</label>
-            <input type="number" step="0.1" placeholder="e.g. 4.2" value={temperature}
-              onChange={(e) => setTemperature(e.target.value !== '' ? Number(e.target.value) : '')}
-              className="form-input font-mono" />
-          </div>
-          <div className="p-3.5 rounded-xl text-[11px]" style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border-soft)' }}>
-            <strong style={{ color: 'var(--text-primary)' }}>Range Rules:</strong> Chiller: <span style={{ color: 'var(--accent)' }}>0°C to 8°C</span> · Freezer: <span style={{ color: '#7C3AED' }}>Below -15°C</span>
-          </div>
-          {temperature !== '' && !isTempInRange() && (
-            <div className="flex gap-3 p-4 rounded-xl animate-slide-up" style={{ background: 'var(--danger-light)', border: '1px solid rgba(220,38,38,0.2)' }}>
-              <AlertTriangle className="h-4.5 w-4.5 flex-shrink-0 mt-0.5" style={{ color: 'var(--danger)' }} />
-              <div>
-                <p className="text-[12px] font-bold" style={{ color: 'var(--danger)' }}>Temperature Out of Range</p>
-                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>This audit will be flagged as a temperature breach.</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* STEP 4: ACTION REQUIRED */}
-      {currentStep === 4 && (
-        <div className="card p-5 space-y-4 animate-slide-up">
-          <span className="badge badge-accent">Observations</span>
-          <div>
-            <label className="form-label mb-1">Mandatory Action</label>
-            <select value={actionRequired} onChange={(e) => setActionRequired(e.target.value)} className="form-input">
-              <option value="None">None (In order)</option>
-              <option value="Cleaning">Cleaning</option>
-              <option value="Repair">Repair</option>
-              <option value="Replacement">Replacement</option>
-              <option value="Gas Filling">Gas Filling</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div>
-            <label className="form-label mb-1">Observations / Notes <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>
-            <textarea placeholder="Write observation details…" rows={3} value={observation}
-              onChange={(e) => setObservation(e.target.value)}
-              className="form-input resize-none" style={{ height: 'auto', paddingTop: '10px', paddingBottom: '10px', lineHeight: '1.5' }} />
-          </div>
-        </div>
-      )}
-
-      {/* STEP 5: NPD CHECK */}
-      {currentStep === 5 && (
-        <div className="card p-5 space-y-4 animate-slide-up">
-          <span className="badge badge-accent">SKU Checklist</span>
-          <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
-            {skus.length === 0 ? (
-              <p className="text-[12px] italic" style={{ color: 'var(--text-muted)' }}>No SKU masters configured.</p>
-            ) : (
-              skus.map((sku) => {
-                const currentStatus = npdResponses[sku.skuCode] || 'Not Required';
-                return (
-                  <div key={sku.skuCode} className="p-3.5 rounded-xl space-y-2.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
-                    <div>
-                      <p className="text-[12px] font-bold" style={{ color: 'var(--text-primary)' }}>{sku.skuName}</p>
-                      <p className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>{sku.skuCode}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {['Available', 'Not Available', 'Not Required'].map((opt) => {
-                        const isChecked = currentStatus === opt;
-                        const col = opt === 'Available' ? 'var(--success)' : opt === 'Not Available' ? 'var(--danger)' : 'var(--text-muted)';
-                        const bg = opt === 'Available' ? 'var(--success-light)' : opt === 'Not Available' ? 'var(--danger-light)' : 'var(--surface)';
-                        return (
-                          <button key={opt} type="button"
-                            onClick={() => setNpdResponses((prev) => ({ ...prev, [sku.skuCode]: opt }))}
-                            className="flex-grow h-9 text-[10px] font-bold rounded-lg transition-all cursor-pointer"
-                            style={{
-                              background: isChecked ? bg : 'transparent',
-                              color: isChecked ? col : 'var(--text-muted)',
-                              border: `1px solid ${isChecked ? col : 'var(--border)'}`,
-                            }}
-                          >
-                            {opt}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* STEP 6: GPS COORDS */}
+      {/* STEP 6: GPS SYNC */}
       {currentStep === 6 && (
         <div className="card p-5 space-y-4 animate-slide-up text-center">
           <span className="badge badge-accent">GPS Sync</span>
@@ -677,16 +876,19 @@ function VisitWizardContent() {
       {currentStep === 7 && (
         <div className="card p-5 space-y-4 animate-slide-up">
           <span className="badge badge-success">Summary Readback</span>
+          
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
             {[
               ['Route Code', selectedRoute, 'mono'],
-              ['Customer Code', selectedCustomer, 'mono'],
+              ['Customer Outlet', activeCustomer ? `${activeCustomer.customerCode} - ${activeCustomer.customerName}` : '—', 'bold'],
               ['Classification', activeCustomer?.classification || '—', 'accent'],
-              ['Asset Type', assetType, 'bold'],
-              ['Temperature', `${temperature}°C (${isTempInRange() ? 'Valid ✓' : 'Breach ⚠'})`, isTempInRange() ? 'success' : 'danger'],
-              ['Action Required', actionRequired, 'accent'],
+              ['Channel', activeCustomer?.channel || '—', 'accent'],
+              ['Assets Monitored', `${assets.length} items`, 'bold'],
               ['GPS Status', 'Acquired ✓', 'success'],
-              ['Photos', `${photos.length} images`, 'bold'],
+              ['Photos Captured', `${photos.length} images`, 'bold'],
+              ['Power SKUs checked', `${Object.keys(powerSkuResults).length} items`, 'mono'],
+              ['NPD SKUs checked', `${Object.keys(npdResponses).length} items`, 'mono'],
+              ...(activeCustomer?.channel.toUpperCase() === 'MT' ? [['SOS Compliant', sosAsPerBda === null ? '—' : (sosAsPerBda ? 'Yes ✓' : 'No ⚠'), sosAsPerBda ? 'success' : 'danger']] : [])
             ].map(([label, value, style], i, arr) => (
               <div key={label as string} className="flex items-center justify-between px-4 py-3"
                 style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--border-soft)' : 'none', background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)' }}>
@@ -700,6 +902,7 @@ function VisitWizardContent() {
               </div>
             ))}
           </div>
+
           <button
             onClick={handleFinalSubmit}
             disabled={submittingVisit || savingDraft}
@@ -716,7 +919,7 @@ function VisitWizardContent() {
         </div>
       )}
 
-      {/* Wizard Navigation Footer - Inline flow on Mobile/Desktop to prevent overlapping layout widgets */}
+      {/* Wizard Navigation Footer */}
       <div
         className="flex items-center justify-between gap-4 p-4 rounded-xl border border-solid border-[var(--border-soft)] mt-4"
         style={{

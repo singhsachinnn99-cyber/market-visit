@@ -13,7 +13,7 @@ import {
   AlertTriangle, MapPin, X, Calendar, Trash2, Thermometer,
   RefreshCw, ChevronRight,
 } from 'lucide-react';
-import { Visit, VisitPhoto, VisitWizardState, NPDResponse } from '@/types';
+import { Visit, VisitPhoto, VisitWizardState, NPDResponse, VisitAsset, VisitPowerSkuResult } from '@/types';
 
 const GCOL: Record<string, string> = {
   A: '#0b7a4c',
@@ -36,7 +36,13 @@ export default function SupervisorDashboard() {
   const [loading, setLoading] = useState(true);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [reviewData, setReviewData] = useState<{ visit: Visit; photos: VisitPhoto[]; npdResponses: NPDResponse[] } | null>(null);
+  const [reviewData, setReviewData] = useState<{
+    visit: Visit;
+    assets: VisitAsset[];
+    photos: VisitPhoto[];
+    powerSkuResults?: VisitPowerSkuResult[];
+    npdResponses: NPDResponse[];
+  } | null>(null);
 
   // Analytics Dashboard Data States (Admin match dependency)
   const [rows, setRows] = useState<any[]>([]);
@@ -140,34 +146,23 @@ export default function SupervisorDashboard() {
     }
   };
 
-  // Dropdown options derived from rows
-  const mgrOptions = useMemo(() => {
-    return Array.from(new Set(rows.map((r) => r.mgr))).sort();
-  }, [rows]);
+  // 1. Channel Options: filtered by Time Period only
+  const channelOptions = useMemo(() => {
+    const filteredByTime = rows.filter(r => !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4));
+    return Array.from(new Set(filteredByTime.map((r) => r.ch))).sort();
+  }, [rows, fTime]);
 
-  const supOptions = useMemo(() => {
-    return Array.from(new Set(rows.map((r) => r.sup))).sort();
-  }, [rows]);
-
+  // 2. Customer / Outlet Options: filtered by Time Period and Channel
   const custOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        rows
-          .filter(
-            (r) =>
-              (!fChannel || r.ch === fChannel) &&
-              (!fMgr || r.mgr === fMgr) &&
-              (!fSuper || r.sup === fSuper)
-          )
-          .map((r) => r.cust)
-      )
-    ).sort();
-  }, [rows, fChannel, fMgr, fSuper]);
+    const filteredByTimeAndChannel = rows.filter(r => 
+      (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4)) &&
+      (!fChannel || r.ch === fChannel)
+    );
+    return Array.from(new Set(filteredByTimeAndChannel.map((r) => r.cust))).sort();
+  }, [rows, fTime, fChannel]);
 
   const resetFilters = () => {
     setFTime('');
-    setFMgr('');
-    setFSuper('');
     setFChannel('');
     setFCust('');
   };
@@ -829,7 +824,11 @@ export default function SupervisorDashboard() {
           <div className="filters">
             <div className="fld">
               <label>Time Period</label>
-              <select value={fTime} onChange={(e) => setFTime(e.target.value)}>
+              <select value={fTime} onChange={(e) => {
+                setFTime(e.target.value);
+                setFChannel('');
+                setFCust('');
+              }}>
                 <option value="">All Periods</option>
                 <option value="recent">Recent (W5-W8)</option>
                 <option value="earlier">Earlier (W1-W4)</option>
@@ -838,12 +837,14 @@ export default function SupervisorDashboard() {
 
           <div className="fld">
             <label>Channel</label>
-            <select value={fChannel} onChange={(e) => setFChannel(e.target.value)}>
+            <select value={fChannel} onChange={(e) => {
+              setFChannel(e.target.value);
+              setFCust('');
+            }}>
               <option value="">All Channels</option>
-              <option value="TT">TT</option>
-              <option value="MT">MT</option>
-              <option value="INST">INST</option>
-              <option value="EXPORT">EXPORT</option>
+              {channelOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </select>
           </div>
 
@@ -1174,31 +1175,40 @@ export default function SupervisorDashboard() {
                       <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Route Code</p>
                       <p className="text-[13px] font-semibold mt-0.5 text-[var(--text-primary)]">{reviewData.visit.routeCode}</p>
                     </div>
-                    <div>
-                      <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Asset Checked</p>
-                      <p className="text-[13px] font-semibold mt-0.5 text-[var(--text-primary)]">{reviewData.visit.assetType}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Temperature reading</p>
-                      <p className={`text-[13px] font-bold mt-0.5 ${reviewData.visit.tempInRange ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {reviewData.visit.temperature}°C ({reviewData.visit.tempInRange ? 'Safe' : 'Breach'})
-                      </p>
-                    </div>
+                    {reviewData.visit.sosAsPerBda !== null && reviewData.visit.sosAsPerBda !== undefined && (
+                      <div className="col-span-2">
+                        <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Share of Shelf (SOS)</p>
+                        <p className="text-[13px] font-semibold mt-0.5 text-[var(--text-primary)]">
+                          {reviewData.visit.sosAsPerBda ? 'Compliant ✓' : 'Non-Compliant ⚠'}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div>
-                    <p className="form-label mb-2">Remarks & Observations</p>
-                    <div className="p-3 bg-[var(--surface-2)] rounded-xl border border-[var(--border-soft)]">
-                      <p className="text-[13px] text-[var(--text-secondary)] italic leading-relaxed">
-                        {reviewData.visit.observation || 'No remarks provided.'}
-                      </p>
+                    <p className="form-label mb-2">Assets Audited</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(reviewData.assets || []).map((ast, index) => (
+                        <div key={ast.assetId} className="p-3 bg-[var(--surface-2)] rounded-xl border border-[var(--border-soft)] space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold uppercase text-[var(--text-primary)]">{ast.assetType} #{index + 1}</span>
+                            <span className={`badge text-[10px] ${ast.tempInRange ? 'badge-success' : 'badge-danger'}`}>
+                              {ast.temperature}°C {ast.tempInRange ? '✓' : '⚠'}
+                            </span>
+                          </div>
+                          {ast.observation && (
+                            <p className="text-[11px] text-[var(--text-secondary)] italic">
+                              &ldquo;{ast.observation}&rdquo;
+                            </p>
+                          )}
+                          {ast.actionRequired !== 'None' && (
+                            <div className="text-[10px] font-bold text-red-500">
+                              Action: {ast.actionRequired}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                    {reviewData.visit.actionRequired !== 'None' && (
-                      <div className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-red-500 bg-red-50 border border-red-100 p-2 rounded-lg">
-                        <AlertTriangle className="h-4 w-4" />
-                        <span>Action Triggered: {reviewData.visit.actionRequired}</span>
-                      </div>
-                    )}
                   </div>
 
                   <div>

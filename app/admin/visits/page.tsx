@@ -11,7 +11,7 @@ import {
   ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight,
   CheckCircle2, Clock, Filter,
 } from 'lucide-react';
-import { Visit, VisitPhoto, NPDResponse } from '@/types';
+import { Visit, VisitPhoto, NPDResponse, VisitAsset, VisitPowerSkuResult } from '@/types';
 
 // ─── Shared table helpers ────────────────────────────────────
 function TH({ children, right }: { children: React.ReactNode; right?: boolean }) {
@@ -87,7 +87,13 @@ export default function VisitLogsPage() {
   const itemsPerPage = 10;
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [reviewData, setReviewData] = useState<{ visit: Visit; photos: VisitPhoto[]; npdResponses: NPDResponse[] } | null>(null);
+  const [reviewData, setReviewData] = useState<{
+    visit: Visit;
+    assets: VisitAsset[];
+    photos: VisitPhoto[];
+    powerSkuResults?: VisitPowerSkuResult[];
+    npdResponses: NPDResponse[];
+  } | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
 
   const fetchVisits = async () => {
@@ -374,32 +380,38 @@ export default function VisitLogsPage() {
                   </div>
 
                   {/* Temperature + Action */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="p-4 rounded-xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
-                      <p className="form-label mb-2">Asset & Temperature</p>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[13px] font-bold uppercase" style={{ color: 'var(--text-primary)' }}>{reviewData.visit.assetType}</span>
-                        <span className={`badge ${reviewData.visit.tempInRange ? 'badge-success' : 'badge-danger'}`}>
-                          {reviewData.visit.temperature}°C {reviewData.visit.tempInRange ? '✓ In Range' : '⚠ Breach'}
-                        </span>
-                      </div>
-                      {!reviewData.visit.tempInRange && (
-                        <div className="mt-2 flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--danger)' }}>
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          Temperature breach detected
+                              {/* Assets and Actions */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {(reviewData.assets || []).map((ast, index) => (
+                      <div key={ast.assetId} className="p-4 rounded-xl space-y-2" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] font-bold uppercase" style={{ color: 'var(--text-primary)' }}>
+                            {ast.assetType} #{index + 1}
+                          </span>
+                          <span className={`badge ${ast.tempInRange ? 'badge-success' : 'badge-danger'}`}>
+                            {ast.temperature}°C {ast.tempInRange ? '✓ In Range' : '⚠ Breach'}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                    <div className="p-4 rounded-xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
-                      <p className="form-label mb-2">Action & Observation</p>
-                      <p className="text-[12px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        Action: <span style={{ color: 'var(--accent)' }}>{reviewData.visit.actionRequired}</span>
-                      </p>
-                      <p className="text-[11px] mt-2 italic leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                        "{reviewData.visit.observation || 'No observations recorded.'}"
-                      </p>
-                    </div>
+                        <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                          Action Required: <span className="font-semibold text-[var(--accent)]">{ast.actionRequired}</span>
+                        </p>
+                        {ast.observation && (
+                          <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>
+                            &ldquo;{ast.observation}&rdquo;
+                          </p>
+                        )}
+                      </div>
+                    ))}
                   </div>
+
+                  {reviewData.visit.sosAsPerBda !== null && reviewData.visit.sosAsPerBda !== undefined && (
+                    <div className="p-4 rounded-xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
+                      <p className="form-label mb-1">Share of Shelf (SOS)</p>
+                      <span className={`badge ${reviewData.visit.sosAsPerBda ? 'badge-success' : 'badge-danger'}`}>
+                        {reviewData.visit.sosAsPerBda ? 'Compliant ✓' : 'Non-Compliant ⚠'}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Photos */}
                   <div>

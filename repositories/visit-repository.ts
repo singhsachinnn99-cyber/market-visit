@@ -1,25 +1,24 @@
-import { Visit, VisitPhoto, NPDResponse } from '@/types';
+import { Visit, VisitPhoto, NPDResponse, VisitAsset, VisitPowerSkuResult } from '@/types';
 import pool from '@/lib/db';
 import mysql from 'mysql2/promise';
 
 function mapRowToVisit(row: any): Visit {
+  const [customerCode, routeCode] = (row.cust_rt_id || '').split('|');
   return {
     visitId: row.visitId,
     supervisorId: row.supervisorId,
-    routeCode: row.routeCode,
-    customerCode: row.customerCode,
-    assetType: row.assetType as any,
-    temperature: row.temperature,
-    tempInRange: row.tempInRange === 1 || row.tempInRange === true,
-    actionRequired: row.actionRequired as any,
-    observation: row.observation,
+    cust_rt_id: row.cust_rt_id,
     latitude: row.latitude,
     longitude: row.longitude,
     accuracy: row.accuracy,
     status: row.status as any,
     createdBy: row.createdBy,
+    visit_datetime: row.visit_datetime instanceof Date ? row.visit_datetime.toISOString() : row.visit_datetime,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt,
+    sosAsPerBda: row.sosAsPerBda === null ? null : (row.sosAsPerBda === 1 || row.sosAsPerBda === true),
+    routeCode: routeCode || '',
+    customerCode: customerCode || '',
   };
 }
 
@@ -87,52 +86,72 @@ export const visitRepository = {
     return rows.map(mapRowToNpd);
   },
 
+  async getVisitAssets(visitId: string): Promise<VisitAsset[]> {
+    const [rows]: any = await pool.execute(
+      'SELECT * FROM `VisitAsset` WHERE `visitId` = ?',
+      [visitId]
+    );
+    return rows.map((r: any) => ({
+      assetId: r.assetId,
+      visitId: r.visitId,
+      assetType: r.assetType as any,
+      temperature: r.temperature,
+      tempInRange: r.tempInRange === 1 || r.tempInRange === true,
+      actionRequired: r.actionRequired as any,
+      observation: r.observation,
+    }));
+  },
+
+  async getVisitPowerSkuResults(visitId: string): Promise<VisitPowerSkuResult[]> {
+    const [rows]: any = await pool.execute(
+      'SELECT * FROM `VisitPowerSkuResult` WHERE `visitId` = ?',
+      [visitId]
+    );
+    return rows.map((r: any) => ({
+      visitId: r.visitId,
+      skuCode: r.skuCode,
+      status: r.status as any,
+    }));
+  },
+
   async saveVisitRecord(visit: Visit, connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
     const executor = connection || pool;
-    const tempInRange = visit.tempInRange ? 1 : 0;
     const createdAt = visit.createdAt ? new Date(visit.createdAt) : new Date();
     const updatedAt = visit.updatedAt ? new Date(visit.updatedAt) : new Date();
+    const visitDatetime = visit.visit_datetime ? new Date(visit.visit_datetime) : new Date();
 
     const sql = `
       INSERT INTO \`Visit\` (
-        \`visitId\`, \`supervisorId\`, \`routeCode\`, \`customerCode\`, \`assetType\`, 
-        \`temperature\`, \`tempInRange\`, \`actionRequired\`, \`observation\`, 
-        \`latitude\`, \`longitude\`, \`accuracy\`, \`status\`, \`createdBy\`, \`createdAt\`, \`updatedAt\`
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        \`visitId\`, \`supervisorId\`, \`cust_rt_id\`, 
+        \`latitude\`, \`longitude\`, \`accuracy\`, \`status\`, 
+        \`createdBy\`, \`visit_datetime\`, \`createdAt\`, \`updatedAt\`, \`sosAsPerBda\`
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         \`supervisorId\` = VALUES(\`supervisorId\`),
-        \`routeCode\` = VALUES(\`routeCode\`),
-        \`customerCode\` = VALUES(\`customerCode\`),
-        \`assetType\` = VALUES(\`assetType\`),
-        \`temperature\` = VALUES(\`temperature\`),
-        \`tempInRange\` = VALUES(\`tempInRange\`),
-        \`actionRequired\` = VALUES(\`actionRequired\`),
-        \`observation\` = VALUES(\`observation\`),
+        \`cust_rt_id\` = VALUES(\`cust_rt_id\`),
         \`latitude\` = VALUES(\`latitude\`),
         \`longitude\` = VALUES(\`longitude\`),
         \`accuracy\` = VALUES(\`accuracy\`),
         \`status\` = VALUES(\`status\`),
         \`createdBy\` = VALUES(\`createdBy\`),
-        \`updatedAt\` = VALUES(\`updatedAt\`)
+        \`visit_datetime\` = VALUES(\`visit_datetime\`),
+        \`updatedAt\` = VALUES(\`updatedAt\`),
+        \`sosAsPerBda\` = VALUES(\`sosAsPerBda\`)
     `;
 
     await executor.execute(sql, [
       visit.visitId,
       visit.supervisorId,
-      visit.routeCode || null,
-      visit.customerCode || null,
-      visit.assetType,
-      visit.temperature,
-      tempInRange,
-      visit.actionRequired,
-      visit.observation,
+      visit.cust_rt_id,
       visit.latitude,
       visit.longitude,
       visit.accuracy,
       visit.status,
       visit.createdBy,
+      visitDatetime,
       createdAt,
       updatedAt,
+      visit.sosAsPerBda === undefined || visit.sosAsPerBda === null ? null : (visit.sosAsPerBda ? 1 : 0)
     ]);
   },
 
@@ -168,14 +187,59 @@ export const visitRepository = {
     }
   },
 
-  async saveVisit(visit: Visit, photos: VisitPhoto[], npdResponses: NPDResponse[]): Promise<Visit> {
+  async deleteAssetsForVisit(visitId: string, connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
+    const executor = connection || pool;
+    await executor.execute('DELETE FROM `VisitAsset` WHERE `visitId` = ?', [visitId]);
+  },
+
+  async insertAssets(assets: VisitAsset[], connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
+    const executor = connection || pool;
+    for (const ast of assets) {
+      await executor.execute(
+        `INSERT INTO \`VisitAsset\` (\`assetId\`, \`visitId\`, \`assetType\`, \`temperature\`, \`tempInRange\`, \`actionRequired\`, \`observation\`) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [ast.assetId, ast.visitId, ast.assetType, ast.temperature, ast.tempInRange ? 1 : 0, ast.actionRequired, ast.observation]
+      );
+    }
+  },
+
+  async deletePowerSkuResultsForVisit(visitId: string, connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
+    const executor = connection || pool;
+    await executor.execute('DELETE FROM `VisitPowerSkuResult` WHERE `visitId` = ?', [visitId]);
+  },
+
+  async insertPowerSkuResults(results: VisitPowerSkuResult[], connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
+    const executor = connection || pool;
+    for (const r of results) {
+      await executor.execute(
+        'INSERT INTO `VisitPowerSkuResult` (`visitId`, `skuCode`, `status`) VALUES (?, ?, ?)',
+        [r.visitId, r.skuCode, r.status]
+      );
+    }
+  },
+
+  async saveVisit(
+    visit: Visit,
+    assets: VisitAsset[],
+    photos: VisitPhoto[],
+    powerSkuResults: VisitPowerSkuResult[],
+    npdResponses: NPDResponse[]
+  ): Promise<Visit> {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
 
       await this.saveVisitRecord(visit, connection);
+      
+      await this.deleteAssetsForVisit(visit.visitId, connection);
+      await this.insertAssets(assets, connection);
+      
       await this.deletePhotosForVisit(visit.visitId, connection);
       await this.insertPhotos(photos, connection);
+      
+      await this.deletePowerSkuResultsForVisit(visit.visitId, connection);
+      await this.insertPowerSkuResults(powerSkuResults, connection);
+
       await this.deleteNpdForVisit(visit.visitId, connection);
       await this.insertNpd(npdResponses, connection);
 
@@ -192,7 +256,7 @@ export const visitRepository = {
   },
 
   async deleteVisit(visitId: string): Promise<void> {
-    // Native ON DELETE CASCADE automatically handles VisitPhoto and NPDResponse removal
+    // Native ON DELETE CASCADE automatically handles VisitPhoto, VisitAsset, NPDResponse, VisitPowerSkuResult removal
     await pool.execute('DELETE FROM `Visit` WHERE `visitId` = ?', [visitId]);
   },
 };

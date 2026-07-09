@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
       { key: 'custMaster', name: 'CUSTMASTER.xlsx', type: 'custMappings' as const, required: true },
       { key: 'skuMaster', name: 'SKUMASTER.xlsx', type: 'skuMaster' as const, required: true },
       { key: 'classification', name: 'Customer_Classification_DUMMY.xlsx', type: 'classification' as const, required: true },
-      { key: 'powerSkuMaster', name: 'PowerSku_Master_DUMMY.xlsx', type: 'skuMaster' as const, required: false },
+      { key: 'powerSkuMaster', name: 'PowerSku_Master_DUMMY.xlsx', type: 'powerSkus' as const, required: false },
     ];
 
     const parsedResults: any[] = [];
@@ -56,12 +56,14 @@ export async function POST(req: NextRequest) {
         customersCount: 0,
         mappingsCount: 0,
         skusCount: 0,
+        powerSkusCount: 0,
         routesPreview: [],
         customersPreview: [],
         mappingsPreview: [],
         skusPreview: [],
+        powerSkusPreview: [],
         errors,
-        payload: { routes: [], customers: [], mappings: [], skus: [] },
+        payload: { routes: [], customers: [], mappings: [], skus: [], powerSkus: [] },
       });
     }
 
@@ -73,10 +75,12 @@ export async function POST(req: NextRequest) {
       customersCount: merged.payload.customers.length,
       mappingsCount: merged.payload.mappings.length,
       skusCount: merged.payload.skus.length,
+      powerSkusCount: merged.payload.powerSkus.length,
       routesPreview: merged.payload.routes.slice(0, 5),
       customersPreview: merged.payload.customers.slice(0, 5),
       mappingsPreview: merged.payload.mappings.slice(0, 5),
       skusPreview: merged.payload.skus.slice(0, 5),
+      powerSkusPreview: merged.payload.powerSkus.slice(0, 5),
       errors: merged.errors,
       payload: merged.payload,
     });

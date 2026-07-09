@@ -8,8 +8,15 @@ export async function GET() {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const user = session.user as any;
 
-    const routes = await routeRepository.getAllRoutes();
+    let routes;
+    if (user.role === 'Admin') {
+      routes = await routeRepository.getAllRoutes();
+    } else {
+      routes = await routeRepository.getRoutesBySupervisor(user.id);
+    }
+
     return NextResponse.json(routes);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

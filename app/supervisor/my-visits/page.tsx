@@ -8,7 +8,7 @@ import {
   CheckCircle2, Eye, MapPin, Calendar, Thermometer, ChevronRight, X, AlertTriangle
 } from 'lucide-react';
 import BackHeader from '../components/BackHeader';
-import { Visit, VisitPhoto, NPDResponse } from '@/types';
+import { Visit, VisitPhoto, NPDResponse, VisitAsset, VisitPowerSkuResult } from '@/types';
 
 export default function MyVisitsPage() {
   const { showToast } = useToast();
@@ -16,7 +16,13 @@ export default function MyVisitsPage() {
   const [loading, setLoading] = useState(true);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [reviewData, setReviewData] = useState<{ visit: Visit; photos: VisitPhoto[]; npdResponses: NPDResponse[] } | null>(null);
+  const [reviewData, setReviewData] = useState<{
+    visit: Visit;
+    assets: VisitAsset[];
+    photos: VisitPhoto[];
+    powerSkuResults?: VisitPowerSkuResult[];
+    npdResponses: NPDResponse[];
+  } | null>(null);
 
   const fetchVisits = async () => {
     try {
@@ -187,7 +193,7 @@ export default function MyVisitsPage() {
               ) : reviewData ? (
                 <>
                   {/* Basic Metadata */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[var(--surface-2)] p-4 rounded-xl border border-[var(--border-soft)]">
+                  <div className="grid grid-cols-2 gap-3 bg-[var(--surface-2)] p-4 rounded-xl border border-[var(--border-soft)]">
                     <div>
                       <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Route</p>
                       <p className="font-mono font-bold mt-1 text-[13px]" style={{ color: 'var(--text-primary)' }}>{reviewData.visit.routeCode}</p>
@@ -196,32 +202,41 @@ export default function MyVisitsPage() {
                       <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Customer</p>
                       <p className="font-semibold mt-1 text-[13px]" style={{ color: 'var(--text-primary)' }}>{reviewData.visit.customerCode}</p>
                     </div>
-                    <div>
-                      <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Temperature</p>
-                      <p className="font-bold mt-1 text-[13px]" style={{ color: reviewData.visit.tempInRange ? 'var(--success)' : 'var(--danger)' }}>
-                        {reviewData.visit.temperature}°C
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Compliance</p>
-                      <span className={`inline-flex badge mt-1 ${reviewData.visit.tempInRange ? 'badge-success' : 'badge-danger'}`}>
-                        {reviewData.visit.tempInRange ? 'Compliant' : 'Breach'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Temperature Action Required */}
-                  {!reviewData.visit.tempInRange && (
-                    <div className="flex gap-3 p-4 rounded-xl border" style={{ background: 'var(--danger-light)', borderColor: 'rgba(220,38,38,0.15)' }}>
-                      <AlertTriangle className="h-5 w-5 flex-shrink-0" style={{ color: 'var(--danger)' }} />
-                      <div>
-                        <h4 className="font-bold text-[var(--danger)]">Temperature Warning Breach</h4>
-                        <p className="text-[12px] mt-1" style={{ color: 'var(--danger)' }}>
-                          <strong>Action Taken:</strong> {reviewData.visit.actionRequired || 'No action selected'}
+                    {reviewData.visit.sosAsPerBda !== null && reviewData.visit.sosAsPerBda !== undefined && (
+                      <div className="col-span-2">
+                        <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Share of Shelf (SOS)</p>
+                        <p className="text-[13px] font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>
+                          {reviewData.visit.sosAsPerBda ? 'Compliant ✓' : 'Non-Compliant ⚠'}
                         </p>
                       </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="form-label mb-2">Assets Audited</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(reviewData.assets || []).map((ast, index) => (
+                        <div key={ast.assetId} className="p-3 bg-[var(--surface-2)] rounded-xl border border-[var(--border-soft)] space-y-1.5 text-[12px]">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold uppercase text-[var(--text-primary)]">{ast.assetType} #{index + 1}</span>
+                            <span className={`badge text-[10px] ${ast.tempInRange ? 'badge-success' : 'badge-danger'}`}>
+                              {ast.temperature}°C {ast.tempInRange ? '✓' : '⚠'}
+                            </span>
+                          </div>
+                          {ast.observation && (
+                            <p className="text-[11px] text-[var(--text-secondary)] italic">
+                              &ldquo;{ast.observation}&rdquo;
+                            </p>
+                          )}
+                          {ast.actionRequired !== 'None' && (
+                            <div className="text-[10px] font-bold text-red-500">
+                              Action Required: {ast.actionRequired}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  )}
+                  </div>
 
                   {/* Photo logs */}
                   {reviewData.photos.length > 0 && (

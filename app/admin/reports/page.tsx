@@ -10,6 +10,7 @@ import {
   Users, BarChart3, CalendarDays, Download, RefreshCw, Filter, RotateCcw,
 } from 'lucide-react';
 import { DashboardStats, Route } from '@/types';
+import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
 
 const AreaChart       = nextDynamic(() => import('recharts').then(m => m.AreaChart), { ssr: false });
 const Area            = nextDynamic(() => import('recharts').then(m => m.Area), { ssr: false });
@@ -56,6 +57,10 @@ export default function ReportsPage() {
   const [selectedSupervisor, setSelectedSupervisor] = useState('');
   const [selectedRoute, setSelectedRoute]           = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalData, setModalData] = useState<any[]>([]);
 
   const { data: routes = [] } = useQuery<Route[]>({
     queryKey: ['routes'],
@@ -186,7 +191,25 @@ export default function ReportsPage() {
             ) : (
               <div className="h-52 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={stats.visitsPerDay} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                  <AreaChart
+                    data={stats.visitsPerDay}
+                    margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(data) => {
+                      if (data && data.activeLabel) {
+                        const clickedDate = data.activeLabel;
+                        const d = new Date(clickedDate);
+                        const formattedDate = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+                        const matches = ((stats as any)?.rows ?? []).filter((r: any) => {
+                          const rDate = new Date(r.createdAt).toISOString().split('T')[0];
+                          return rDate === clickedDate;
+                        });
+                        setModalTitle(`Visits on ${formattedDate}`);
+                        setModalData(matches);
+                        setModalOpen(true);
+                      }
+                    }}
+                  >
                     <defs>
                       <linearGradient id="vg" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2} />
@@ -211,8 +234,26 @@ export default function ReportsPage() {
               <div className="h-52 flex flex-col items-center justify-center">
                 <div className="h-36 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} paddingAngle={3} dataKey="value">
+                    <PieChart style={{ cursor: 'pointer' }}>
+                      <Pie
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={40}
+                        outerRadius={65}
+                        paddingAngle={3}
+                        dataKey="value"
+                        onClick={(data) => {
+                          if (data && (data as any).name) {
+                            const name = (data as any).name;
+                            const isOk = name === 'In Range';
+                            const matches = ((stats as any)?.rows ?? []).filter((r: any) => r.ok === isOk);
+                            setModalTitle(`Visits with Temperature Status: ${name}`);
+                            setModalData(matches);
+                            setModalOpen(true);
+                          }
+                        }}
+                      >
                         {pieData.map((_, i) => <Cell key={i} fill={i === 0 ? '#10B981' : '#EF4444'} />)}
                       </Pie>
                       <Tooltip contentStyle={TT_STYLE} formatter={(v: any) => [`${v.toFixed(1)}%`]} />
@@ -237,12 +278,29 @@ export default function ReportsPage() {
           ) : (
             <div className="h-52 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.coveragePerRoute} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                <BarChart
+                  data={stats.coveragePerRoute}
+                  margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
+                  style={{ cursor: 'pointer' }}
+                >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-soft)" />
                   <XAxis dataKey="routeCode" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={TT_STYLE} formatter={(v: any) => [`${v}%`, 'Coverage']} />
-                  <Bar dataKey="coverage" radius={[4, 4, 0, 0]} maxBarSize={32}>
+                  <Bar
+                    dataKey="coverage"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={32}
+                    onClick={(data) => {
+                      if (data && (data as any).routeCode) {
+                        const rCode = (data as any).routeCode;
+                        const matches = ((stats as any)?.rows ?? []).filter((r: any) => r.rt === rCode);
+                        setModalTitle(`Visits for Route ${rCode}`);
+                        setModalData(matches);
+                        setModalOpen(true);
+                      }
+                    }}
+                  >
                     {(stats?.coveragePerRoute ?? []).map((r, i) => (
                       <Cell key={i} fill={r.coverage >= 80 ? '#10B981' : r.coverage >= 50 ? '#F59E0B' : '#EF4444'} />
                     ))}
@@ -286,6 +344,12 @@ export default function ReportsPage() {
           )}
         </SectionCard>
       </div>
+      <InteractiveChartTableModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        data={modalData}
+      />
     </div>
   );
 }

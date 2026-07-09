@@ -6,6 +6,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Map, CheckCircle2, AlertTriangle, TrendingUp, MapPin } from 'lucide-react';
 import { Route } from '@/types';
 import nextDynamic from 'next/dynamic';
+import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
+import { useState } from 'react';
 
 const BarChart = nextDynamic(() => import('recharts').then(m => m.BarChart), { ssr: false });
 const Bar = nextDynamic(() => import('recharts').then(m => m.Bar), { ssr: false });
@@ -23,6 +25,10 @@ const TT_STYLE = {
 };
 
 export default function RoutesPage() {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalData, setModalData] = useState<any[]>([]);
+
   const { data: routes = [], isLoading } = useQuery<Route[]>({
     queryKey: ['routes'],
     queryFn: () => fetch('/api/routes').then(r => r.json()),
@@ -85,12 +91,29 @@ export default function RoutesPage() {
           <div className="p-5">
             <div className="h-56 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={coverageData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                <BarChart
+                  data={coverageData}
+                  margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
+                  style={{ cursor: 'pointer' }}
+                >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-soft)" />
                   <XAxis dataKey="routeCode" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={TT_STYLE} formatter={(v: any) => [`${v}%`, 'Coverage']} />
-                  <Bar dataKey="coverage" radius={[4, 4, 0, 0]} maxBarSize={36}>
+                  <Bar
+                    dataKey="coverage"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={36}
+                    onClick={(data) => {
+                      if (data && (data as any).routeCode) {
+                        const rCode = (data as any).routeCode;
+                        const matches = (stats?.rows ?? []).filter((r: any) => r.rt === rCode);
+                        setModalTitle(`Visits for Route ${rCode}`);
+                        setModalData(matches);
+                        setModalOpen(true);
+                      }
+                    }}
+                  >
                     {coverageData.map((r: any, i: number) => (
                       <Cell key={i} fill={r.coverage >= 80 ? '#10B981' : r.coverage >= 50 ? '#F59E0B' : '#EF4444'} />
                     ))}
@@ -192,6 +215,12 @@ export default function RoutesPage() {
           </table>
         </div>
       </div>
+      <InteractiveChartTableModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        data={modalData}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Chart } from 'chart.js/auto';
 import { useTheme } from '@/providers/theme-provider';
+import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
 
 const SUPERVISOR_TO_MANAGER: Record<string, string> = {
   'YASAR': 'KHALID',
@@ -119,6 +120,17 @@ export default function SupervisorReportsPage() {
     );
   }, [rows, fTime, fMgr, fSuper, fChannel, fCust]);
 
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalData, setModalData] = useState<any[]>([]);
+
+  const handleChartClick = (chartTitle: string, filterFn: (row: any) => boolean) => {
+    const matched = filtered.filter(filterFn);
+    setModalTitle(chartTitle);
+    setModalData(matched);
+    setModalOpen(true);
+  };
+
   // Compute KPI values
   const outletsCount = useMemo(() => new Set(filtered.map((r) => r.cust)).size, [filtered]);
   const breachesCount = useMemo(() => filtered.filter((r) => !r.ok).length, [filtered]);
@@ -202,6 +214,16 @@ export default function SupervisorReportsPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
+          onClick: (e, el, chart) => {
+            if (el.length > 0) {
+              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
+              const weekNum = parseInt(label.replace('W', ''), 10);
+              handleChartClick(`Visits for Week ${weekNum}`, (r) => r.week === weekNum);
+            }
+          },
+          onHover: (e, el, chart) => {
+            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+          },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
             y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
@@ -231,6 +253,15 @@ export default function SupervisorReportsPage() {
           maintainAspectRatio: false,
           cutout: '62%',
           plugins: { legend: { position: 'bottom', labels: { color: textColor } } },
+          onClick: (e, el, chart) => {
+            if (el.length > 0) {
+              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
+              handleChartClick(`Visits for ${label} Channel`, (r) => r.ch === label);
+            }
+          },
+          onHover: (e, el, chart) => {
+            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+          },
         },
       });
     }
@@ -258,6 +289,15 @@ export default function SupervisorReportsPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
+          onClick: (e, el, chart) => {
+            if (el.length > 0) {
+              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
+              handleChartClick(`Visits for Supervisor ${label}`, (r) => r.sup === label);
+            }
+          },
+          onHover: (e, el, chart) => {
+            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+          },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
             y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
@@ -287,6 +327,16 @@ export default function SupervisorReportsPage() {
           maintainAspectRatio: false,
           cutout: '62%',
           plugins: { legend: { position: 'bottom', labels: { color: textColor } } },
+          onClick: (e, el, chart) => {
+            if (el.length > 0) {
+              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
+              const isOk = label === 'Within range';
+              handleChartClick(`Visits with Temperature Status: ${label}`, (r) => r.ok === isOk);
+            }
+          },
+          onHover: (e, el, chart) => {
+            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+          },
         },
       });
     }
@@ -310,6 +360,16 @@ export default function SupervisorReportsPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
+          onClick: (e, el, chart) => {
+            if (el.length > 0) {
+              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
+              const npdCode = label === 'Available' ? 'A' : label === 'Not avail.' ? 'N' : 'X';
+              handleChartClick(`Visits with NPD Status: ${label}`, (r) => r.npd === npdCode);
+            }
+          },
+          onHover: (e, el, chart) => {
+            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+          },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
             y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
@@ -337,6 +397,16 @@ export default function SupervisorReportsPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
+          onClick: (e, el, chart) => {
+            if (el.length > 0) {
+              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
+              const pskuCode = label === 'Available' ? 'A' : label === 'Not avail.' ? 'N' : 'X';
+              handleChartClick(`Visits with Power SKU Status: ${label}`, (r) => r.psku === pskuCode);
+            }
+          },
+          onHover: (e, el, chart) => {
+            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+          },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
             y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
@@ -366,6 +436,15 @@ export default function SupervisorReportsPage() {
         options: {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
+          onClick: (e, el, chart) => {
+            if (el.length > 0) {
+              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
+              handleChartClick(`Visits for Classification Grade ${label}`, (r) => r.gr === label);
+            }
+          },
+          onHover: (e, el, chart) => {
+            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+          },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
             y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
@@ -916,6 +995,12 @@ export default function SupervisorReportsPage() {
           <b>Real database visits live sync.</b> All five filters above are active — selections recalculate compliance & scorecard data dynamically.
         </div>
       </div>
+      <InteractiveChartTableModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        data={modalData}
+      />
     </div>
   );
 }

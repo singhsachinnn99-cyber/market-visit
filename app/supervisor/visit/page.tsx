@@ -290,6 +290,10 @@ function VisitWizardContent() {
   };
 
   const handleSaveDraft = async () => {
+    if (!selectedCustomer || !selectedCustomer.includes('|')) {
+      showToast('Please select both a route and a customer before saving.', 'warning');
+      return;
+    }
     setSavingDraft(true);
     try {
       const draftPayload = {
@@ -319,6 +323,10 @@ function VisitWizardContent() {
   };
 
   const handleFinalSubmit = async () => {
+    if (!selectedCustomer || !selectedCustomer.includes('|')) {
+      showToast('Please select both a route and a customer before submitting.', 'warning');
+      return;
+    }
     setSubmittingVisit(true);
     try {
       if (assets.some(a => a.temperature === undefined || a.temperature === null || (a.temperature as any) === '' || (a.temperature as any) === '-')) {

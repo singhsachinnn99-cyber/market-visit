@@ -122,6 +122,8 @@ export async function saveVisitDraftAction(data: VisitDraftInput) {
       tempInRange,
       actionRequired: ast.actionRequired || 'None',
       observation: ast.observation || '',
+      isFirstInFlow: ast.isFirstInFlow === true || (ast.isFirstInFlow as any) === 1,
+      fefoFollowed: ast.fefoFollowed === true || (ast.fefoFollowed as any) === 1,
     };
   });
 
@@ -243,6 +245,8 @@ export async function submitVisitAction(data: VisitInput) {
       tempInRange,
       actionRequired: ast.actionRequired,
       observation: ast.observation || '',
+      isFirstInFlow: ast.isFirstInFlow === true || (ast.isFirstInFlow as any) === 1,
+      fefoFollowed: ast.fefoFollowed === true || (ast.fefoFollowed as any) === 1,
     };
   });
 

@@ -36,13 +36,11 @@ function generateVisitId(): string {
 }
 
 const STEP_NAMES = [
-  'Route Selection',
-  'Customer Selection',
+  'Route & Customer Selection',
   'Power SKU Checklist',
   'NPD Checklist',
   'Capture Assets',
   'Capture Photos',
-  'GPS Sync',
   'Review & Submit'
 ];
 
@@ -161,6 +159,8 @@ function VisitWizardContent() {
           tempInRange: true,
           actionRequired: 'None',
           observation: '',
+          isFirstInFlow: false,
+          fefoFollowed: false,
         },
       ]);
     }
@@ -251,7 +251,7 @@ function VisitWizardContent() {
       }
 
       if (successCount > 0) {
-        showToast(`${successCount} photo(s) uploaded successfully to ${category}.`, 'success');
+        showToast(`${successCount} photo(s) uploaded successfully to ${category === 'Vegetables' ? 'Assets' : category}.`, 'success');
       }
       if (failCount > 0) {
         showToast(`Failed to upload ${failCount} photo(s).`, 'error');
@@ -267,17 +267,15 @@ function VisitWizardContent() {
   };
 
   const nextStep = () => {
-    if (currentStep === 0 && !selectedRoute) {
-      showToast('Please select a route.', 'warning');
-      return;
-    }
-    if (currentStep === 1 && !selectedCustomer) {
-      showToast('Please select a customer.', 'warning');
-      return;
-    }
-    if (currentStep === 6 && (gpsLoading || !latitude)) {
-      showToast('Please wait for GPS coordinates to resolve.', 'warning');
-      return;
+    if (currentStep === 0) {
+      if (!selectedRoute) {
+        showToast('Please select a route.', 'warning');
+        return;
+      }
+      if (!selectedCustomer) {
+        showToast('Please select a customer.', 'warning');
+        return;
+      }
     }
 
     const nextIndex = currentStep + 1;
@@ -299,7 +297,8 @@ function VisitWizardContent() {
         cust_rt_id: selectedCustomer,
         assets: assets.map(a => ({
           ...a,
-          tempInRange: getTempInRange(a.assetType, a.temperature)
+          temperature: Number(a.temperature) || 0,
+          tempInRange: getTempInRange(a.assetType, Number(a.temperature))
         })),
         photos,
         powerSkuResults,
@@ -322,14 +321,8 @@ function VisitWizardContent() {
   const handleFinalSubmit = async () => {
     setSubmittingVisit(true);
     try {
-      if (!latitude || !longitude) {
-        showToast('GPS coordinates are mandatory to submit the audit.', 'error');
-        setSubmittingVisit(false);
-        return;
-      }
-
-      if (assets.some(a => a.temperature === undefined || a.temperature === null)) {
-        showToast('Please record a temperature for all assets.', 'error');
+      if (assets.some(a => a.temperature === undefined || a.temperature === null || (a.temperature as any) === '' || (a.temperature as any) === '-')) {
+        showToast('Please record a valid temperature for all assets.', 'error');
         setSubmittingVisit(false);
         return;
       }
@@ -339,14 +332,15 @@ function VisitWizardContent() {
         cust_rt_id: selectedCustomer,
         assets: assets.map(a => ({
           ...a,
-          tempInRange: getTempInRange(a.assetType, a.temperature)
+          temperature: Number(a.temperature) || 0,
+          tempInRange: getTempInRange(a.assetType, Number(a.temperature))
         })),
         photos,
         powerSkuResults,
         npdResponses,
         sosAsPerBda,
-        latitude,
-        longitude,
+        latitude: latitude || 0,
+        longitude: longitude || 0,
         accuracy: accuracy || 0,
         status: 'Submitted' as const,
       };
@@ -380,6 +374,8 @@ function VisitWizardContent() {
         tempInRange: true,
         actionRequired: 'None',
         observation: '',
+        isFirstInFlow: false,
+        fefoFollowed: false,
       },
     ]);
   };
@@ -436,11 +432,11 @@ function VisitWizardContent() {
               background: 'var(--accent)', 
               top: '50%', 
               transform: 'translateY(-50%)',
-              width: currentStep === 0 ? '0px' : `calc(${(currentStep / 7) * 100}% - 8px)`
+              width: currentStep === 0 ? '0px' : `calc(${(currentStep / 5) * 100}% - 8px)`
             }}
           />
           
-          {Array.from({ length: 8 }).map((_, i) => {
+          {Array.from({ length: 6 }).map((_, i) => {
             const isActive = i === currentStep;
             const isCompleted = i < currentStep;
             return (
@@ -497,15 +493,15 @@ function VisitWizardContent() {
             className="text-[10px] font-bold px-2.5 py-1 rounded-full text-white"
             style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #7C3AED 100%)' }}
           >
-            Step {currentStep + 1} / 8
+            Step {currentStep + 1} / 6
           </span>
         </div>
       </div>
 
-      {/* STEP 0: ROUTE SELECT */}
+      {/* STEP 0: ROUTE & CUSTOMER SELECTION */}
       {currentStep === 0 && (
         <div className="card p-5 space-y-4 animate-slide-up">
-          <span className="badge badge-accent">Route Picker</span>
+          <span className="badge badge-accent">Route & Customer Selection</span>
           <div>
             <label className="form-label mb-1">Select Available Route</label>
             <select
@@ -519,96 +515,95 @@ function VisitWizardContent() {
               ))}
             </select>
           </div>
-        </div>
-      )}
 
-      {/* STEP 1: CUSTOMER SELECT */}
-      {currentStep === 1 && (
-        <div className="card p-5 space-y-4 animate-slide-up">
-          <span className="badge badge-accent">Outlet Selection</span>
-          
-          <div className="space-y-3">
-            <label className="form-label">Search & Select Customer Outlet</label>
-            <input
-              type="text"
-              placeholder="Type customer code or name to search..."
-              value={customerSearch}
-              onChange={(e) => setCustomerSearch(e.target.value)}
-              className="form-input"
-            />
-            
-            <div className="space-y-2 mt-2 max-h-[280px] overflow-y-auto pr-1 border border-solid border-[var(--border-soft)] rounded-xl p-2 bg-[var(--surface-2)]">
-              {filteredCustomers.length === 0 ? (
-                <p className="text-[12px] italic text-center py-8 text-[var(--text-muted)]">
-                  No matching customers found for this route.
-                </p>
-              ) : (
-                filteredCustomers.map((c) => {
-                  const isSelected = selectedCustomer === c.cust_rt_id;
-                  return (
-                    <button
-                      key={c.cust_rt_id}
-                      type="button"
-                      onClick={() => setSelectedCustomer(c.cust_rt_id)}
-                      className="w-full text-left p-3 rounded-xl transition-all duration-200 flex items-center justify-between border border-solid cursor-pointer"
-                      style={{
-                        background: isSelected ? 'var(--accent-light)' : 'var(--surface)',
-                        borderColor: isSelected ? 'var(--accent)' : 'var(--border-soft)',
-                        boxShadow: isSelected ? '0 2px 8px rgba(79,70,229,0.08)' : 'none',
-                      }}
-                    >
-                      <div className="space-y-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--accent)] border border-solid border-[var(--border-soft)]">
-                            {c.customerCode}
-                          </span>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-solid border-emerald-100">
-                            Grade {c.classification}
-                          </span>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-solid border-blue-100">
-                            {c.channel}
-                          </span>
-                        </div>
-                        <h4 className="text-[13px] font-extrabold text-[var(--text-primary)] mt-0.5">
-                          {c.customerName}
-                        </h4>
-                      </div>
-                      <div className="flex items-center justify-center h-5 w-5 rounded-full border border-solid transition-all"
+          {selectedRoute ? (
+            <div className="space-y-3 pt-2" style={{ borderTop: '1px dashed var(--border-soft)' }}>
+              <label className="form-label">Search & Select Customer Outlet</label>
+              <input
+                type="text"
+                placeholder="Type customer code or name to search..."
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                className="form-input"
+              />
+              
+              <div className="space-y-2 mt-2 max-h-[250px] overflow-y-auto pr-1 border border-solid border-[var(--border-soft)] rounded-xl p-2 bg-[var(--surface-2)]">
+                {filteredCustomers.length === 0 ? (
+                  <p className="text-[12px] italic text-center py-8 text-[var(--text-muted)]">
+                    No matching customers found for this route.
+                  </p>
+                ) : (
+                  filteredCustomers.map((c) => {
+                    const isSelected = selectedCustomer === c.cust_rt_id;
+                    return (
+                      <button
+                        key={c.cust_rt_id}
+                        type="button"
+                        onClick={() => setSelectedCustomer(c.cust_rt_id)}
+                        className="w-full text-left p-3 rounded-xl transition-all duration-200 flex items-center justify-between border border-solid cursor-pointer"
                         style={{
-                          background: isSelected ? 'var(--accent)' : 'transparent',
-                          borderColor: isSelected ? 'var(--accent)' : 'var(--border)',
+                          background: isSelected ? 'var(--accent-light)' : 'var(--surface)',
+                          borderColor: isSelected ? 'var(--accent)' : 'var(--border-soft)',
+                          boxShadow: isSelected ? '0 2px 8px rgba(79,70,229,0.08)' : 'none',
                         }}
                       >
-                        {isSelected && <span className="text-white text-[10px] font-bold">✓</span>}
-                      </div>
-                    </button>
-                  );
-                })
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--accent)] border border-solid border-[var(--border-soft)]">
+                              {c.customerCode}
+                            </span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-solid border-emerald-100">
+                              Grade {c.classification}
+                            </span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-solid border-blue-100">
+                              {c.channel}
+                            </span>
+                          </div>
+                          <h4 className="text-[13px] font-extrabold text-[var(--text-primary)] mt-0.5">
+                            {c.customerName}
+                          </h4>
+                        </div>
+                        <div className="flex items-center justify-center h-5 w-5 rounded-full border border-solid transition-all"
+                          style={{
+                            background: isSelected ? 'var(--accent)' : 'transparent',
+                            borderColor: isSelected ? 'var(--accent)' : 'var(--border)',
+                          }}
+                        >
+                          {isSelected && <span className="text-white text-[10px] font-bold">✓</span>}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {activeCustomer && (
+                <div className="p-4 rounded-xl animate-fade-in border border-solid border-emerald-200/60 bg-emerald-50/30 flex items-start gap-3 mt-3">
+                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 flex-shrink-0">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Selected Outlet</p>
+                    <h3 className="text-[14px] font-extrabold text-[var(--text-primary)] leading-none mt-0.5">
+                      {activeCustomer.customerName}
+                    </h3>
+                    <p className="text-[11.5px] text-[var(--text-secondary)]">
+                      Code: <b>{activeCustomer.customerCode}</b> · Channel: <b>{activeCustomer.channel}</b> · Classification: <b>Grade {activeCustomer.classification}</b>
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
-          </div>
-
-          {activeCustomer && (
-            <div className="p-4 rounded-xl animate-fade-in border border-solid border-emerald-200/60 bg-emerald-50/30 flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 flex-shrink-0">
-                <ShieldCheck className="h-5 w-5" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Selected Outlet</p>
-                <h3 className="text-[14px] font-extrabold text-[var(--text-primary)] leading-none mt-0.5">
-                  {activeCustomer.customerName}
-                </h3>
-                <p className="text-[11.5px] text-[var(--text-secondary)]">
-                  Code: <b>{activeCustomer.customerCode}</b> · Channel: <b>{activeCustomer.channel}</b> · Classification: <b>Grade {activeCustomer.classification}</b>
-                </p>
-              </div>
-            </div>
+          ) : (
+            <p className="text-[11px] italic text-center py-4" style={{ color: 'var(--text-muted)' }}>
+              Please select a route first to display available customer outlets.
+            </p>
           )}
         </div>
       )}
 
       {/* STEP 2: POWER SKU CHECKLIST */}
-      {currentStep === 2 && (
+      {currentStep === 1 && (
         <div className="card p-5 space-y-4 animate-slide-up">
           <span className="badge badge-accent">Power SKU Checklist</span>
           <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
@@ -628,8 +623,16 @@ function VisitWizardContent() {
                     <div className="flex items-center gap-2">
                       {['Available', 'Not Available', 'Not Required'].map((opt) => {
                         const isChecked = currentStatus === opt;
-                        const col = opt === 'Available' ? 'var(--success)' : opt === 'Not Available' ? 'var(--danger)' : 'var(--text-muted)';
-                        const bg = opt === 'Available' ? 'var(--success-light)' : opt === 'Not Available' ? 'var(--danger-light)' : 'var(--surface)';
+                        const col = opt === 'Available' 
+                          ? 'var(--success)' 
+                          : opt === 'Not Available' 
+                            ? 'var(--danger)' 
+                            : '#d97706'; // Premium Amber text
+                        const bg = opt === 'Available' 
+                          ? 'var(--success-light)' 
+                          : opt === 'Not Available' 
+                            ? 'var(--danger-light)' 
+                            : '#fef3c7'; // Soft Amber background
                         return (
                           <button key={opt} type="button"
                             onClick={() => setPowerSkuResults((prev) => ({ ...prev, [sku.skuCode]: opt }))}
@@ -640,7 +643,7 @@ function VisitWizardContent() {
                               border: `1px solid ${isChecked ? col : 'var(--border)'}`,
                             }}
                           >
-                            {opt}
+                            {opt === 'Not Required' ? 'Not Applicable' : opt}
                           </button>
                         );
                       })}
@@ -654,7 +657,7 @@ function VisitWizardContent() {
       )}
 
       {/* STEP 3: NPD CHECKLIST */}
-      {currentStep === 3 && (
+      {currentStep === 2 && (
         <div className="card p-5 space-y-4 animate-slide-up">
           <span className="badge badge-accent">NPD SKU Checklist</span>
           <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
@@ -672,8 +675,16 @@ function VisitWizardContent() {
                     <div className="flex items-center gap-2">
                       {['Available', 'Not Available', 'Not Required'].map((opt) => {
                         const isChecked = currentStatus === opt;
-                        const col = opt === 'Available' ? 'var(--success)' : opt === 'Not Available' ? 'var(--danger)' : 'var(--text-muted)';
-                        const bg = opt === 'Available' ? 'var(--success-light)' : opt === 'Not Available' ? 'var(--danger-light)' : 'var(--surface)';
+                        const col = opt === 'Available' 
+                          ? 'var(--success)' 
+                          : opt === 'Not Available' 
+                            ? 'var(--danger)' 
+                            : '#d97706'; // Premium Amber text
+                        const bg = opt === 'Available' 
+                          ? 'var(--success-light)' 
+                          : opt === 'Not Available' 
+                            ? 'var(--danger-light)' 
+                            : '#fef3c7'; // Soft Amber background
                         return (
                           <button key={opt} type="button"
                             onClick={() => setNpdResponses((prev) => ({ ...prev, [sku.skuCode]: opt }))}
@@ -684,7 +695,7 @@ function VisitWizardContent() {
                               border: `1px solid ${isChecked ? col : 'var(--border)'}`,
                             }}
                           >
-                            {opt}
+                            {opt === 'Not Required' ? 'Not Applicable' : opt}
                           </button>
                         );
                       })}
@@ -698,7 +709,7 @@ function VisitWizardContent() {
       )}
 
       {/* STEP 4: CAPTURE ASSETS */}
-      {currentStep === 4 && (
+      {currentStep === 3 && (
         <div className="card p-5 space-y-4 animate-slide-up">
           <div className="flex items-center justify-between">
             <span className="badge badge-accent">Asset Monitoring</span>
@@ -749,9 +760,19 @@ function VisitWizardContent() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="form-label mb-1">Temp (°C)</label>
-                      <input type="number" step="0.1" placeholder="e.g. 4.2" value={ast.temperature}
-                        onChange={(e) => updateAssetField(ast.assetId, 'temperature', e.target.value !== '' ? Number(e.target.value) : 0)}
-                        className="form-input font-mono h-9 text-[12px]" />
+                      <input 
+                        type="text" 
+                        inputMode="decimal" 
+                        placeholder="e.g. -18" 
+                        value={ast.temperature === undefined || ast.temperature === null ? '' : ast.temperature}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '' || val === '-' || !isNaN(Number(val))) {
+                            updateAssetField(ast.assetId, 'temperature', val);
+                          }
+                        }}
+                        className="form-input font-mono h-9 text-[12px]" 
+                      />
                     </div>
                     <div>
                       <label className="form-label mb-1">Mandatory Action Required</label>
@@ -771,6 +792,60 @@ function VisitWizardContent() {
                     <input type="text" placeholder="Write observation details…" value={ast.observation}
                       onChange={(e) => updateAssetField(ast.assetId, 'observation', e.target.value)}
                       className="form-input h-9 text-[12px]" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="form-label mb-1">Asset is First in Flow?</label>
+                      <div className="flex items-center gap-2">
+                        {[true, false].map((val) => {
+                          const isSelected = ast.isFirstInFlow === val;
+                          const activeBg = val ? 'var(--success-light)' : 'var(--danger-light)';
+                          const activeColor = val ? 'var(--success)' : 'var(--danger)';
+                          return (
+                            <button
+                              key={String(val)}
+                              type="button"
+                              onClick={() => updateAssetField(ast.assetId, 'isFirstInFlow', val)}
+                              className="flex-grow h-9 text-[10px] font-bold rounded-lg transition-all cursor-pointer"
+                              style={{
+                                background: isSelected ? activeBg : 'var(--surface)',
+                                color: isSelected ? activeColor : 'var(--text-muted)',
+                                border: `1px solid ${isSelected ? activeColor : 'var(--border)'}`,
+                              }}
+                            >
+                              {val ? 'Yes' : 'No'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="form-label mb-1">FEFO is Followed?</label>
+                      <div className="flex items-center gap-2">
+                        {[true, false].map((val) => {
+                          const isSelected = ast.fefoFollowed === val;
+                          const activeBg = val ? 'var(--success-light)' : 'var(--danger-light)';
+                          const activeColor = val ? 'var(--success)' : 'var(--danger)';
+                          return (
+                            <button
+                              key={String(val)}
+                              type="button"
+                              onClick={() => updateAssetField(ast.assetId, 'fefoFollowed', val)}
+                              className="flex-grow h-9 text-[10px] font-bold rounded-lg transition-all cursor-pointer"
+                              style={{
+                                background: isSelected ? activeBg : 'var(--surface)',
+                                color: isSelected ? activeColor : 'var(--text-muted)',
+                                border: `1px solid ${isSelected ? activeColor : 'var(--border)'}`,
+                              }}
+                            >
+                              {val ? 'Yes' : 'No'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Temperature Warning banner */}
@@ -797,18 +872,18 @@ function VisitWizardContent() {
             <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[12px] font-bold" style={{ color: 'var(--text-primary)' }}>Modern Trade SOS Check</p>
+                  <p className="text-[12px] font-bold" style={{ color: 'var(--text-primary)' }}>SOS As per BDA?</p>
                   <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Is Share of Shelf (SOS) compliant with BDA guidelines?</p>
                 </div>
                 <div className="flex items-center gap-2">
                   {[true, false].map((v) => {
                     const isChecked = sosAsPerBda === v;
-                    const label = v ? 'Compliant' : 'Non-Compliant';
+                    const label = v ? 'Yes' : 'No';
                     const col = v ? 'var(--success)' : 'var(--danger)';
                     const bg = v ? 'var(--success-light)' : 'var(--danger-light)';
                     return (
                       <button key={label} type="button" onClick={() => setSosAsPerBda(v)}
-                        className="h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer transition-all"
+                        className="h-8 px-4 text-[10px] font-bold rounded-lg cursor-pointer transition-all"
                         style={{
                           background: isChecked ? bg : 'var(--surface)',
                           color: isChecked ? col : 'var(--text-muted)',
@@ -827,16 +902,17 @@ function VisitWizardContent() {
       )}
 
       {/* STEP 5: CAPTURE PHOTOS */}
-      {currentStep === 5 && (
+      {currentStep === 4 && (
         <div className="card p-5 space-y-4 animate-slide-up">
           <span className="badge badge-accent">Camera Capture</span>
           <div className="space-y-3">
             {(['Dairy', 'Beverages', 'Fruits', 'Vegetables'] as const).map((cat) => {
               const catPhotos = photos.filter((p) => p.category === cat);
+              const displayName = cat === 'Vegetables' ? 'Assets' : cat;
               return (
                 <div key={cat} className="p-4 rounded-xl space-y-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-bold uppercase" style={{ color: 'var(--text-primary)' }}>{cat}</span>
+                    <span className="text-[12px] font-bold uppercase" style={{ color: 'var(--text-primary)' }}>{displayName}</span>
                     <label className="btn-ghost cursor-pointer" style={{ height: '32px', padding: '0 12px' }}>
                       <Camera className="h-3.5 w-3.5" style={{ color: 'var(--accent)' }} />
                       <span>Add Photos</span>
@@ -845,7 +921,7 @@ function VisitWizardContent() {
                   </div>
                   {catPhotos.length === 0 ? (
                     <div className="border-2 border-dashed rounded-xl p-4 text-center" style={{ borderColor: 'var(--border)' }}>
-                      <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>No photos for {cat} yet.</p>
+                      <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>No photos for {displayName} yet.</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-3 gap-2">
@@ -874,47 +950,8 @@ function VisitWizardContent() {
         </div>
       )}
 
-      {/* STEP 6: GPS SYNC */}
-      {currentStep === 6 && (
-        <div className="card p-5 space-y-4 animate-slide-up text-center">
-          <span className="badge badge-accent">GPS Sync</span>
-          <div className="py-6 flex flex-col items-center gap-4">
-            {gpsLoading ? (
-              <>
-                <div className="icon-wrap h-14 w-14 rounded-2xl" style={{ background: 'var(--accent-light)' }}>
-                  <RefreshCw className="h-7 w-7 animate-spin" style={{ color: 'var(--accent)' }} />
-                </div>
-                <p className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>Locking satellite coordinates…</p>
-              </>
-            ) : latitude ? (
-              <>
-                <div className="icon-wrap h-14 w-14 rounded-2xl" style={{ background: 'var(--success-light)' }}>
-                  <MapPin className="h-7 w-7" style={{ color: 'var(--success)' }} />
-                </div>
-                <div>
-                  <p className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>GPS Confirmed ✓</p>
-                  <p className="font-mono text-[12px] mt-1" style={{ color: 'var(--text-muted)' }}>{latitude.toFixed(5)}, {longitude?.toFixed(5)}</p>
-                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Accuracy: ±{accuracy?.toFixed(1)}m</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="icon-wrap h-14 w-14 rounded-2xl" style={{ background: 'var(--danger-light)' }}>
-                  <AlertTriangle className="h-7 w-7" style={{ color: 'var(--danger)' }} />
-                </div>
-                <div>
-                  <p className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>Location Required</p>
-                  <p className="text-[12px] mt-1 max-w-xs" style={{ color: 'var(--danger)' }}>{gpsError || 'Allow location access to continue.'}</p>
-                </div>
-                <button onClick={getCoordinates} className="btn-ghost">Retry GPS</button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* STEP 7: REVIEW AUDIT SUMMARY */}
-      {currentStep === 7 && (
+      {/* STEP 5: REVIEW AUDIT SUMMARY */}
+      {currentStep === 5 && (
         <div className="card p-5 space-y-4 animate-slide-up">
           <span className="badge badge-success">Summary Readback</span>
           
@@ -925,7 +962,11 @@ function VisitWizardContent() {
               ['Classification', activeCustomer?.classification || '—', 'accent'],
               ['Channel', activeCustomer?.channel || '—', 'accent'],
               ['Assets Monitored', `${assets.length} items`, 'bold'],
-              ['GPS Status', 'Acquired ✓', 'success'],
+              ...assets.flatMap((ast, idx) => [
+                [`Asset #${idx + 1} (${ast.assetType})`, `${ast.temperature}°C (${getTempInRange(ast.assetType, Number(ast.temperature)) ? 'OK' : 'Breach'})`, getTempInRange(ast.assetType, Number(ast.temperature)) ? 'success' : 'danger'],
+                [`Asset #${idx + 1} Flow / FEFO`, `Flow: ${ast.isFirstInFlow ? 'Yes' : 'No'} | FEFO: ${ast.fefoFollowed ? 'Yes' : 'No'}`, 'mono']
+              ]),
+              ['GPS Status', latitude ? `Acquired (${latitude.toFixed(4)}, ${longitude?.toFixed(4)})` : (gpsLoading ? 'Acquiring...' : 'Not Acquired ⚠'), latitude ? 'success' : 'danger'],
               ['Photos Captured', `${photos.length} images`, 'bold'],
               ['Power SKUs checked', `${Object.keys(powerSkuResults).length} items`, 'mono'],
               ['NPD SKUs checked', `${Object.keys(npdResponses).length} items`, 'mono'],
@@ -977,10 +1018,10 @@ function VisitWizardContent() {
           <ArrowLeft className="h-3.5 w-3.5" />
           Back
         </button>
-        {currentStep < 7 && (
+        {currentStep < 5 && (
           <button
             onClick={nextStep}
-            disabled={savingDraft || submittingVisit || (currentStep === 0 && !selectedRoute) || (currentStep === 1 && !selectedCustomer) || (currentStep === 6 && (gpsLoading || !latitude))}
+            disabled={savingDraft || submittingVisit || (currentStep === 0 && (!selectedRoute || !selectedCustomer))}
             className="btn-primary cursor-pointer"
             style={{
               height: '40px', padding: '0 20px',
@@ -989,7 +1030,7 @@ function VisitWizardContent() {
               opacity: (savingDraft || submittingVisit) ? 0.5 : 1,
             }}
           >
-            {currentStep === 6 ? 'Review Summary' : 'Next'}
+            {currentStep === 4 ? 'Review Summary' : 'Next'}
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
         )}

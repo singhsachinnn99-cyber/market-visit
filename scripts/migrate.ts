@@ -244,6 +244,8 @@ async function runMigration() {
         \`tempInRange\` TINYINT(1) NOT NULL,
         \`actionRequired\` ENUM('Cleaning', 'Repair', 'Replacement', 'Gas Filling', 'Other', 'None') NOT NULL DEFAULT 'None',
         \`observation\` TEXT NOT NULL,
+        \`isFirstInFlow\` TINYINT(1) NOT NULL DEFAULT 0,
+        \`fefoFollowed\` TINYINT(1) NOT NULL DEFAULT 0,
         FOREIGN KEY (\`visitId\`) REFERENCES \`Visit\`(\`visitId\`) ON DELETE CASCADE,
         INDEX \`idx_asset_visit\` (\`visitId\`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -265,92 +267,97 @@ async function runMigration() {
     // Re-enable foreign key checks now that tables are created
     await connection.query('SET FOREIGN_KEY_CHECKS = 1');
 
-    // 15. Restore Customer Data
-    console.log(`Restoring ${existingMappings.length} Customer Mappings...`);
-    const customerDetails = new Map<string, any>();
-    existingCustomers.forEach((c: any) => {
-      customerDetails.set(c.customerCode, c);
-    });
+    // 15. Restore Customer Data (Optional - bypassed by default for fast fresh updates)
+    const shouldRestore = process.env.RESTORE_DATA === 'true';
+    if (shouldRestore) {
+      console.log(`Restoring ${existingMappings.length} Customer Mappings...`);
+      const customerDetails = new Map<string, any>();
+      existingCustomers.forEach((c: any) => {
+        customerDetails.set(c.customerCode, c);
+      });
 
-    for (const m of existingMappings) {
-      const detail = customerDetails.get(m.customerCode) || {
-        customerName: 'Unknown',
-        classification: 'D',
-        channel: 'General Trade',
-      };
-      const cust_rt_id = `${m.customerCode}|${m.routeCode}`;
-      
-      await connection.query(`
-        INSERT IGNORE INTO \`Customer\` (\`cust_rt_id\`, \`customerCode\`, \`customerName\`, \`classification\`, \`channel\`, \`routeCode\`)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [cust_rt_id, m.customerCode, detail.customerName, detail.classification, detail.channel, m.routeCode]);
+      for (const m of existingMappings) {
+        const detail = customerDetails.get(m.customerCode) || {
+          customerName: 'Unknown',
+          classification: 'D',
+          channel: 'General Trade',
+        };
+        const cust_rt_id = `${m.customerCode}|${m.routeCode}`;
+        
+        await connection.query(`
+          INSERT IGNORE INTO \`Customer\` (\`cust_rt_id\`, \`customerCode\`, \`customerName\`, \`classification\`, \`channel\`, \`routeCode\`)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `, [cust_rt_id, m.customerCode, detail.customerName, detail.classification, detail.channel, m.routeCode]);
 
-      await connection.query(`
-        INSERT IGNORE INTO \`CustomerRouteMapping\` (\`cust_rt_id\`, \`customerCode\`, \`routeCode\`)
-        VALUES (?, ?, ?)
-      `, [cust_rt_id, m.customerCode, m.routeCode]);
-    }
+        await connection.query(`
+          INSERT IGNORE INTO \`CustomerRouteMapping\` (\`cust_rt_id\`, \`customerCode\`, \`routeCode\`)
+          VALUES (?, ?, ?)
+        `, [cust_rt_id, m.customerCode, m.routeCode]);
+      }
 
-    // 16. Restore Visits
-    console.log(`Restoring ${existingVisits.length} Visits...`);
-    for (const v of existingVisits) {
-      const cust_rt_id = `${v.customerCode}|${v.routeCode}`;
+      // 16. Restore Visits
+      console.log(`Restoring ${existingVisits.length} Visits...`);
+      for (const v of existingVisits) {
+        const cust_rt_id = `${v.customerCode}|${v.routeCode}`;
 
-      // Ensure mapping customer exists
-      await connection.query(`
-        INSERT IGNORE INTO \`Customer\` (\`cust_rt_id\`, \`customerCode\`, \`customerName\`, \`classification\`, \`channel\`, \`routeCode\`)
-        VALUES (?, ?, ?, 'D', 'General Trade', ?)
-      `, [cust_rt_id, v.customerCode, v.customerCode, v.routeCode]);
+        // Ensure mapping customer exists
+        await connection.query(`
+          INSERT IGNORE INTO \`Customer\` (\`cust_rt_id\`, \`customerCode\`, \`customerName\`, \`classification\`, \`channel\`, \`routeCode\`)
+          VALUES (?, ?, ?, 'D', 'General Trade', ?)
+        `, [cust_rt_id, v.customerCode, v.customerCode, v.routeCode]);
 
-      await connection.query(`
-        INSERT INTO \`Visit\` (\`visitId\`, \`supervisorId\`, \`cust_rt_id\`, \`latitude\`, \`longitude\`, \`accuracy\`, \`status\`, \`createdBy\`, \`visit_datetime\`, \`createdAt\`, \`updatedAt\`)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        v.visitId,
-        v.supervisorId,
-        cust_rt_id,
-        v.latitude,
-        v.longitude,
-        v.accuracy,
-        v.status,
-        v.createdBy,
-        v.visit_datetime || v.createdAt || new Date(),
-        v.createdAt || new Date(),
-        v.updatedAt || new Date()
-      ]);
+        await connection.query(`
+          INSERT INTO \`Visit\` (\`visitId\`, \`supervisorId\`, \`cust_rt_id\`, \`latitude\`, \`longitude\`, \`accuracy\`, \`status\`, \`createdBy\`, \`visit_datetime\`, \`createdAt\`, \`updatedAt\`)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          v.visitId,
+          v.supervisorId,
+          cust_rt_id,
+          v.latitude,
+          v.longitude,
+          v.accuracy,
+          v.status,
+          v.createdBy,
+          v.visit_datetime || v.createdAt || new Date(),
+          v.createdAt || new Date(),
+          v.updatedAt || new Date()
+        ]);
 
-      // Insert migrated asset record
-      const assetId = `ast_${Math.random().toString(36).substring(2, 9)}`;
-      await connection.query(`
-        INSERT INTO \`VisitAsset\` (\`assetId\`, \`visitId\`, \`assetType\`, \`temperature\`, \`tempInRange\`, \`actionRequired\`, \`observation\`)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `, [
-        assetId,
-        v.visitId,
-        v.assetType || 'Chiller',
-        v.temperature || 0,
-        v.tempInRange ? 1 : 0,
-        v.actionRequired || 'None',
-        v.observation || ''
-      ]);
-    }
+        // Insert migrated asset record
+        const assetId = `ast_${Math.random().toString(36).substring(2, 9)}`;
+        await connection.query(`
+          INSERT INTO \`VisitAsset\` (\`assetId\`, \`visitId\`, \`assetType\`, \`temperature\`, \`tempInRange\`, \`actionRequired\`, \`observation\`)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [
+          assetId,
+          v.visitId,
+          v.assetType || 'Chiller',
+          v.temperature || 0,
+          v.tempInRange ? 1 : 0,
+          v.actionRequired || 'None',
+          v.observation || ''
+        ]);
+      }
 
-    // 17. Restore Photos
-    console.log(`Restoring ${existingPhotos.length} Photos...`);
-    for (const p of existingPhotos) {
-      await connection.query(`
-        INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, p.uploadedAt]);
-    }
+      // 17. Restore Photos
+      console.log(`Restoring ${existingPhotos.length} Photos...`);
+      for (const p of existingPhotos) {
+        await connection.query(`
+          INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `, [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, p.uploadedAt]);
+      }
 
-    // 18. Restore NPD Responses
-    console.log(`Restoring ${existingNpd.length} NPD responses...`);
-    for (const n of existingNpd) {
-      await connection.query(`
-        INSERT INTO \`NPDResponse\` (\`visitId\`, \`skuCode\`, \`status\`)
-        VALUES (?, ?, ?)
-      `, [n.visitId, n.skuCode, n.status]);
+      // 18. Restore NPD Responses
+      console.log(`Restoring ${existingNpd.length} NPD responses...`);
+      for (const n of existingNpd) {
+        await connection.query(`
+          INSERT INTO \`NPDResponse\` (\`visitId\`, \`skuCode\`, \`status\`)
+          VALUES (?, ?, ?)
+        `, [n.visitId, n.skuCode, n.status]);
+      }
+    } else {
+      console.log('Bypassing data restoration loops for fast schema reset.');
     }
 
     console.log('Database migration completed successfully!');

@@ -15,6 +15,8 @@ export const visitAssetSchema = z.object({
   tempInRange: z.boolean(),
   actionRequired: z.enum(['Cleaning', 'Repair', 'Replacement', 'Gas Filling', 'Other', 'None'] as const),
   observation: z.string().optional().default(''),
+  isFirstInFlow: z.boolean().optional().default(false),
+  fefoFollowed: z.boolean().optional().default(false),
 });
 
 export const visitSchema = z.object({
@@ -44,6 +46,8 @@ export const visitDraftSchema = z.object({
     temperature: true,
     tempInRange: true,
     actionRequired: true,
+    isFirstInFlow: true,
+    fefoFollowed: true,
   })).default([]),
   photos: z.array(visitPhotoSchema).default([]),
   powerSkuResults: z.record(z.string(), z.enum(['Available', 'Not Available', 'Not Required'] as const)).optional().default({}),

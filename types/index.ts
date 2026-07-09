@@ -85,6 +85,8 @@ export interface VisitAsset {
   tempInRange: boolean;
   actionRequired: ActionRequiredType;
   observation: string;
+  isFirstInFlow: boolean;
+  fefoFollowed: boolean;
 }
 
 export interface VisitPhoto {

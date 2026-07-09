@@ -22,8 +22,8 @@ export const visitAssetSchema = z.object({
 export const visitSchema = z.object({
   visitId: z.string(),
   cust_rt_id: z.string().min(1, { message: 'Customer-Route selection is required' }),
-  latitude: z.number().refine((val) => Math.abs(val) > 0.0001, { message: 'GPS Latitude is required' }),
-  longitude: z.number().refine((val) => Math.abs(val) > 0.0001, { message: 'GPS Longitude is required' }),
+  latitude: z.number().optional().default(0),
+  longitude: z.number().optional().default(0),
   accuracy: z.number().optional().default(0),
   status: z.enum(['Draft', 'Submitted'] as const),
   assets: z.array(visitAssetSchema).default([]),

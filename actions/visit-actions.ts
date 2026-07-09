@@ -197,10 +197,7 @@ export async function submitVisitAction(data: VisitInput) {
 
   const input = parsed.data;
 
-  // Validate coordinates specifically
-  if (Math.abs(input.latitude) < 0.0001 || Math.abs(input.longitude) < 0.0001) {
-    throw new Error('GPS location coordinates are required for final submission.');
-  }
+
 
   const [customerCode, routeCode] = input.cust_rt_id.split('|');
 

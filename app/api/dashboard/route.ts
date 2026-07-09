@@ -145,7 +145,7 @@ export async function GET(req: NextRequest) {
         fefo,
         action,
         visitId: v.visitId,
-        createdAt: v.createdAt instanceof Date ? v.createdAt.toISOString() : v.createdAt
+        createdAt: (v.createdAt as any) instanceof Date ? (v.createdAt as any).toISOString() : v.createdAt
       };
     });
 
@@ -265,7 +265,7 @@ export async function GET(req: NextRequest) {
           assetType: firstAsset.assetType,
           temperature: firstAsset.temperature,
           supervisorName: userInfo.name,
-          visitDate: v.createdAt instanceof Date ? v.createdAt.toISOString() : v.createdAt,
+          visitDate: (v.createdAt as any) instanceof Date ? (v.createdAt as any).toISOString() : v.createdAt,
         };
       });
 

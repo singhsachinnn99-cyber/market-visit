@@ -50,28 +50,25 @@ export const customerRepository = {
   },
 
   async upsertCustomers(customers: Customer[]): Promise<{ inserted: number; updated: number }> {
-    const [rows]: any = await pool.execute('SELECT `cust_rt_id` FROM `Customer`');
-    const existingIds = new Set<string>(rows.map((r: any) => r.cust_rt_id));
-
     let inserted = 0;
     let updated = 0;
 
     for (const cust of customers) {
-      if (existingIds.has(cust.cust_rt_id)) {
-        await pool.execute(
-          `UPDATE \`Customer\` 
-           SET \`customerName\` = ?, \`classification\` = ?, \`channel\` = ?, \`customerCode\` = ?, \`routeCode\` = ? 
-           WHERE \`cust_rt_id\` = ?`,
-          [cust.customerName, cust.classification, cust.channel, cust.customerCode, cust.routeCode, cust.cust_rt_id]
-        );
-        updated++;
-      } else {
-        await pool.execute(
-          `INSERT INTO \`Customer\` (\`cust_rt_id\`, \`customerCode\`, \`customerName\`, \`classification\`, \`channel\`, \`routeCode\`) 
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [cust.cust_rt_id, cust.customerCode, cust.customerName, cust.classification, cust.channel, cust.routeCode]
-        );
+      const [res]: any = await pool.execute(
+        `INSERT INTO \`Customer\` (\`cust_rt_id\`, \`customerCode\`, \`customerName\`, \`classification\`, \`channel\`, \`routeCode\`) 
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE 
+           \`customerName\` = VALUES(\`customerName\`),
+           \`classification\` = VALUES(\`classification\`),
+           \`channel\` = VALUES(\`channel\`),
+           \`customerCode\` = VALUES(\`customerCode\`),
+           \`routeCode\` = VALUES(\`routeCode\`)`,
+        [cust.cust_rt_id, cust.customerCode, cust.customerName, cust.classification, cust.channel, cust.routeCode]
+      );
+      if (res.affectedRows === 1) {
         inserted++;
+      } else {
+        updated++;
       }
     }
 
@@ -79,9 +76,6 @@ export const customerRepository = {
   },
 
   async upsertMappings(mappings: CustomerRouteMapping[]): Promise<{ inserted: number; updated: number }> {
-    const [rows]: any = await pool.execute('SELECT `cust_rt_id` FROM `CustomerRouteMapping`');
-    const existingIds = new Set<string>(rows.map((r: any) => r.cust_rt_id));
-
     let inserted = 0;
     let updated = 0;
 
@@ -89,14 +83,18 @@ export const customerRepository = {
       if (!m.customerCode || !m.routeCode) continue;
       const cust_rt_id = m.cust_rt_id || `${m.customerCode}|${m.routeCode}`;
 
-      if (existingIds.has(cust_rt_id)) {
-        updated++;
-      } else {
-        await pool.execute(
-          'INSERT INTO `CustomerRouteMapping` (`cust_rt_id`, `customerCode`, `routeCode`) VALUES (?, ?, ?)',
-          [cust_rt_id, m.customerCode, m.routeCode]
-        );
+      const [res]: any = await pool.execute(
+        `INSERT INTO \`CustomerRouteMapping\` (\`cust_rt_id\`, \`customerCode\`, \`routeCode\`) 
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE 
+           \`customerCode\` = VALUES(\`customerCode\`),
+           \`routeCode\` = VALUES(\`routeCode\`)`,
+        [cust_rt_id, m.customerCode, m.routeCode]
+      );
+      if (res.affectedRows === 1) {
         inserted++;
+      } else {
+        updated++;
       }
     }
 

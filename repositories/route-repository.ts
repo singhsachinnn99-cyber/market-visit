@@ -34,9 +34,6 @@ export const routeRepository = {
   },
 
   async upsertRoutes(routes: Route[]): Promise<{ inserted: number; updated: number }> {
-    const [rows]: any = await pool.execute('SELECT `routeCode` FROM `Route`');
-    const existingCodes = new Set<string>(rows.map((r: any) => r.routeCode));
-
     let inserted = 0;
     let updated = 0;
 
@@ -45,18 +42,20 @@ export const routeRepository = {
       const managerId = route.managerId || null;
       const channel = route.channel || 'GT';
 
-      if (existingCodes.has(route.routeCode)) {
-        await pool.execute(
-          'UPDATE `Route` SET `routeName` = ?, `channel` = ?, `supervisorId` = ?, `managerId` = ? WHERE `routeCode` = ?',
-          [route.routeName, channel, supervisorId, managerId, route.routeCode]
-        );
-        updated++;
-      } else {
-        await pool.execute(
-          'INSERT INTO `Route` (`routeCode`, `routeName`, `channel`, `supervisorId`, `managerId`) VALUES (?, ?, ?, ?, ?)',
-          [route.routeCode, route.routeName, channel, supervisorId, managerId]
-        );
+      const [res]: any = await pool.execute(
+        `INSERT INTO \`Route\` (\`routeCode\`, \`routeName\`, \`channel\`, \`supervisorId\`, \`managerId\`) 
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE 
+           \`routeName\` = VALUES(\`routeName\`),
+           \`channel\` = VALUES(\`channel\`),
+           \`supervisorId\` = VALUES(\`supervisorId\`),
+           \`managerId\` = VALUES(\`managerId\`)`,
+        [route.routeCode, route.routeName, channel, supervisorId, managerId]
+      );
+      if (res.affectedRows === 1) {
         inserted++;
+      } else {
+        updated++;
       }
     }
 

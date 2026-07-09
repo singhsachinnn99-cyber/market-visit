@@ -39,26 +39,23 @@ export const skuRepository = {
   },
 
   async upsertSkus(skus: SKU[]): Promise<{ inserted: number; updated: number }> {
-    const [rows]: any = await pool.execute('SELECT `skuCode` FROM `SKU`');
-    const existingCodes = new Set<string>(rows.map((r: any) => r.skuCode));
-
     let inserted = 0;
     let updated = 0;
 
     for (const sku of skus) {
       const typeVal = sku.type || 'SKU';
-      if (existingCodes.has(sku.skuCode)) {
-        await pool.execute(
-          'UPDATE `SKU` SET `skuName` = ?, `type` = ? WHERE `skuCode` = ?',
-          [sku.skuName, typeVal, sku.skuCode]
-        );
-        updated++;
-      } else {
-        await pool.execute(
-          'INSERT INTO `SKU` (`skuCode`, `skuName`, `type`) VALUES (?, ?, ?)',
-          [sku.skuCode, sku.skuName, typeVal]
-        );
+      const [res]: any = await pool.execute(
+        `INSERT INTO \`SKU\` (\`skuCode\`, \`skuName\`, \`type\`) 
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE 
+           \`skuName\` = VALUES(\`skuName\`),
+           \`type\` = VALUES(\`type\`)`,
+        [sku.skuCode, sku.skuName, typeVal]
+      );
+      if (res.affectedRows === 1) {
         inserted++;
+      } else {
+        updated++;
       }
     }
 
@@ -66,26 +63,21 @@ export const skuRepository = {
   },
 
   async upsertPowerSkus(powerSkus: PowerSKU[]): Promise<{ inserted: number; updated: number }> {
-    const [rows]: any = await pool.execute('SELECT CONCAT(`skuCode`, \'_\', `channel`) as pk FROM `PowerSKU`');
-    const existingKeys = new Set<string>(rows.map((r: any) => r.pk));
-
     let inserted = 0;
     let updated = 0;
 
     for (const ps of powerSkus) {
-      const key = `${ps.skuCode}_${ps.channel}`;
-      if (existingKeys.has(key)) {
-        await pool.execute(
-          'UPDATE `PowerSKU` SET `skuName` = ? WHERE `skuCode` = ? AND `channel` = ?',
-          [ps.skuName, ps.skuCode, ps.channel]
-        );
-        updated++;
-      } else {
-        await pool.execute(
-          'INSERT INTO `PowerSKU` (`skuCode`, `skuName`, `channel`) VALUES (?, ?, ?)',
-          [ps.skuCode, ps.skuName, ps.channel]
-        );
+      const [res]: any = await pool.execute(
+        `INSERT INTO \`PowerSKU\` (\`skuCode\`, \`skuName\`, \`channel\`) 
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE 
+           \`skuName\` = VALUES(\`skuName\`)`,
+        [ps.skuCode, ps.skuName, ps.channel]
+      );
+      if (res.affectedRows === 1) {
         inserted++;
+      } else {
+        updated++;
       }
     }
 

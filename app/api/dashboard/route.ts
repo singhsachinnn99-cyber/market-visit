@@ -203,8 +203,8 @@ export async function GET(req: NextRequest) {
       return { routeCode, routeName, visited, total, coverage };
     });
 
-    const totalAssignedOutlets = coveragePerRoute.reduce((sum, r) => sum + r.total, 0);
-    const totalVisitedOutlets = coveragePerRoute.reduce((sum, r) => sum + r.visited, 0);
+    const totalAssignedOutlets = coveragePerRoute.reduce((sum: number, r: any) => sum + r.total, 0);
+    const totalVisitedOutlets = coveragePerRoute.reduce((sum: number, r: any) => sum + r.visited, 0);
     const coveragePercent = totalAssignedOutlets > 0 ? Math.round((totalVisitedOutlets / totalAssignedOutlets) * 100) : 0;
 
     const supervisorPerformance = dbUsers
@@ -220,10 +220,10 @@ export async function GET(req: NextRequest) {
         }).length;
 
         const supRoutes = dbRoutes.filter((r: any) => r.supervisorId === u.id);
-        const totalAssigned = supRoutes.reduce((sum, r) => {
+        const totalAssigned = supRoutes.reduce((sum: number, r: any) => {
           return sum + customers.filter(c => c.routeCode === r.routeCode).length;
         }, 0);
-        const totalVisited = supRoutes.reduce((sum, r) => {
+        const totalVisited = supRoutes.reduce((sum: number, r: any) => {
           const visitedCustIds = new Set(
             filteredVisits
               .filter(v => {

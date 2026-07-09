@@ -81,6 +81,8 @@ export default function VisitLogsPage() {
   const { showToast } = useToast();
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [isSyncing, setIsSyncing] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
@@ -96,17 +98,37 @@ export default function VisitLogsPage() {
   } | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
 
-  const fetchVisits = async () => {
-    setLoading(true);
+  const fetchVisits = async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setIsSyncing(true);
     try {
       const data = await getVisitsAction();
       setVisits((data as Visit[]).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      setLastUpdated(new Date());
     } catch (err: any) {
       showToast(err.message || 'Failed to load visits.', 'error');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+      setIsSyncing(false);
+    }
   };
 
-  useEffect(() => { fetchVisits(); }, []);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      if (active) await fetchVisits(false);
+    };
+    load();
+
+    const interval = setInterval(async () => {
+      if (active) await fetchVisits(true);
+    }, 10000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleOpenReview = async (id: string) => {
     setReviewId(id);
@@ -163,6 +185,19 @@ export default function VisitLogsPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="form-input pl-9"
           />
+        </div>
+
+        {/* Live sync indicator */}
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-solid border-[var(--border-soft)] bg-[var(--surface-2)] text-[11px] font-bold font-mono text-[var(--text-muted)] h-9">
+          <span 
+            className={`h-2 w-2 rounded-full ${isSyncing ? 'bg-[var(--accent)] animate-pulse' : 'bg-[var(--success)] animate-pulse'}`} 
+            style={{
+              boxShadow: isSyncing ? '0 0 8px var(--accent)' : '0 0 8px var(--success)'
+            }}
+          />
+          <span>{isSyncing ? 'SYNCING...' : 'LIVE SYNC ACTIVE'}</span>
+          <span style={{ opacity: 0.3 }}>|</span>
+          <span>UPDATED {lastUpdated.toLocaleTimeString()}</span>
         </div>
 
         {/* Status pills */}

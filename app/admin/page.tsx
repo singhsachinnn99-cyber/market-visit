@@ -34,6 +34,8 @@ const GCOL: Record<string, string> = {
 export default function AdminDashboardPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [isSyncing, setIsSyncing] = useState(false);
   const { theme } = useTheme();
 
   // Filter States
@@ -55,22 +57,38 @@ export default function AdminDashboardPage() {
   // Chart instances
   const chartsRef = useRef<Record<string, any>>({});
 
-  // Fetch real data on mount
+  // Fetch real data on mount & poll every 10 seconds
   useEffect(() => {
-    async function loadData() {
+    let active = true;
+    async function loadData(silent = false) {
+      if (!silent) setIsLoading(true);
+      else setIsSyncing(true);
       try {
         const res = await fetch('/api/dashboard');
         const data = await res.json();
-        if (data.success) {
+        if (data.success && active) {
           setRows(data.rows);
+          setLastUpdated(new Date());
         }
       } catch (err) {
         console.error('Failed to load dashboard data:', err);
       } finally {
-        setIsLoading(false);
+        if (active) {
+          setIsLoading(false);
+          setIsSyncing(false);
+        }
       }
     }
-    loadData();
+    loadData(false);
+
+    const timer = setInterval(() => {
+      loadData(true);
+    }, 10000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
   }, []);
 
   // Compute dropdown values from unfiltered rows
@@ -504,6 +522,40 @@ export default function AdminDashboardPage() {
           color:var(--blue-deep);
           cursor:pointer;
         }
+        .live-badge {
+          display:flex;
+          align-items:center;
+          gap:8px;
+          padding:8px 12px;
+          border:1.5px solid var(--line);
+          border-radius:11px;
+          background:var(--card);
+          font-family:monospace;
+          font-size:10.5px;
+          font-weight:700;
+          color:var(--soft);
+          user-select:none;
+        }
+        .live-dot {
+          height:8px;
+          width:8px;
+          border-radius:50%;
+          display:inline-block;
+        }
+        .live-dot.active {
+          background:var(--green);
+          box-shadow: 0 0 8px var(--green);
+          animation: pulse-dot 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .live-dot.syncing {
+          background:var(--blue);
+          box-shadow: 0 0 8px var(--blue);
+          animation: pulse-dot 0.6s ease-in-out infinite alternate;
+        }
+        @keyframes pulse-dot {
+          0%, 100% { opacity: 0.35; transform: scale(0.9); }
+          50% { opacity: 1; transform: scale(1.15); }
+        }
         .active-note {
           font-size:11px;
           color:var(--soft);
@@ -758,6 +810,13 @@ export default function AdminDashboardPage() {
           </div>
 
           <button className="reset" onClick={resetFilters}>Reset</button>
+
+          <div className="live-badge">
+            <span className={`live-dot ${isSyncing ? 'syncing' : 'active'}`} />
+            <span>{isSyncing ? 'SYNCING...' : 'LIVE SYNC ACTIVE'}</span>
+            <span style={{ opacity: 0.3 }}>|</span>
+            <span>UPDATED {lastUpdated.toLocaleTimeString()}</span>
+          </div>
         </div>
 
         {/* Active Filter description */}

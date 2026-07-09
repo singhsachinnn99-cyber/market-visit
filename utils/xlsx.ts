@@ -400,6 +400,7 @@ export function mergeParsedData(parsedFiles: ParsedFileResult[]): { payload: Par
   });
 
   // 4. Process CUSTMASTER Customer mappings
+  const importedRouteCodes = new Set(payload.routes.map(r => r.routeCode));
   const customerNamesMap = new Map<string, { customerName: string; routeCodes: Set<string> }>();
   filesByType.custMappings.forEach(f => {
     const customerCodeCol = f.mapping['CustomerCode'];
@@ -423,6 +424,11 @@ export function mergeParsedData(parsedFiles: ParsedFileResult[]): { payload: Par
       }
 
       if (customerCode && customerName && routeCode) {
+        // Skip customer mappings for routes that were skipped/closed
+        if (!importedRouteCodes.has(routeCode)) {
+          return;
+        }
+
         const cust_rt_id = `${customerCode}|${routeCode}`;
         payload.mappings.push({
           cust_rt_id,

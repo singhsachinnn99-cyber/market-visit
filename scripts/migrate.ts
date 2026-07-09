@@ -61,6 +61,48 @@ async function runMigration() {
     await connection.query('DROP TABLE IF EXISTS `CustomerRouteMapping`');
     await connection.query('DROP TABLE IF EXISTS `Customer`');
 
+    // Create foundational tables if they do not exist (for brand new Railway instances)
+    console.log('Ensuring foundational tables exist...');
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS \`User\` (
+        \`id\` VARCHAR(191) PRIMARY KEY,
+        \`name\` VARCHAR(191) NOT NULL,
+        \`employeeCode\` VARCHAR(191) UNIQUE NOT NULL,
+        \`email\` VARCHAR(191) UNIQUE NOT NULL,
+        \`passwordHash\` VARCHAR(191) NOT NULL,
+        \`mobile\` VARCHAR(191) NOT NULL,
+        \`role\` ENUM('Admin', 'Supervisor') NOT NULL,
+        \`status\` ENUM('Active', 'Inactive') NOT NULL,
+        \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        INDEX \`idx_user_email\` (\`email\`),
+        INDEX \`idx_user_employee_code\` (\`employeeCode\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS \`Route\` (
+        \`routeCode\` VARCHAR(191) PRIMARY KEY,
+        \`routeName\` VARCHAR(191) NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS \`SKU\` (
+        \`skuCode\` VARCHAR(191) PRIMARY KEY,
+        \`skuName\` VARCHAR(191) NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS \`AuditLog\` (
+        \`logId\` VARCHAR(191) PRIMARY KEY,
+        \`user\` VARCHAR(191) NOT NULL,
+        \`action\` VARCHAR(191) NOT NULL,
+        \`entity\` VARCHAR(191) NOT NULL,
+        \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
     // 3. Create Manager Table
     console.log('Creating Manager table...');
     await connection.query(`

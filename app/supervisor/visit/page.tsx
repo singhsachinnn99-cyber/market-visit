@@ -527,7 +527,7 @@ function VisitWizardContent() {
         <div className="card p-5 space-y-4 animate-slide-up">
           <span className="badge badge-accent">Outlet Selection</span>
           
-          <div className="space-y-2">
+          <div className="space-y-3">
             <label className="form-label">Search & Select Customer Outlet</label>
             <input
               type="text"
@@ -537,29 +537,70 @@ function VisitWizardContent() {
               className="form-input"
             />
             
-            <select 
-              value={selectedCustomer} 
-              onChange={(e) => setSelectedCustomer(e.target.value)} 
-              className="form-input"
-              size={5}
-              style={{ height: 'auto', maxHeight: '180px' }}
-            >
-              <option value="">— Choose Customer —</option>
-              {filteredCustomers.map((c) => (
-                <option key={c.cust_rt_id} value={c.cust_rt_id}>{c.customerCode} – {c.customerName}</option>
-              ))}
-            </select>
+            <div className="space-y-2 mt-2 max-h-[280px] overflow-y-auto pr-1 border border-solid border-[var(--border-soft)] rounded-xl p-2 bg-[var(--surface-2)]">
+              {filteredCustomers.length === 0 ? (
+                <p className="text-[12px] italic text-center py-8 text-[var(--text-muted)]">
+                  No matching customers found for this route.
+                </p>
+              ) : (
+                filteredCustomers.map((c) => {
+                  const isSelected = selectedCustomer === c.cust_rt_id;
+                  return (
+                    <button
+                      key={c.cust_rt_id}
+                      type="button"
+                      onClick={() => setSelectedCustomer(c.cust_rt_id)}
+                      className="w-full text-left p-3 rounded-xl transition-all duration-200 flex items-center justify-between border border-solid cursor-pointer"
+                      style={{
+                        background: isSelected ? 'var(--accent-light)' : 'var(--surface)',
+                        borderColor: isSelected ? 'var(--accent)' : 'var(--border-soft)',
+                        boxShadow: isSelected ? '0 2px 8px rgba(79,70,229,0.08)' : 'none',
+                      }}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--accent)] border border-solid border-[var(--border-soft)]">
+                            {c.customerCode}
+                          </span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-solid border-emerald-100">
+                            Grade {c.classification}
+                          </span>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-solid border-blue-100">
+                            {c.channel}
+                          </span>
+                        </div>
+                        <h4 className="text-[13px] font-extrabold text-[var(--text-primary)] mt-0.5">
+                          {c.customerName}
+                        </h4>
+                      </div>
+                      <div className="flex items-center justify-center h-5 w-5 rounded-full border border-solid transition-all"
+                        style={{
+                          background: isSelected ? 'var(--accent)' : 'transparent',
+                          borderColor: isSelected ? 'var(--accent)' : 'var(--border)',
+                        }}
+                      >
+                        {isSelected && <span className="text-white text-[10px] font-bold">✓</span>}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           {activeCustomer && (
-            <div className="grid grid-cols-2 gap-3 p-4 rounded-xl animate-slide-up" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
-              <div>
-                <p className="form-label mb-1">Classification</p>
-                <span className="badge badge-accent">Grade {activeCustomer.classification}</span>
+            <div className="p-4 rounded-xl animate-fade-in border border-solid border-emerald-200/60 bg-emerald-50/30 flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 flex-shrink-0">
+                <ShieldCheck className="h-5 w-5" />
               </div>
-              <div>
-                <p className="form-label mb-1">Channel</p>
-                <p className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>{activeCustomer.channel}</p>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Selected Outlet</p>
+                <h3 className="text-[14px] font-extrabold text-[var(--text-primary)] leading-none mt-0.5">
+                  {activeCustomer.customerName}
+                </h3>
+                <p className="text-[11.5px] text-[var(--text-secondary)]">
+                  Code: <b>{activeCustomer.customerCode}</b> · Channel: <b>{activeCustomer.channel}</b> · Classification: <b>Grade {activeCustomer.classification}</b>
+                </p>
               </div>
             </div>
           )}

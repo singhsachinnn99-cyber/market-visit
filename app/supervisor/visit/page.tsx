@@ -673,7 +673,7 @@ function VisitWizardContent() {
               <p className="text-[12px] italic text-center py-4" style={{ color: 'var(--text-muted)' }}>No NPD SKUs configured.</p>
             ) : (
               npdSkus.map((sku) => {
-                const currentStatus = npdResponses[sku.skuCode] || 'Not Required';
+                const currentStatus = npdResponses[sku.skuCode] || '';
                 return (
                   <div key={sku.skuCode} className="p-3.5 rounded-xl space-y-2.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
                     <div>

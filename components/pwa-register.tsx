@@ -8,28 +8,36 @@ export default function PWARegister() {
   const [showBanner, setShowBanner] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      // 1. Listen for new service worker taking control and reload the page
-      let refreshing = false;
-      const handleControllerChange = () => {
-        if (!refreshing) {
-          refreshing = true;
-          window.location.reload();
-        }
-      };
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
-      navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
+    const isLocalhost = ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname);
+    const isProduction = process.env.NODE_ENV === "production";
+    if (!isProduction || isLocalhost) {
+      console.warn("Skipping service worker registration in development/local environment.");
+      return;
+    }
 
-      // 2. Register the service worker
-      navigator.serviceWorker
-        .register("/sw.js")
-        .then((registration) => {
-          console.log("Service Worker registered with scope:", registration.scope);
-          registration.update();
-        })
-        .catch((error) => {
-          console.error("Service Worker registration failed:", error);
-        });
+    // 1. Listen for new service worker taking control and reload the page
+    let refreshing = false;
+    const handleControllerChange = () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    };
+
+    navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
+
+    // 2. Register the service worker
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => {
+        console.log("Service Worker registered with scope:", registration.scope);
+        registration.update();
+      })
+      .catch((error) => {
+        console.error("Service Worker registration failed:", error);
+      });
 
       // 3. Listen for browser install prompt
       const handleBeforeInstallPrompt = (e: Event) => {
@@ -57,7 +65,6 @@ export default function PWARegister() {
         window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
         window.removeEventListener("appinstalled", handleAppInstalled);
       };
-    }
   }, []);
 
   const handleInstallClick = async () => {

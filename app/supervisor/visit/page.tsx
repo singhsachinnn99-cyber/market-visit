@@ -77,6 +77,7 @@ function VisitWizardContent() {
   // Submitting loaders
   const [savingDraft, setSavingDraft] = useState(false);
   const [submittingVisit, setSubmittingVisit] = useState(false);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   // 1. Load masters
   const { data: routes = [] } = useQuery<Route[]>({
@@ -161,7 +162,7 @@ function VisitWizardContent() {
           assetId: 'ast_' + Math.random().toString(36).substring(2, 9),
           visitId,
           assetType: 'Chiller',
-          temperature: 0,
+          temperature: undefined as number | undefined,
           tempInRange: true,
           actionRequired: 'None',
           observation: '',
@@ -174,6 +175,10 @@ function VisitWizardContent() {
 
   useEffect(() => {
     getCoordinates();
+  }, []);
+
+  useEffect(() => {
+    setIsMobileDevice(typeof window !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
   }, []);
 
   const getTempInRange = (type: 'Chiller' | 'Freezer', temp: number) => {
@@ -349,9 +354,13 @@ function VisitWizardContent() {
       showToast('Please select both a route and a customer before submitting.', 'warning');
       return;
     }
+    if (visitType === 'No Visit' && !reasonCategory) {
+      showToast('Please select a reason category for no-visit reports.', 'warning');
+      return;
+    }
     setSubmittingVisit(true);
     try {
-      if (assets.some(a => a.temperature === undefined || a.temperature === null || (a.temperature as any) === '' || (a.temperature as any) === '-')) {
+      if (visitType !== 'No Visit' && assets.some(a => a.temperature === undefined || a.temperature === null || (a.temperature as any) === '' || (a.temperature as any) === '-')) {
         showToast('Please record a valid temperature for all assets.', 'error');
         setSubmittingVisit(false);
         return;
@@ -403,7 +412,7 @@ function VisitWizardContent() {
         assetId: 'ast_' + Math.random().toString(36).substring(2, 9),
         visitId,
         assetType: 'Chiller',
-        temperature: 0,
+        temperature: undefined as number | undefined,
         tempInRange: true,
         actionRequired: 'None',
         observation: '',
@@ -429,6 +438,8 @@ function VisitWizardContent() {
     c.customerCode.toLowerCase().includes(customerSearch.toLowerCase()) ||
     c.customerName.toLowerCase().includes(customerSearch.toLowerCase())
   );
+
+  const isNoVisitFlow = currentStep === 0 && visitType === 'No Visit';
 
   return (
     <div className="max-w-2xl mx-auto space-y-5 pb-28">
@@ -806,7 +817,7 @@ function VisitWizardContent() {
 
           <div className="space-y-4">
             {assets.map((ast, idx) => {
-              const inRange = getTempInRange(ast.assetType, ast.temperature);
+              const inRange = getTempInRange(ast.assetType, ast.temperature ?? 0);
               return (
                 <div key={ast.assetId} className="p-4 rounded-xl space-y-4" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
                   <div className="flex items-center justify-between">
@@ -991,13 +1002,20 @@ function VisitWizardContent() {
               const displayName = cat === 'Vegetables' ? 'Assets' : cat;
               return (
                 <div key={cat} className="p-4 rounded-xl space-y-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className="text-[12px] font-bold uppercase" style={{ color: 'var(--text-primary)' }}>{displayName}</span>
-                    <label className="btn-ghost cursor-pointer" style={{ height: '32px', padding: '0 12px' }}>
-                      <Camera className="h-3.5 w-3.5" style={{ color: 'var(--accent)' }} />
-                      <span>Add Photos</span>
-                      <input type="file" accept="image/*" multiple disabled={uploadingPhoto} onChange={(e) => handlePhotoUpload(e, cat)} className="hidden" />
-                    </label>
+                    <div className="flex items-center gap-2">
+                      <label className="btn-ghost cursor-pointer" style={{ height: '32px', padding: '0 12px' }}>
+                        <Camera className="h-3.5 w-3.5" style={{ color: 'var(--accent)' }} />
+                        <span>{isMobileDevice ? 'Camera' : 'Add Photos'}</span>
+                        <input type="file" accept="image/*" capture={isMobileDevice ? 'environment' : undefined} multiple disabled={uploadingPhoto} onChange={(e) => handlePhotoUpload(e, cat)} className="hidden" />
+                      </label>
+                      <label className="btn-ghost cursor-pointer" style={{ height: '32px', padding: '0 12px' }}>
+                        <Camera className="h-3.5 w-3.5" style={{ color: 'var(--accent)' }} />
+                        <span>Gallery</span>
+                        <input type="file" accept="image/*" multiple disabled={uploadingPhoto} onChange={(e) => handlePhotoUpload(e, cat)} className="hidden" />
+                      </label>
+                    </div>
                   </div>
                   {catPhotos.length === 0 ? (
                     <div className="border-2 border-dashed rounded-xl p-4 text-center" style={{ borderColor: 'var(--border)' }}>
@@ -1100,8 +1118,8 @@ function VisitWizardContent() {
         </button>
         {currentStep < 5 && (
           <button
-            onClick={nextStep}
-            disabled={savingDraft || submittingVisit || (currentStep === 0 && (!selectedRoute || !selectedCustomer))}
+            onClick={isNoVisitFlow ? handleFinalSubmit : nextStep}
+            disabled={savingDraft || submittingVisit || (currentStep === 0 && (!selectedRoute || !selectedCustomer || (visitType === 'No Visit' && !reasonCategory)))}
             className="btn-primary cursor-pointer"
             style={{
               height: '40px', padding: '0 20px',
@@ -1110,8 +1128,8 @@ function VisitWizardContent() {
               opacity: (savingDraft || submittingVisit) ? 0.5 : 1,
             }}
           >
-            {currentStep === 4 ? 'Review Summary' : 'Next'}
-            <ChevronRight className="h-3.5 w-3.5" />
+            {isNoVisitFlow ? 'Submit' : currentStep === 4 ? 'Review Summary' : 'Next'}
+            {isNoVisitFlow ? <ShieldCheck className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </button>
         )}
       </div>

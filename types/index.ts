@@ -84,7 +84,7 @@ export interface VisitAsset {
   assetId: string;
   visitId: string;
   assetType: AssetType;
-  temperature: number;
+  temperature?: number | null;
   tempInRange: boolean;
   actionRequired: ActionRequiredType;
   observation: string;

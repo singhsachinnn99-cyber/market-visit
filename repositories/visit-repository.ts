@@ -209,7 +209,7 @@ export const visitRepository = {
       await executor.execute(
         `INSERT INTO \`VisitAsset\` (\`assetId\`, \`visitId\`, \`assetType\`, \`temperature\`, \`tempInRange\`, \`actionRequired\`, \`observation\`, \`isFirstInFlow\`, \`fefoFollowed\`) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [ast.assetId, ast.visitId, ast.assetType, ast.temperature, ast.tempInRange ? 1 : 0, ast.actionRequired, ast.observation, ast.isFirstInFlow ? 1 : 0, ast.fefoFollowed ? 1 : 0]
+        [ast.assetId, ast.visitId, ast.assetType, ast.temperature ?? null, ast.tempInRange ? 1 : 0, ast.actionRequired, ast.observation, ast.isFirstInFlow ? 1 : 0, ast.fefoFollowed ? 1 : 0]
       );
     }
   },

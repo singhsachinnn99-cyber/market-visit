@@ -42,6 +42,7 @@ export default function SupervisorReportsPage() {
   const [fMgr, setFMgr] = useState('');
   const [fSuper, setFSuper] = useState('');
   const [fChannel, setFChannel] = useState('');
+  const [fClass, setFClass] = useState('');
   const [fCust, setFCust] = useState('');
 
   // Canvas Refs
@@ -92,12 +93,29 @@ export default function SupervisorReportsPage() {
             (r) =>
               (!fChannel || r.ch === fChannel) &&
               (!fMgr || r.mgr === fMgr) &&
-              (!fSuper || r.sup === fSuper)
+              (!fSuper || r.sup === fSuper) &&
+              (!fClass || r.gr === fClass)
           )
           .map((r) => r.cust)
       )
     ).sort();
-  }, [rows, fChannel, fMgr, fSuper]);
+  }, [rows, fChannel, fMgr, fSuper, fClass]);
+
+  const classOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        rows
+          .filter(
+            (r) =>
+              (!fChannel || r.ch === fChannel) &&
+              (!fMgr || r.mgr === fMgr) &&
+              (!fSuper || r.sup === fSuper) &&
+              (!fCust || r.cust === fCust)
+          )
+          .map((r) => r.gr)
+      )
+    ).sort();
+  }, [rows, fChannel, fMgr, fSuper, fCust]);
 
   // Reset helper
   const resetFilters = () => {
@@ -105,6 +123,7 @@ export default function SupervisorReportsPage() {
     setFMgr('');
     setFSuper('');
     setFChannel('');
+    setFClass('');
     setFCust('');
   };
 
@@ -115,10 +134,11 @@ export default function SupervisorReportsPage() {
         (!fMgr || r.mgr === fMgr) &&
         (!fSuper || r.sup === fSuper) &&
         (!fChannel || r.ch === fChannel) &&
+        (!fClass || r.gr === fClass) &&
         (!fCust || r.cust === fCust) &&
         (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4))
     );
-  }, [rows, fTime, fMgr, fSuper, fChannel, fCust]);
+  }, [rows, fTime, fMgr, fSuper, fChannel, fClass, fCust]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
@@ -167,9 +187,10 @@ export default function SupervisorReportsPage() {
     if (fMgr) parts.push(`Manager: <b>${fMgr}</b>`);
     if (fSuper) parts.push(`Supervisor: <b>${fSuper}</b>`);
     if (fChannel) parts.push(`Channel: <b>${fChannel}</b>`);
+    if (fClass) parts.push(`Classification: <b>${fClass}</b>`);
     if (fCust) parts.push(`Outlet: <b>${fCust}</b>`);
     return parts.length ? 'Filtered by ' + parts.join(' · ') : 'Showing all visits';
-  }, [fTime, fMgr, fSuper, fChannel, fCust]);
+  }, [fTime, fMgr, fSuper, fChannel, fClass, fCust]);
 
   // Chart Rendering Hook
   useEffect(() => {
@@ -772,12 +793,29 @@ export default function SupervisorReportsPage() {
 
           <div className="fld">
             <label>Channel</label>
-            <select value={fChannel} onChange={(e) => setFChannel(e.target.value)}>
+            <select value={fChannel} onChange={(e) => {
+              setFChannel(e.target.value);
+              setFClass('');
+              setFCust('');
+            }}>
               <option value="">All Channels</option>
               <option value="TT">TT</option>
               <option value="MT">MT</option>
               <option value="INST">INST</option>
               <option value="EXPORT">EXPORT</option>
+            </select>
+          </div>
+
+          <div className="fld">
+            <label>Classification</label>
+            <select value={fClass} onChange={(e) => {
+              setFClass(e.target.value);
+              setFCust('');
+            }}>
+              <option value="">All Classifications</option>
+              {classOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </select>
           </div>
 

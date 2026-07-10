@@ -92,7 +92,7 @@ export interface VisitAsset {
 export interface VisitPhoto {
   photoId: string;
   visitId: string;
-  category: 'Dairy' | 'Beverages' | 'Fruits' | 'Vegetables';
+  category: 'Dairy' | 'Beverages' | 'Ice Cream' | 'Vegetables';
   cloudinaryUrl: string;
   publicId: string;
   uploadedAt: string; // ISO string
@@ -179,7 +179,7 @@ export interface VisitWizardState {
   observation?: string;
   photos: {
     photoId: string;
-    category: 'Dairy' | 'Beverages' | 'Fruits' | 'Vegetables';
+    category: 'Dairy' | 'Beverages' | 'Ice Cream' | 'Vegetables';
     cloudinaryUrl: string;
     publicId: string;
     uploadedAt: string;

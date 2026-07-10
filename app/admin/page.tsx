@@ -40,10 +40,13 @@ export default function AdminDashboardPage() {
   const { theme } = useTheme();
 
   // Filter States
+  const [fFrom, setFFrom] = useState('');
+  const [fTo, setFTo] = useState('');
   const [fTime, setFTime] = useState('');
   const [fMgr, setFMgr] = useState('');
   const [fSuper, setFSuper] = useState('');
   const [fChannel, setFChannel] = useState('');
+  const [fClass, setFClass] = useState('');
   const [fCust, setFCust] = useState('');
 
   // Canvas Refs
@@ -92,63 +95,103 @@ export default function AdminDashboardPage() {
     };
   }, []);
 
+  const normalizeDate = (value: string) => value ? new Date(`${value}T00:00:00`) : null;
+
   // Compute dropdown values from unfiltered rows
   // 1. Manager Options: filtered by Time Period only
   const mgrOptions = useMemo(() => {
-    const filteredByTime = rows.filter(r => !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4));
+    const filteredByTime = rows.filter(r => {
+      const rowDate = new Date(r.createdAt);
+      const from = normalizeDate(fFrom);
+      const to = normalizeDate(fTo);
+      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
+      const fromOk = !from || rowDate >= from;
+      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
+      return periodOk && fromOk && toOk;
+    });
     return Array.from(new Set(filteredByTime.map((r) => r.mgr))).sort();
-  }, [rows, fTime]);
+  }, [rows, fTime, fFrom, fTo]);
 
   // 2. Supervisor Options: filtered by Time Period and Manager
   const supOptions = useMemo(() => {
-    const filteredByTimeAndMgr = rows.filter(r => 
-      (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4)) &&
-      (!fMgr || r.mgr === fMgr)
-    );
+    const filteredByTimeAndMgr = rows.filter(r => {
+      const rowDate = new Date(r.createdAt);
+      const from = normalizeDate(fFrom);
+      const to = normalizeDate(fTo);
+      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
+      const fromOk = !from || rowDate >= from;
+      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
+      return periodOk && (!fMgr || r.mgr === fMgr) && fromOk && toOk;
+    });
     return Array.from(new Set(filteredByTimeAndMgr.map((r) => r.sup))).sort();
-  }, [rows, fTime, fMgr]);
+  }, [rows, fTime, fMgr, fFrom, fTo]);
 
   // 3. Channel Options: filtered by Time Period, Manager, and Supervisor
   const channelOptions = useMemo(() => {
-    const filteredByTimeMgrSuper = rows.filter(r => 
-      (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4)) &&
-      (!fMgr || r.mgr === fMgr) &&
-      (!fSuper || r.sup === fSuper)
-    );
+    const filteredByTimeMgrSuper = rows.filter(r => {
+      const rowDate = new Date(r.createdAt);
+      const from = normalizeDate(fFrom);
+      const to = normalizeDate(fTo);
+      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
+      const fromOk = !from || rowDate >= from;
+      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
+      return periodOk && (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && fromOk && toOk;
+    });
     return Array.from(new Set(filteredByTimeMgrSuper.map((r) => r.ch))).sort();
-  }, [rows, fTime, fMgr, fSuper]);
+  }, [rows, fTime, fMgr, fSuper, fFrom, fTo]);
 
-  // 4. Customer / Outlet Options: filtered by Time Period, Manager, Supervisor, and Channel
+  // 4. Customer / Outlet Options: filtered by Time Period, Manager, Supervisor, Channel, and Classification
   const custOptions = useMemo(() => {
-    const filteredByAllUpstream = rows.filter(r => 
-      (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4)) &&
-      (!fMgr || r.mgr === fMgr) &&
-      (!fSuper || r.sup === fSuper) &&
-      (!fChannel || r.ch === fChannel)
-    );
+    const filteredByAllUpstream = rows.filter(r => {
+      const rowDate = new Date(r.createdAt);
+      const from = normalizeDate(fFrom);
+      const to = normalizeDate(fTo);
+      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
+      const fromOk = !from || rowDate >= from;
+      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
+      return periodOk && (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && fromOk && toOk;
+    });
     return Array.from(new Set(filteredByAllUpstream.map((r) => r.cust))).sort();
-  }, [rows, fTime, fMgr, fSuper, fChannel]);
+  }, [rows, fTime, fMgr, fSuper, fChannel, fClass, fFrom, fTo]);
+
+  // 5. Classification Options: filtered by Time Period, Manager, Supervisor, Channel, and Outlet
+  const classOptions = useMemo(() => {
+    const filteredByAllUpstream = rows.filter(r => {
+      const rowDate = new Date(r.createdAt);
+      const from = normalizeDate(fFrom);
+      const to = normalizeDate(fTo);
+      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
+      const fromOk = !from || rowDate >= from;
+      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
+      return periodOk && (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fCust || r.cust === fCust) && fromOk && toOk;
+    });
+    return Array.from(new Set(filteredByAllUpstream.map((r) => r.gr))).sort();
+  }, [rows, fTime, fMgr, fSuper, fChannel, fCust, fFrom, fTo]);
 
   // Reset helper
   const resetFilters = () => {
+    setFFrom('');
+    setFTo('');
     setFTime('');
     setFMgr('');
     setFSuper('');
     setFChannel('');
+    setFClass('');
     setFCust('');
   };
 
   // Filtered rows matching selection
   const filtered = useMemo(() => {
-    return rows.filter(
-      (r) =>
-        (!fMgr || r.mgr === fMgr) &&
-        (!fSuper || r.sup === fSuper) &&
-        (!fChannel || r.ch === fChannel) &&
-        (!fCust || r.cust === fCust) &&
-        (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4))
-    );
-  }, [rows, fTime, fMgr, fSuper, fChannel, fCust]);
+    return rows.filter((r) => {
+      const rowDate = new Date(r.createdAt);
+      const from = normalizeDate(fFrom);
+      const to = normalizeDate(fTo);
+      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
+      const fromOk = !from || rowDate >= from;
+      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
+      return periodOk && (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && (!fCust || r.cust === fCust) && fromOk && toOk;
+    });
+  }, [rows, fTime, fMgr, fSuper, fChannel, fClass, fCust, fFrom, fTo]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
@@ -193,13 +236,15 @@ export default function AdminDashboardPage() {
   // Render active note description
   const activeNote = useMemo(() => {
     const parts = [];
+    if (fFrom || fTo) parts.push(`Date: <b>${fFrom || 'Start'} → ${fTo || 'Now'}</b>`);
     if (fTime) parts.push(`Period: <b>${fTime === 'recent' ? 'Recent' : 'Earlier'}</b>`);
     if (fMgr) parts.push(`Manager: <b>${fMgr}</b>`);
     if (fSuper) parts.push(`Supervisor: <b>${fSuper}</b>`);
     if (fChannel) parts.push(`Channel: <b>${fChannel}</b>`);
+    if (fClass) parts.push(`Classification: <b>${fClass}</b>`);
     if (fCust) parts.push(`Outlet: <b>${fCust}</b>`);
     return parts.length ? 'Filtered by ' + parts.join(' · ') : 'Showing all visits';
-  }, [fTime, fMgr, fSuper, fChannel, fCust]);
+  }, [fFrom, fTo, fTime, fMgr, fSuper, fChannel, fClass, fCust]);
 
   // Chart Rendering Hook
   useEffect(() => {
@@ -574,7 +619,8 @@ export default function AdminDashboardPage() {
           color:var(--soft);
           padding-left:4px;
         }
-        .filters select {
+        .filters select,
+        .filters input {
           padding:8px 11px;
           border:1.5px solid var(--line);
           border-radius:11px;
@@ -586,7 +632,11 @@ export default function AdminDashboardPage() {
           cursor:pointer;
           min-width:120px;
         }
-        .filters select:focus {
+        .filters input {
+          cursor:text;
+        }
+        .filters select:focus,
+        .filters input:focus {
           outline:none;
           border-color:var(--blue);
         }
@@ -796,7 +846,8 @@ export default function AdminDashboardPage() {
           .fld {
             width: 100%;
           }
-          .filters select {
+          .filters select,
+          .filters input {
             width: 100%;
             min-height: 40px;
           }
@@ -822,6 +873,16 @@ export default function AdminDashboardPage() {
         {/* Filters Panel */}
         <div className="filters">
           <div className="fld">
+            <label>From</label>
+            <input type="date" value={fFrom} onChange={(e) => setFFrom(e.target.value)} />
+          </div>
+
+          <div className="fld">
+            <label>To</label>
+            <input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} />
+          </div>
+
+          <div className="fld">
             <label>Time Period</label>
             <select value={fTime} onChange={(e) => {
               setFTime(e.target.value);
@@ -842,6 +903,7 @@ export default function AdminDashboardPage() {
               setFMgr(e.target.value);
               setFSuper('');
               setFChannel('');
+              setFClass('');
               setFCust('');
             }}>
               <option value="">All Managers</option>
@@ -856,6 +918,7 @@ export default function AdminDashboardPage() {
             <select value={fSuper} onChange={(e) => {
               setFSuper(e.target.value);
               setFChannel('');
+              setFClass('');
               setFCust('');
             }}>
               <option value="">All Supervisors</option>
@@ -869,10 +932,24 @@ export default function AdminDashboardPage() {
             <label>Channel</label>
             <select value={fChannel} onChange={(e) => {
               setFChannel(e.target.value);
+              setFClass('');
               setFCust('');
             }}>
               <option value="">All Channels</option>
               {channelOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="fld">
+            <label>Classification</label>
+            <select value={fClass} onChange={(e) => {
+              setFClass(e.target.value);
+              setFCust('');
+            }}>
+              <option value="">All Classifications</option>
+              {classOptions.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>

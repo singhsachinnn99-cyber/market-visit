@@ -132,7 +132,7 @@ async function runImport() {
     console.log('Importing Photos...');
     const photos = readJsonFile<VisitPhoto>('photos.json');
     for (const p of photos) {
-      const category = ['Dairy', 'Beverages', 'Fruits', 'Vegetables'].includes(p.category) ? p.category : 'Dairy';
+      const category = ['Dairy', 'Beverages', 'Ice Cream', 'Vegetables'].includes(p.category) ? p.category : 'Dairy';
       const uploadedAt = p.uploadedAt ? new Date(p.uploadedAt) : new Date();
 
       await connection.execute(

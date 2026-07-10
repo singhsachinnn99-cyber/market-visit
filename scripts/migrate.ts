@@ -211,7 +211,7 @@ async function runMigration() {
       CREATE TABLE \`VisitPhoto\` (
         \`photoId\` VARCHAR(191) PRIMARY KEY,
         \`visitId\` VARCHAR(191) NOT NULL,
-        \`category\` ENUM('Dairy', 'Beverages', 'Fruits', 'Vegetables') NOT NULL,
+        `category` ENUM('Dairy', 'Beverages', 'Ice Cream', 'Vegetables') NOT NULL,
         \`cloudinaryUrl\` TEXT NOT NULL,
         \`publicId\` VARCHAR(191) NOT NULL,
         \`uploadedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

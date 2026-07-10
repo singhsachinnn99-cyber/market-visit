@@ -58,8 +58,6 @@ export default function InteractiveChartTableModal({
     }
   }, [isOpen, data]);
 
-  if (!isOpen) return null;
-
   // Search Filter
   const filteredData = useMemo(() => {
     if (!search.trim()) return data;
@@ -107,6 +105,8 @@ export default function InteractiveChartTableModal({
     return sortedData.slice(start, start + pageSize);
   }, [sortedData, currentPage, pageSize]);
 
+  if (!isOpen) return null;
+
   const handleSort = (field: string) => {
     if (sortField === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -152,6 +152,7 @@ export default function InteractiveChartTableModal({
           border: '1px solid var(--border)',
           color: 'var(--text-primary)'
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-soft)] bg-[var(--surface)] flex-shrink-0">

@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 
 function mapRowToCustomer(row: any): Customer {
   return {
-    cust_rt_id: row.cust_rt_id,
+    cust_rt_id: row.cust_rt_id || `${row.customerCode}|${row.routeCode}`,
     customerCode: row.customerCode,
     customerName: row.customerName,
     classification: row.classification,
@@ -28,7 +28,12 @@ export const customerRepository = {
 
   async getCustomersByRoute(routeCode: string): Promise<Customer[]> {
     const [rows]: any = await pool.execute(
-      'SELECT * FROM `Customer` WHERE `routeCode` = ?',
+      'SELECT c.`cust_rt_id`, c.`customerCode`, c.`customerName`, c.`classification`, c.`channel`, m.`routeCode`'
+      + ' FROM `Customer` c'
+      + ' INNER JOIN `CustomerRouteMapping` m ON c.`cust_rt_id` = m.`cust_rt_id`'
+      + ' INNER JOIN `Route` r ON m.`routeCode` = r.`routeCode`'
+      + ' WHERE m.`routeCode` = ?'
+      + "   AND (r.`channel` IS NULL OR TRIM(r.`channel`) = '' OR UPPER(TRIM(c.`channel`)) = UPPER(TRIM(r.`channel`)))",
       [routeCode]
     );
     return rows.map(mapRowToCustomer);

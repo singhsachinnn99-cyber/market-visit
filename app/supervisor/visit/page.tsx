@@ -207,7 +207,7 @@ function VisitWizardContent() {
     }
   };
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, category: 'Dairy' | 'Beverages' | 'Fruits' | 'Vegetables') => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, category: 'Dairy' | 'Beverages' | 'Ice Cream' | 'Vegetables') => {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
       setUploadingPhoto(true);
@@ -621,7 +621,7 @@ function VisitWizardContent() {
               </p>
             ) : (
               powerSkus.map((sku) => {
-                const currentStatus = powerSkuResults[sku.skuCode] || 'Not Required';
+                const currentStatus = powerSkuResults[sku.skuCode] || '';
                 return (
                   <div key={sku.skuCode} className="p-3.5 rounded-xl space-y-2.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
                     <div>
@@ -635,12 +635,12 @@ function VisitWizardContent() {
                           ? 'var(--success)' 
                           : opt === 'Not Available' 
                             ? 'var(--danger)' 
-                            : '#d97706'; // Premium Amber text
+                            : '#d97706';
                         const bg = opt === 'Available' 
                           ? 'var(--success-light)' 
                           : opt === 'Not Available' 
                             ? 'var(--danger-light)' 
-                            : '#fef3c7'; // Soft Amber background
+                            : '#fef3c7';
                         return (
                           <button key={opt} type="button"
                             onClick={() => setPowerSkuResults((prev) => ({ ...prev, [sku.skuCode]: opt }))}
@@ -687,12 +687,12 @@ function VisitWizardContent() {
                           ? 'var(--success)' 
                           : opt === 'Not Available' 
                             ? 'var(--danger)' 
-                            : '#d97706'; // Premium Amber text
+                            : '#d97706';
                         const bg = opt === 'Available' 
                           ? 'var(--success-light)' 
                           : opt === 'Not Available' 
                             ? 'var(--danger-light)' 
-                            : '#fef3c7'; // Soft Amber background
+                            : '#fef3c7';
                         return (
                           <button key={opt} type="button"
                             onClick={() => setNpdResponses((prev) => ({ ...prev, [sku.skuCode]: opt }))}
@@ -767,7 +767,7 @@ function VisitWizardContent() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="form-label mb-1">Temp (°C)</label>
+                      <label className="form-label mb-1 font-bold text-black">Temp (°C)</label>
                       <input 
                         type="text" 
                         inputMode="decimal" 
@@ -783,7 +783,7 @@ function VisitWizardContent() {
                       />
                     </div>
                     <div>
-                      <label className="form-label mb-1">Mandatory Action Required</label>
+                      <label className="form-label mb-1 font-bold text-black">Mandatory Action Required</label>
                       <select value={ast.actionRequired} onChange={(e) => updateAssetField(ast.assetId, 'actionRequired', e.target.value)} className="form-input h-9 text-[12px]">
                         <option value="None">None</option>
                         <option value="Cleaning">Cleaning</option>
@@ -796,7 +796,7 @@ function VisitWizardContent() {
                   </div>
 
                   <div>
-                    <label className="form-label mb-1">Observations / Notes</label>
+                    <label className="form-label mb-1 font-bold text-black">Observations / Notes</label>
                     <input type="text" placeholder="Write observation details…" value={ast.observation}
                       onChange={(e) => updateAssetField(ast.assetId, 'observation', e.target.value)}
                       className="form-input h-9 text-[12px]" />
@@ -804,7 +804,7 @@ function VisitWizardContent() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="form-label mb-1">Asset is First in Flow?</label>
+                      <label className="form-label mb-1 font-bold text-black">Asset is First in Flow?</label>
                       <div className="flex items-center gap-2">
                         {[true, false].map((val) => {
                           const isSelected = ast.isFirstInFlow === val;
@@ -830,7 +830,7 @@ function VisitWizardContent() {
                     </div>
                     
                     <div>
-                      <label className="form-label mb-1">FEFO is Followed?</label>
+                      <label className="form-label mb-1 font-bold text-black">FEFO is Followed?</label>
                       <div className="flex items-center gap-2">
                         {[true, false].map((val) => {
                           const isSelected = ast.fefoFollowed === val;
@@ -914,7 +914,7 @@ function VisitWizardContent() {
         <div className="card p-5 space-y-4 animate-slide-up">
           <span className="badge badge-accent">Camera Capture</span>
           <div className="space-y-3">
-            {(['Dairy', 'Beverages', 'Fruits', 'Vegetables'] as const).map((cat) => {
+            {(['Dairy', 'Beverages', 'Ice Cream', 'Vegetables'] as const).map((cat) => {
               const catPhotos = photos.filter((p) => p.category === cat);
               const displayName = cat === 'Vegetables' ? 'Assets' : cat;
               return (

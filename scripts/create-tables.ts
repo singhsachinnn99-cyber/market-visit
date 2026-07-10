@@ -91,10 +91,7 @@ async function createTables() {
     `CREATE TABLE IF NOT EXISTS \`VisitPhoto\` (
       \`photoId\` VARCHAR(191) PRIMARY KEY,
       \`visitId\` VARCHAR(191) NOT NULL,
-      \`category\` ENUM('Dairy', 'Beverages', 'Fruits', 'Vegetables') NOT NULL,
-      \`cloudinaryUrl\` TEXT NOT NULL,
-      \`publicId\` VARCHAR(191) NOT NULL,
-      \`uploadedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      \`category\` ENUM('Dairy', 'Beverages', 'Ice Cream', 'Vegetables') NOT NULL,
       FOREIGN KEY (\`visitId\`) REFERENCES \`Visit\`(\`visitId\`) ON DELETE CASCADE,
       INDEX \`idx_photo_visit\` (\`visitId\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,

@@ -82,7 +82,12 @@ export async function getVisitDetailsAction(visitId: string) {
 
 export async function saveVisitDraftAction(data: VisitDraftInput) {
   const user = await getAuthenticatedUser();
-  const parsed = visitDraftSchema.safeParse(data);
+  const payload = data as any;
+  const normalizedData = {
+    ...data,
+    cust_rt_id: payload.cust_rt_id || (payload.customerCode && payload.routeCode ? `${payload.customerCode}|${payload.routeCode}` : ''),
+  };
+  const parsed = visitDraftSchema.safeParse(normalizedData);
   if (!parsed.success) {
     throw new Error(`Validation failed: ${parsed.error.issues.map((e) => e.message).join(', ')}`);
   }
@@ -193,7 +198,12 @@ export async function saveVisitDraftAction(data: VisitDraftInput) {
 
 export async function submitVisitAction(data: VisitInput) {
   const user = await getAuthenticatedUser();
-  const parsed = visitSchema.safeParse(data);
+  const payload = data as any;
+  const normalizedData = {
+    ...data,
+    cust_rt_id: payload.cust_rt_id || (payload.customerCode && payload.routeCode ? `${payload.customerCode}|${payload.routeCode}` : ''),
+  };
+  const parsed = visitSchema.safeParse(normalizedData);
   if (!parsed.success) {
     throw new Error(`Validation failed: ${parsed.error.issues.map((e) => e.message).join(', ')}`);
   }

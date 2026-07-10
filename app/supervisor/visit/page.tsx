@@ -57,6 +57,9 @@ function VisitWizardContent() {
   // Selections
   const [selectedRoute, setSelectedRoute] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState(''); // Stores cust_rt_id
+  const [visitType, setVisitType] = useState<'Visit' | 'No Visit'>('Visit');
+  const [reasonCategory, setReasonCategory] = useState('');
+  const [reason, setReason] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
 
   // Multiple assets list
@@ -133,6 +136,9 @@ function VisitWizardContent() {
         setVisitId(localMatch.visitId);
         setSelectedRoute(localMatch.routeCode);
         setSelectedCustomer(localMatch.customerCode); // stores cust_rt_id
+        setVisitType(localMatch.visit_type || 'Visit');
+        setReasonCategory(localMatch.reason_category || '');
+        setReason(localMatch.reason || '');
         setAssets((localMatch.assets || []).map((a: any) => ({ ...a, visitId: resumeId })));
         setPhotos((localMatch.photos || []).map((p: any) => ({ ...p, visitId: resumeId })));
         setPowerSkuResults(localMatch.powerSkuResults || {});
@@ -185,6 +191,9 @@ function VisitWizardContent() {
         visitId,
         routeCode: selectedRoute,
         customerCode: selectedCustomer, // stores cust_rt_id
+        visit_type: visitType,
+        reason_category: reasonCategory,
+        reason,
         customerName: activeCustomer?.customerName || '',
         assets,
         photos,
@@ -276,6 +285,16 @@ function VisitWizardContent() {
         showToast('Please select a customer.', 'warning');
         return;
       }
+      if (visitType === 'No Visit') {
+        if (!reasonCategory) {
+          showToast('Please select a reason category for no-visit reports.', 'warning');
+          return;
+        }
+        const nextIndex = 5;
+        setCurrentStep(nextIndex);
+        saveStateToLocalStorage(nextIndex);
+        return;
+      }
     }
 
     const nextIndex = currentStep + 1;
@@ -298,6 +317,9 @@ function VisitWizardContent() {
     try {
       const draftPayload = {
         visitId,
+        visit_type: visitType,
+        reason_category: reasonCategory,
+        reason,
         cust_rt_id: selectedCustomer,
         assets: assets.map(a => ({
           ...a,
@@ -337,6 +359,9 @@ function VisitWizardContent() {
 
       const finalPayload = {
         visitId,
+        visit_type: visitType,
+        reason_category: reasonCategory,
+        reason,
         cust_rt_id: selectedCustomer,
         assets: assets.map(a => ({
           ...a,
@@ -526,6 +551,53 @@ function VisitWizardContent() {
 
           {selectedRoute ? (
             <div className="space-y-3 pt-2" style={{ borderTop: '1px dashed var(--border-soft)' }}>
+              <div className="grid grid-cols-2 gap-3">
+                {(['Visit', 'No Visit'] as const).map((type) => {
+                  const isSelected = visitType === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setVisitType(type)}
+                      className="h-10 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                      style={{
+                        background: isSelected ? 'var(--accent-light)' : 'var(--surface)',
+                        color: isSelected ? 'var(--accent)' : 'var(--text-muted)',
+                        border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
+                      }}
+                    >
+                      {type}
+                    </button>
+                  );
+                })}
+              </div>
+              {visitType === 'No Visit' && (
+                <div className="rounded-xl p-4 border border-solid border-[var(--border-soft)] bg-[var(--surface-2)] space-y-3">
+                  <p className="text-[11px] font-bold text-[var(--text-primary)]">No Visit reason</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <select
+                      value={reasonCategory}
+                      onChange={(e) => setReasonCategory(e.target.value)}
+                      className="form-input h-9 text-[12px]"
+                    >
+                      <option value="">— Select Reason Category —</option>
+                      <option value="Outlet Closed">Outlet Closed</option>
+                      <option value="No Permission">No Permission</option>
+                      <option value="Customer Absent">Customer Absent</option>
+                      <option value="Safety Concern">Safety Concern</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Optional short note"
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      className="form-input h-9 text-[12px]"
+                    />
+                  </div>
+                  <p className="text-[10px] text-[var(--text-muted)]">A no-visit report is recorded immediately with the selected reason and does not require the full asset/photo workflow.</p>
+                </div>
+              )}
               <label className="form-label">Search & Select Customer Outlet</label>
               <input
                 type="text"
@@ -767,7 +839,7 @@ function VisitWizardContent() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="form-label mb-1 font-bold text-black">Temp (°C)</label>
+                      <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Temp (°C)</label>
                       <input 
                         type="text" 
                         inputMode="decimal" 
@@ -783,7 +855,7 @@ function VisitWizardContent() {
                       />
                     </div>
                     <div>
-                      <label className="form-label mb-1 font-bold text-black">Mandatory Action Required</label>
+                      <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Mandatory Action Required</label>
                       <select value={ast.actionRequired} onChange={(e) => updateAssetField(ast.assetId, 'actionRequired', e.target.value)} className="form-input h-9 text-[12px]">
                         <option value="None">None</option>
                         <option value="Cleaning">Cleaning</option>
@@ -796,7 +868,7 @@ function VisitWizardContent() {
                   </div>
 
                   <div>
-                    <label className="form-label mb-1 font-bold text-black">Observations / Notes</label>
+                    <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Observations / Notes</label>
                     <input type="text" placeholder="Write observation details…" value={ast.observation}
                       onChange={(e) => updateAssetField(ast.assetId, 'observation', e.target.value)}
                       className="form-input h-9 text-[12px]" />
@@ -804,7 +876,7 @@ function VisitWizardContent() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="form-label mb-1 font-bold text-black">Asset is First in Flow?</label>
+                      <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Asset is First in Flow?</label>
                       <div className="flex items-center gap-2">
                         {[true, false].map((val) => {
                           const isSelected = ast.isFirstInFlow === val;
@@ -830,7 +902,7 @@ function VisitWizardContent() {
                     </div>
                     
                     <div>
-                      <label className="form-label mb-1 font-bold text-black">FEFO is Followed?</label>
+                      <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>FEFO is Followed?</label>
                       <div className="flex items-center gap-2">
                         {[true, false].map((val) => {
                           const isSelected = ast.fefoFollowed === val;

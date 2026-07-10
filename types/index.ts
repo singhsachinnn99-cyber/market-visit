@@ -61,6 +61,9 @@ export interface Visit {
   visitId: string;
   supervisorId: string; // User.id
   cust_rt_id: string;
+  visit_type?: 'Visit' | 'No Visit';
+  reason_category?: string;
+  reason?: string;
   latitude: number;
   longitude: number;
   accuracy: number;
@@ -193,6 +196,9 @@ export interface VisitWizardState {
   accuracy?: number;
   currentStep: number;
   status: VisitStatus;
+  visit_type?: 'Visit' | 'No Visit';
+  reason_category?: string;
+  reason?: string;
 }
 
 // Excel Import wizard status

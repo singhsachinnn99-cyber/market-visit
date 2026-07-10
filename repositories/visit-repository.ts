@@ -8,6 +8,9 @@ function mapRowToVisit(row: any): Visit {
     visitId: row.visitId,
     supervisorId: row.supervisorId,
     cust_rt_id: row.cust_rt_id,
+    visit_type: row.visit_type as any,
+    reason_category: row.reason_category,
+    reason: row.reason,
     latitude: row.latitude,
     longitude: row.longitude,
     accuracy: row.accuracy,
@@ -124,13 +127,16 @@ export const visitRepository = {
 
     const sql = `
       INSERT INTO \`Visit\` (
-        \`visitId\`, \`supervisorId\`, \`cust_rt_id\`, 
+        \`visitId\`, \`supervisorId\`, \`cust_rt_id\`, \`visit_type\`, \`reason_category\`, \`reason\`,
         \`latitude\`, \`longitude\`, \`accuracy\`, \`status\`, 
         \`createdBy\`, \`visit_datetime\`, \`createdAt\`, \`updatedAt\`, \`sosAsPerBda\`
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         \`supervisorId\` = VALUES(\`supervisorId\`),
         \`cust_rt_id\` = VALUES(\`cust_rt_id\`),
+        \`visit_type\` = VALUES(\`visit_type\`),
+        \`reason_category\` = VALUES(\`reason_category\`),
+        \`reason\` = VALUES(\`reason\`),
         \`latitude\` = VALUES(\`latitude\`),
         \`longitude\` = VALUES(\`longitude\`),
         \`accuracy\` = VALUES(\`accuracy\`),
@@ -145,6 +151,9 @@ export const visitRepository = {
       visit.visitId,
       visit.supervisorId,
       visit.cust_rt_id,
+      visit.visit_type || 'Visit',
+      visit.reason_category || '',
+      visit.reason || '',
       visit.latitude,
       visit.longitude,
       visit.accuracy,

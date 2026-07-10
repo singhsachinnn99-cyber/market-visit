@@ -292,20 +292,21 @@ function VisitWizardContent() {
 
   const nextStep = () => {
     if (currentStep === 0) {
-      if (!selectedRoute) {
-        showToast('Please select a route.', 'warning');
-        return;
-      }
-      if (!effectiveCustomerId) {
-        showToast('Please select a customer.', 'warning');
-        return;
-      }
       if (visitType === 'No Visit') {
         if (!reasonCategory) {
           showToast('Please select a reason category for no-visit reports.', 'warning');
           return;
         }
         saveStateToLocalStorage(0);
+        return;
+      }
+
+      if (!selectedRoute) {
+        showToast('Please select a route.', 'warning');
+        return;
+      }
+      if (!effectiveCustomerId) {
+        showToast('Please select a customer.', 'warning');
         return;
       }
     }
@@ -322,9 +323,13 @@ function VisitWizardContent() {
   };
 
   const handleSaveDraft = async () => {
-    if (!effectiveCustomerId) {
+    if (visitType === 'No Visit') {
+      setSavingDraft(true);
+    } else if (!effectiveCustomerId) {
       showToast('Please select both a route and a customer before saving.', 'warning');
       return;
+    } else {
+      setSavingDraft(true);
     }
     setSavingDraft(true);
     try {
@@ -360,7 +365,12 @@ function VisitWizardContent() {
   };
 
   const handleFinalSubmit = async () => {
-    if (!effectiveCustomerId) {
+    if (visitType === 'No Visit') {
+      if (!reasonCategory) {
+        showToast('Please select a reason category for no-visit reports.', 'warning');
+        return;
+      }
+    } else if (!effectiveCustomerId) {
       showToast('Please select both a route and a customer before submitting.', 'warning');
       return;
     }
@@ -555,72 +565,72 @@ function VisitWizardContent() {
       {/* STEP 0: ROUTE & CUSTOMER SELECTION */}
       {currentStep === 0 && (
         <div className="card p-5 space-y-4 animate-slide-up">
-          <span className="badge badge-accent">Route & Customer Selection</span>
-          <div>
-            <label className="form-label mb-1">Select Available Route</label>
-            <select
-              value={selectedRoute}
-              onChange={(e) => { setSelectedRoute(e.target.value); setSelectedCustomer(''); }}
-              className="form-input"
-            >
-              <option value="">— Choose Route —</option>
-              {routes.map((r) => (
-                <option key={r.routeCode} value={r.routeCode}>{r.routeCode} – {r.routeName} ({r.channel})</option>
-              ))}
-            </select>
-          </div>
+          <span className="badge badge-accent">{visitType === 'No Visit' ? 'No Visit Report' : 'Route & Customer Selection'}</span>
 
-          {selectedRoute ? (
-            <div className="space-y-3 pt-2" style={{ borderTop: '1px dashed var(--border-soft)' }}>
+          {visitType === 'No Visit' ? (
+            <div className="rounded-xl p-4 border border-solid border-[var(--border-soft)] bg-[var(--surface-2)] space-y-3">
+              <p className="text-[11px] font-bold text-[var(--text-primary)]">No Visit reason</p>
               <div className="grid grid-cols-2 gap-3">
-                {(['Visit', 'No Visit'] as const).map((type) => {
-                  const isSelected = visitType === type;
-                  return (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setVisitType(type)}
-                      className="h-10 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
-                      style={{
-                        background: isSelected ? 'var(--accent-light)' : 'var(--surface)',
-                        color: isSelected ? 'var(--accent)' : 'var(--text-muted)',
-                        border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
-                      }}
-                    >
-                      {type}
-                    </button>
-                  );
-                })}
+                <select
+                  value={reasonCategory}
+                  onChange={(e) => setReasonCategory(e.target.value)}
+                  className="form-input h-9 text-[12px]"
+                >
+                  <option value="">— Select Reason Category —</option>
+                  <option value="Outlet Closed">Outlet Closed</option>
+                  <option value="No Permission">No Permission</option>
+                  <option value="Customer Absent">Customer Absent</option>
+                  <option value="Safety Concern">Safety Concern</option>
+                  <option value="Other">Other</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Optional short note"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="form-input h-9 text-[12px]"
+                />
               </div>
-              {visitType === 'No Visit' && (
-                <div className="rounded-xl p-4 border border-solid border-[var(--border-soft)] bg-[var(--surface-2)] space-y-3">
-                  <p className="text-[11px] font-bold text-[var(--text-primary)]">No Visit reason</p>
+              <p className="text-[10px] text-[var(--text-muted)]">This report will be submitted immediately with the selected reason and will not require the full asset or photo workflow.</p>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="form-label mb-1">Select Available Route</label>
+                <select
+                  value={selectedRoute}
+                  onChange={(e) => { setSelectedRoute(e.target.value); setSelectedCustomer(''); }}
+                  className="form-input"
+                >
+                  <option value="">— Choose Route —</option>
+                  {routes.map((r) => (
+                    <option key={r.routeCode} value={r.routeCode}>{r.routeCode} – {r.routeName} ({r.channel})</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedRoute ? (
+                <div className="space-y-3 pt-2" style={{ borderTop: '1px dashed var(--border-soft)' }}>
                   <div className="grid grid-cols-2 gap-3">
-                    <select
-                      value={reasonCategory}
-                      onChange={(e) => setReasonCategory(e.target.value)}
-                      className="form-input h-9 text-[12px]"
-                    >
-                      <option value="">— Select Reason Category —</option>
-                      <option value="Outlet Closed">Outlet Closed</option>
-                      <option value="No Permission">No Permission</option>
-                      <option value="Customer Absent">Customer Absent</option>
-                      <option value="Safety Concern">Safety Concern</option>
-                      <option value="Other">Other</option>
-                    </select>
-                    <input
-                      type="text"
-                      placeholder="Optional short note"
-                      value={reason}
-                      onChange={(e) => setReason(e.target.value)}
-                      className="form-input h-9 text-[12px]"
-                    />
+                    {(['Visit', 'No Visit'] as const).map((type) => {
+                      const isSelected = visitType === type;
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => setVisitType(type)}
+                          className="h-10 rounded-lg text-[11px] font-bold transition-all cursor-pointer"
+                          style={{
+                            background: isSelected ? 'var(--accent-light)' : 'var(--surface)',
+                            color: isSelected ? 'var(--accent)' : 'var(--text-muted)',
+                            border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
+                          }}
+                        >
+                          {type}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <p className="text-[10px] text-[var(--text-muted)]">A no-visit report is recorded immediately with the selected reason and does not require the full asset/photo workflow.</p>
-                </div>
-              )}
-              {!isNoVisitFlow && (
-                <>
                   <label className="form-label">Search & Select Customer Outlet</label>
                   <input
                     type="text"
@@ -696,13 +706,13 @@ function VisitWizardContent() {
                       </div>
                     </div>
                   )}
-                </>
+                </div>
+              ) : (
+                <p className="text-[11px] italic text-center py-4" style={{ color: 'var(--text-muted)' }}>
+                  Please select a route first to display available customer outlets.
+                </p>
               )}
-            </div>
-          ) : (
-            <p className="text-[11px] italic text-center py-4" style={{ color: 'var(--text-muted)' }}>
-              Please select a route first to display available customer outlets.
-            </p>
+            </>
           )}
         </div>
       )}
@@ -1133,7 +1143,7 @@ function VisitWizardContent() {
         {currentStep < 5 && (
           <button
             onClick={isNoVisitFlow ? handleFinalSubmit : nextStep}
-            disabled={savingDraft || submittingVisit || (currentStep === 0 && (!selectedRoute || !effectiveCustomerId || (visitType === 'No Visit' && !reasonCategory)))}
+            disabled={savingDraft || submittingVisit || (currentStep === 0 && (visitType === 'No Visit' ? !reasonCategory : (!selectedRoute || !effectiveCustomerId)))}
             className="btn-primary cursor-pointer"
             style={{
               height: '40px', padding: '0 20px',

@@ -56,6 +56,7 @@ export default function SupervisorLayout({ children }: { children: React.ReactNo
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [noVisitCount, setNoVisitCount] = useState(0);
   
   const canGoBack = pathname !== '/supervisor';
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -82,6 +83,31 @@ export default function SupervisorLayout({ children }: { children: React.ReactNo
       handleSignOut();
     }
   };
+
+  useEffect(() => {
+    if (!session?.user) return;
+
+    let active = true;
+    const loadNoVisitCount = async () => {
+      try {
+        const res = await fetch('/api/dashboard');
+        const data = await res.json();
+        if (active && data?.success) {
+          setNoVisitCount(Number(data.noVisitCount || 0));
+        }
+      } catch {
+        if (active) setNoVisitCount(0);
+      }
+    };
+
+    loadNoVisitCount();
+    const timer = window.setInterval(loadNoVisitCount, 15000);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [session?.user]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -213,6 +239,11 @@ export default function SupervisorLayout({ children }: { children: React.ReactNo
                         style={{ opacity: active ? 1 : 0.6 }}
                       />
                       <span>{item.name}</span>
+                      {(item.path === '/supervisor' || item.path === '/supervisor/reports') && (
+                        <span className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
+                          No Visit {noVisitCount}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}

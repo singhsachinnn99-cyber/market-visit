@@ -145,12 +145,16 @@ export async function GET(req: NextRequest) {
         fefo,
         action,
         visitId: v.visitId,
+        visitType: v.visit_type === 'No Visit' ? 'No Visit' : 'Visit',
+        reasonCategory: v.reason_category || '',
+        reason: v.reason || '',
         createdAt: (v.createdAt as any) instanceof Date ? (v.createdAt as any).toISOString() : v.createdAt
       };
     });
 
     // 6. Compute aggregated statistics for the Reports & Routes pages
     const totalVisits = rows.length;
+    const noVisitCount = rows.filter((r: any) => r.visitType === 'No Visit').length;
 
     const todayStr = new Date().toISOString().split('T')[0];
     const todayVisits = filteredVisits.filter(v => {
@@ -273,6 +277,7 @@ export async function GET(req: NextRequest) {
       success: true,
       rows,
       totalVisits,
+      noVisitCount,
       todayVisits,
       totalSupervisors,
       coveragePercent,

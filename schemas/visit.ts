@@ -45,13 +45,6 @@ export const visitSchema = z.object({
   }
 
   if (data.visit_type === 'No Visit') {
-    if (!data.cust_rt_id || data.cust_rt_id.trim() === '') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['cust_rt_id'],
-        message: 'Customer selection is required for a no-visit report.',
-      });
-    }
     if (!data.reason_category || data.reason_category.trim() === '') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

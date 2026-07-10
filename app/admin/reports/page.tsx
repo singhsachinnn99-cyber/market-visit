@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   FileBarChart2, TrendingUp, Target, Thermometer,
-  Users, BarChart3, CalendarDays, Download, RefreshCw, Filter, RotateCcw,
+  Users, BarChart3, CalendarDays, Download, RefreshCw, Filter, RotateCcw, AlertTriangle,
 } from 'lucide-react';
 import { DashboardStats, Route } from '@/types';
 import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
@@ -158,9 +158,10 @@ export default function ReportsPage() {
       )}
 
       {/* Summary KPI Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: 'Total Visits', value: stats?.totalVisits ?? 0, icon: CalendarDays, color: 'var(--accent)', bg: 'var(--accent-light)' },
+          { label: 'No Visits', value: stats?.noVisitCount ?? 0, icon: AlertTriangle, color: '#D97706', bg: '#FFF7ED' },
           { label: 'Coverage', value: `${stats?.coveragePercent ?? 0}%`, icon: Target, color: '#059669', bg: '#ECFDF5' },
           { label: 'Breach Rate', value: `${stats?.tempBreachPercent ?? 0}%`, icon: Thermometer, color: (stats?.tempBreachPercent ?? 0) > 15 ? 'var(--danger)' : 'var(--text-muted)', bg: (stats?.tempBreachPercent ?? 0) > 15 ? 'var(--danger-light)' : 'var(--surface-2)' },
           { label: 'Team Size', value: stats?.totalSupervisors ?? 0, icon: Users, color: '#0EA5E9', bg: '#F0F9FF' },

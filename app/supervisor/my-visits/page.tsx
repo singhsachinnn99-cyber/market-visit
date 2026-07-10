@@ -36,6 +36,19 @@ export default function MyVisitsPage() {
     }
   };
 
+  const getVisitDisplay = (v: Visit) => {
+    const isNoVisit = v.visit_type === 'No Visit';
+    return {
+      isNoVisit,
+      typeLabel: isNoVisit ? 'No Visit' : 'Visit',
+      typeClass: isNoVisit ? 'badge-warning' : 'badge-success',
+      routeLabel: isNoVisit ? '—' : (v.routeCode || '—'),
+      customerLabel: isNoVisit ? 'No outlet selected' : (v.customerCode || '—'),
+      tempLabel: isNoVisit ? 'N/A' : `${v.temperature ?? 0}°C ${v.tempInRange ? '✓' : '⚠'}`,
+      tempClass: isNoVisit ? 'badge-info' : (v.tempInRange ? 'badge-success' : 'badge-danger'),
+    };
+  };
+
   useEffect(() => {
     fetchVisits();
   }, []);
@@ -70,7 +83,7 @@ export default function MyVisitsPage() {
           <table className="w-full text-[13px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-soft)', background: 'var(--surface-2)' }}>
-                {['Visit ID', 'Date', 'Route', 'Customer', 'Temperature', 'Action'].map((h, i) => (
+                {['Visit ID', 'Date', 'Type', 'Route', 'Customer', 'Action'].map((h, i) => (
                   <th key={h} className={`px-5 py-3 ${i === 5 ? 'text-right' : 'text-left'}`} style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                     {h}
                   </th>
@@ -93,33 +106,41 @@ export default function MyVisitsPage() {
                   </td>
                 </tr>
               ) : (
-                visits.map(v => (
-                  <tr key={v.visitId} style={{ borderBottom: '1px solid var(--border-soft)' }} className="hover:bg-[var(--surface-2)] transition-colors">
-                    <td className="px-5 py-3.5 font-mono text-[12px] font-semibold" style={{ color: 'var(--accent)' }}>
-                      {v.visitId}
-                    </td>
-                    <td className="px-5 py-3.5 text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                      {new Date(v.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </td>
-                    <td className="px-5 py-3.5 font-mono text-[12px] text-[var(--text-secondary)]">
-                      {v.routeCode}
-                    </td>
-                    <td className="px-5 py-3.5 text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      {v.customerCode}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className={`badge ${v.tempInRange ? 'badge-success' : 'badge-danger'}`}>
-                        {v.temperature}°C {v.tempInRange ? '✓' : '⚠'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <button onClick={() => handleOpenReview(v.visitId)} className="btn-ghost" style={{ height: '30px', padding: '0 12px', fontSize: '12px' }}>
-                        <Eye className="h-3.5 w-3.5" />
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                visits.map(v => {
+                  const display = getVisitDisplay(v);
+                  return (
+                    <tr key={v.visitId} style={{ borderBottom: '1px solid var(--border-soft)' }} className="hover:bg-[var(--surface-2)] transition-colors">
+                      <td className="px-5 py-3.5 font-mono text-[12px] font-semibold" style={{ color: 'var(--accent)' }}>
+                        {v.visitId}
+                      </td>
+                      <td className="px-5 py-3.5 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                        {new Date(v.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="space-y-1">
+                          <span className={`badge ${display.typeClass}`}>
+                            {display.typeLabel}
+                          </span>
+                          {display.isNoVisit && v.reason_category && (
+                            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{v.reason_category}</p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 font-mono text-[12px] text-[var(--text-secondary)]">
+                        {display.routeLabel}
+                      </td>
+                      <td className="px-5 py-3.5 text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                        {display.customerLabel}
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        <button onClick={() => handleOpenReview(v.visitId)} className="btn-ghost" style={{ height: '30px', padding: '0 12px', fontSize: '12px' }}>
+                          <Eye className="h-3.5 w-3.5" />
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -140,30 +161,39 @@ export default function MyVisitsPage() {
               No submitted audits found.
             </div>
           ) : (
-            visits.map(v => (
-              <div key={v.visitId} onClick={() => handleOpenReview(v.visitId)} className="py-3.5 px-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-[var(--surface-2)] transition-colors">
-                <div className="min-w-0 flex-grow">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[11px] font-bold text-[var(--accent)]">{v.visitId}</span>
-                    <span className="text-[10px] text-[var(--text-muted)]">
-                      {new Date(v.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    </span>
+            visits.map(v => {
+              const display = getVisitDisplay(v);
+              return (
+                <div key={v.visitId} onClick={() => handleOpenReview(v.visitId)} className="py-3.5 px-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-[var(--surface-2)] transition-colors">
+                  <div className="min-w-0 flex-grow">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[11px] font-bold text-[var(--accent)]">{v.visitId}</span>
+                      <span className="text-[10px] text-[var(--text-muted)]">
+                        {new Date(v.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className={`badge ${display.typeClass}`}>{display.typeLabel}</span>
+                      {display.isNoVisit && v.reason_category && (
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{v.reason_category}</span>
+                      )}
+                    </div>
+                    <h4 className="text-[13px] font-bold mt-1.5 truncate text-[var(--text-primary)]">
+                      {display.customerLabel}
+                    </h4>
+                    <p className="font-mono text-[10px] text-[var(--text-muted)] mt-0.5">
+                      Route: {display.routeLabel}
+                    </p>
                   </div>
-                  <h4 className="text-[13px] font-bold mt-1.5 truncate text-[var(--text-primary)]">
-                    {v.customerCode}
-                  </h4>
-                  <p className="font-mono text-[10px] text-[var(--text-muted)] mt-0.5">
-                    Route: {v.routeCode}
-                  </p>
+                  <div className="flex items-center gap-2.5 flex-shrink-0">
+                    <span className={`badge ${display.tempClass}`}>
+                      {display.tempLabel}
+                    </span>
+                    <ChevronRight className="h-4.5 w-4.5 text-[var(--text-muted)]" />
+                  </div>
                 </div>
-                <div className="flex items-center gap-2.5 flex-shrink-0">
-                  <span className={`badge ${v.tempInRange ? 'badge-success' : 'badge-danger'}`}>
-                    {v.temperature}°C
-                  </span>
-                  <ChevronRight className="h-4.5 w-4.5 text-[var(--text-muted)]" />
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

@@ -230,6 +230,8 @@ export default function SupervisorDashboard() {
   const outletsCount = useMemo(() => new Set(filtered.map((r) => r.cust)).size, [filtered]);
   const breachesCount = useMemo(() => filtered.filter((r) => !r.ok).length, [filtered]);
   const fefoCount = useMemo(() => filtered.filter((r) => r.fefo).length, [filtered]);
+  const noVisitCount = useMemo(() => filtered.filter((r) => r.visitType === 'No Visit').length, [filtered]);
+  const noVisitRows = useMemo(() => filtered.filter((r: any) => r.visitType === 'No Visit'), [filtered]);
   const breachPct = useMemo(
     () => (filtered.length ? ((breachesCount / filtered.length) * 100).toFixed(1) + '% of assets' : '–'),
     [filtered, breachesCount]
@@ -1023,6 +1025,11 @@ export default function SupervisorDashboard() {
             <div className="delta">unique outlets</div>
           </div>
           <div className="kpi a">
+            <div className="lbl">No Visits</div>
+            <div className="val">{noVisitCount}</div>
+            <div className="delta">skipped outlet visits</div>
+          </div>
+          <div className="kpi a">
             <div className="lbl">Assets Checked</div>
             <div className="val">{filtered.length}</div>
             <div className="delta">chillers/freezers</div>
@@ -1038,6 +1045,38 @@ export default function SupervisorDashboard() {
             <div className="delta">assets following FEFO</div>
           </div>
         </div>
+
+        {/* No Visit Details */}
+        {noVisitRows.length > 0 && (
+          <div className="panel" style={{ marginBottom: '12px' }}>
+            <h3>No Visit Details</h3>
+            <div className="psub">Skipped outlet visits with recorded reasons</div>
+            <div className="overflow-x-auto" style={{ marginTop: '10px' }}>
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                    <th className="px-3 py-2 text-left" style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }}>Date</th>
+                    <th className="px-3 py-2 text-left" style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }}>Supervisor</th>
+                    <th className="px-3 py-2 text-left" style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }}>Route</th>
+                    <th className="px-3 py-2 text-left" style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }}>Outlet</th>
+                    <th className="px-3 py-2 text-left" style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' }}>Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {noVisitRows.map((row: any) => (
+                    <tr key={row.visitId} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                      <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>{new Date(row.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                      <td className="px-3 py-2" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{row.sup}</td>
+                      <td className="px-3 py-2 font-mono" style={{ color: 'var(--text-secondary)' }}>{row.rt || '—'}</td>
+                      <td className="px-3 py-2" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{row.cust || '—'}</td>
+                      <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>{row.reasonCategory || row.reason || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Row 1 Grid */}
         <div className="grid">

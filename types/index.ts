@@ -143,6 +143,7 @@ export interface DashboardFilters {
 
 export interface DashboardStats {
   totalVisits: number;
+  noVisitCount: number;
   todayVisits: number;
   totalSupervisors: number;
   coveragePercent: number;

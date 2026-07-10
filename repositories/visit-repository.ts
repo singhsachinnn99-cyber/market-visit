@@ -45,6 +45,46 @@ function mapRowToNpd(row: any): NPDResponse {
   };
 }
 
+async function ensureVisitTableSchema(connection: mysql.Connection | mysql.PoolConnection): Promise<void> {
+  const [columnsResult]: any = await connection.execute(
+    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Visit'"
+  );
+  const existingColumns = new Set((columnsResult as any[]).map((row: any) => row.COLUMN_NAME));
+
+  const migrations: string[] = [];
+
+  if (!existingColumns.has('visit_type')) {
+    migrations.push("ALTER TABLE `Visit` ADD COLUMN `visit_type` ENUM('Visit','No Visit') NOT NULL DEFAULT 'Visit'");
+  }
+  if (!existingColumns.has('reason_category')) {
+    migrations.push("ALTER TABLE `Visit` ADD COLUMN `reason_category` VARCHAR(191) NULL");
+  }
+  if (!existingColumns.has('reason')) {
+    migrations.push("ALTER TABLE `Visit` ADD COLUMN `reason` TEXT NULL");
+  }
+  if (!existingColumns.has('sosAsPerBda')) {
+    migrations.push("ALTER TABLE `Visit` ADD COLUMN `sosAsPerBda` TINYINT(1) NULL");
+  }
+  if (!existingColumns.has('visit_datetime')) {
+    migrations.push("ALTER TABLE `Visit` ADD COLUMN `visit_datetime` DATETIME NULL");
+  }
+
+  const [custRtColumns]: any = await connection.execute("SHOW COLUMNS FROM `Visit` LIKE 'cust_rt_id'");
+  if (custRtColumns?.[0]?.Null === 'NO') {
+    migrations.push("ALTER TABLE `Visit` MODIFY COLUMN `cust_rt_id` VARCHAR(191) NULL");
+  }
+
+  for (const migration of migrations) {
+    try {
+      await connection.execute(migration);
+    } catch (error: any) {
+      if (!/duplicate column|already exists|doesn't exist|Unknown column/i.test(error.message || '')) {
+        throw error;
+      }
+    }
+  }
+}
+
 export const visitRepository = {
   async getVisitById(visitId: string): Promise<Visit | null> {
     const [rows]: any = await pool.execute(
@@ -122,6 +162,16 @@ export const visitRepository = {
   async saveVisitRecord(visit: Visit, connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
     const executor = connection || pool;
     const createdAt = visit.createdAt ? new Date(visit.createdAt) : new Date();
+    if (connection) {
+      await ensureVisitTableSchema(connection);
+    } else {
+      const fallbackConnection = await pool.getConnection();
+      try {
+        await ensureVisitTableSchema(fallbackConnection);
+      } finally {
+        fallbackConnection.release();
+      }
+    }
     const updatedAt = visit.updatedAt ? new Date(visit.updatedAt) : new Date();
     const visitDatetime = visit.visit_datetime ? new Date(visit.visit_datetime) : new Date();
 
@@ -147,10 +197,12 @@ export const visitRepository = {
         \`sosAsPerBda\` = VALUES(\`sosAsPerBda\`)
     `;
 
+    const normalizedCustRtId = visit.cust_rt_id && visit.cust_rt_id.trim() !== '' ? visit.cust_rt_id : null;
+
     await executor.execute(sql, [
       visit.visitId,
       visit.supervisorId,
-      visit.cust_rt_id,
+      normalizedCustRtId,
       visit.visit_type || 'Visit',
       visit.reason_category || '',
       visit.reason || '',

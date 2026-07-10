@@ -214,8 +214,8 @@ export async function submitVisitAction(data: VisitInput) {
 
   const [customerCode, routeCode] = input.cust_rt_id.split('|');
 
-  // Enforce route ownership for supervisor
-  if (user.role === 'Supervisor') {
+  // Enforce route ownership for supervisor only when a route is present
+  if (user.role === 'Supervisor' && routeCode) {
     const isAssigned = await routeRepository.isRouteAssignedToSupervisor(routeCode, user.id);
     if (!isAssigned) {
       throw new Error('Forbidden: Selected Route is not assigned to you.');

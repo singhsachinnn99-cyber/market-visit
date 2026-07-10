@@ -113,6 +113,19 @@ export default function VisitLogsPage() {
     }
   };
 
+  const getVisitDisplay = (v: Visit) => {
+    const isNoVisit = v.visit_type === 'No Visit';
+    return {
+      isNoVisit,
+      typeLabel: isNoVisit ? 'No Visit' : 'Visit',
+      typeClass: isNoVisit ? 'badge-warning' : 'badge-success',
+      routeLabel: isNoVisit ? '—' : (v.routeCode || '—'),
+      customerLabel: isNoVisit ? 'No outlet selected' : (v.customerCode || '—'),
+      tempLabel: isNoVisit ? 'N/A' : `${v.temperature ?? 0}°C ${v.tempInRange ? '✓' : '⚠'}`,
+      tempClass: isNoVisit ? 'badge-info' : (v.tempInRange ? 'badge-success' : 'badge-danger'),
+    };
+  };
+
   useEffect(() => {
     let active = true;
     const load = async () => {
@@ -157,7 +170,10 @@ export default function VisitLogsPage() {
     const q = search.toLowerCase();
     return (
       (v.visitId.toLowerCase().includes(q) || v.supervisorId.toLowerCase().includes(q) ||
-        v.routeCode.toLowerCase().includes(q) || v.customerCode.toLowerCase().includes(q)) &&
+        v.routeCode.toLowerCase().includes(q) || v.customerCode.toLowerCase().includes(q) ||
+        (v.visit_type || '').toLowerCase().includes(q) ||
+        (v.reason_category || '').toLowerCase().includes(q) ||
+        (v.reason || '').toLowerCase().includes(q)) &&
       (statusFilter === 'All' || v.status === statusFilter)
     );
   });
@@ -231,6 +247,7 @@ export default function VisitLogsPage() {
                 <TH>Visit ID</TH>
                 <TH>Supervisor</TH>
                 <TH>Route</TH>
+                <TH>Type</TH>
                 <TH>Customer</TH>
                 <TH>Temperature</TH>
                 <TH>Status</TH>
@@ -242,7 +259,7 @@ export default function VisitLogsPage() {
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    {Array.from({ length: 8 }).map((_, j) => (
+                    {Array.from({ length: 9 }).map((_, j) => (
                       <td key={j} className="px-5 py-3.5"><Skeleton className="h-4 w-20" /></td>
                     ))}
                   </tr>
@@ -254,74 +271,83 @@ export default function VisitLogsPage() {
                   </td>
                 </tr>
               ) : (
-                paginated.map((v) => (
-                  <tr
-                    key={v.visitId}
-                    style={{ borderBottom: '1px solid var(--border-soft)' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                    className="transition-colors"
-                  >
-                    <td className="px-5 py-3.5">
-                      <span className="font-mono text-[12px] font-medium" style={{ color: 'var(--accent)' }}>{v.visitId}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>{v.supervisorId}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>{v.routeCode}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>{v.customerCode}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {v.status === 'Submitted' ? (
-                        <span
-                          className={`badge ${v.tempInRange ? 'badge-success' : 'badge-danger'}`}
-                        >
-                          {v.temperature}°C {v.tempInRange ? '✓' : '⚠'}
+                paginated.map((v) => {
+                  const display = getVisitDisplay(v);
+                  return (
+                    <tr
+                      key={v.visitId}
+                      style={{ borderBottom: '1px solid var(--border-soft)' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      className="transition-colors"
+                    >
+                      <td className="px-5 py-3.5">
+                        <span className="font-mono text-[12px] font-medium" style={{ color: 'var(--accent)' }}>{v.visitId}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>{v.supervisorId}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>{display.routeLabel}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="space-y-1">
+                          <span className={`badge ${display.typeClass}`}>{display.typeLabel}</span>
+                          {display.isNoVisit && v.reason_category && (
+                            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{v.reason_category}</p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="font-mono text-[12px]" style={{ color: 'var(--text-secondary)' }}>{display.customerLabel}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {v.status === 'Submitted' ? (
+                          <span className={`badge ${display.tempClass}`}>
+                            {display.tempLabel}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className={`badge ${v.status === 'Submitted' ? 'badge-success' : 'badge-warning'}`}>
+                          {v.status}
                         </span>
-                      ) : (
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className={`badge ${v.status === 'Submitted' ? 'badge-success' : 'badge-warning'}`}>
-                        {v.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                        {new Date(v.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => handleOpenReview(v.visitId)}
-                          className="btn-ghost"
-                          style={{ height: '30px', padding: '0 10px', fontSize: '12px' }}
-                          title="View Details"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteDialog({ open: true, id: v.visitId })}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '6px',
-                            height: '30px', padding: '0 10px',
-                            background: 'var(--danger-light)', color: 'var(--danger)',
-                            border: '1px solid rgba(220,38,38,0.15)', borderRadius: '6px',
-                            fontSize: '12px', cursor: 'pointer',
-                          }}
-                          title="Delete"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                          {new Date(v.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleOpenReview(v.visitId)}
+                            className="btn-ghost"
+                            style={{ height: '30px', padding: '0 10px', fontSize: '12px' }}
+                            title="View Details"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteDialog({ open: true, id: v.visitId })}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '6px',
+                              height: '30px', padding: '0 10px',
+                              background: 'var(--danger-light)', color: 'var(--danger)',
+                              border: '1px solid rgba(220,38,38,0.15)', borderRadius: '6px',
+                              fontSize: '12px', cursor: 'pointer',
+                            }}
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

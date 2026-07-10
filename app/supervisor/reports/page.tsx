@@ -155,6 +155,7 @@ export default function SupervisorReportsPage() {
   const outletsCount = useMemo(() => new Set(filtered.map((r) => r.cust)).size, [filtered]);
   const breachesCount = useMemo(() => filtered.filter((r) => !r.ok).length, [filtered]);
   const fefoCount = useMemo(() => filtered.filter((r) => r.fefo).length, [filtered]);
+  const noVisitCount = useMemo(() => filtered.filter((r) => r.visitType === 'No Visit').length, [filtered]);
   const breachPct = useMemo(
     () => (filtered.length ? ((breachesCount / filtered.length) * 100).toFixed(1) + '% of assets' : '–'),
     [filtered, breachesCount]
@@ -846,6 +847,11 @@ export default function SupervisorReportsPage() {
             <div className="lbl">Outlets Covered</div>
             <div className="val">{outletsCount}</div>
             <div className="delta">unique outlets</div>
+          </div>
+          <div className="kpi a">
+            <div className="lbl">No Visits</div>
+            <div className="val">{noVisitCount}</div>
+            <div className="delta">skipped outlet visits</div>
           </div>
           <div className="kpi a">
             <div className="lbl">Assets Checked</div>

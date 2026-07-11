@@ -57,6 +57,10 @@ export async function GET(req: NextRequest) {
       FROM User u 
       LEFT JOIN Manager m ON u.managerId = m.id
     `);
+    const [skuRows]: any = await pool.execute('SELECT * FROM `SKU`');
+    const skuMap = new Map<string, any>(skuRows.map((sku: any) => [sku.skuCode, sku]));
+    const [powerSkuRows]: any = await pool.execute('SELECT * FROM `PowerSKU`');
+    const powerSkuMap = new Map<string, any>(powerSkuRows.map((sku: any) => [sku.skuCode, sku]));
     const userMap = new Map<string, { name: string; managerName: string }>(
       dbUsers.map((u: any) => [u.id, { name: u.name.toUpperCase(), managerName: (u.managerName || 'ADNAN').toUpperCase() }])
     );
@@ -91,7 +95,32 @@ export async function GET(req: NextRequest) {
 
     const customerMap = new Map(customers.map((c) => [c.cust_rt_id, c]));
 
+    const inferBusinessVertical = (skuName: string) => {
+      const label = (skuName || '').toLowerCase();
+      if (label.includes('yog') || label.includes('laban') || label.includes('milk') || label.includes('cream')) return 'Dairy';
+      if (label.includes('juice') || label.includes('nectar') || label.includes('drink') || label.includes('water')) return 'Beverage';
+      if (label.includes('ice') || label.includes('cone') || label.includes('choc')) return 'Ice Cream';
+      return 'Other';
+    };
+
+    const formatTempContext = (assetType: string, temperature: number | null | undefined) => {
+      if (temperature === null || temperature === undefined || Number.isNaN(Number(temperature))) {
+        return '—';
+      }
+      const value = Number(temperature).toFixed(1);
+      if (assetType === 'Freezer') return `${value}°C (should be below -15°C)`;
+      return `${value}°C (should be 0 to 8°C)`;
+    };
+
     // 5. Map into flat structured rows for frontend analytics charts
+    const reportRows = {
+      npd: [] as any[],
+      psku: [] as any[],
+      'cold-chain': [] as any[],
+      classification: [] as any[],
+    };
+    const classificationRows: any[] = [];
+
     const rows = filteredVisits.map((v) => {
       const userInfo = userMap.get(v.supervisorId) || { name: 'UNKNOWN', managerName: 'ADNAN' };
       const supName = userInfo.name;
@@ -103,6 +132,7 @@ export async function GET(req: NextRequest) {
       const gr = customer ? customer.classification : 'C';
 
       const [customerCode, routeCode] = (v.cust_rt_id || '').split('|');
+      const visitDate = (v.createdAt as any) instanceof Date ? (v.createdAt as any).toISOString() : v.createdAt;
 
       const date = new Date(v.createdAt);
       const week = Math.min(8, Math.max(1, Math.ceil(date.getDate() / 4)));
@@ -128,6 +158,79 @@ export async function GET(req: NextRequest) {
       const fefo = ok;
       const action = visitAssets.map(a => a.actionRequired !== 'None' ? `${a.assetType}: ${a.actionRequired}` : '').filter(Boolean).join(', ') || 'None';
 
+      classificationRows.push({
+        date: visitDate,
+        visitId: v.visitId,
+        channel: ch,
+        manager: mgrName,
+        supervisor: supName,
+        routeCode: routeCode || '',
+        outletCode: customerCode || '',
+        outletName: custName,
+        classification: gr,
+        class: gr,
+      });
+
+      visitNpd.forEach((response: any) => {
+        const sku = skuMap.get(response.skuCode);
+        const skuName = sku?.skuName || response.skuCode;
+        reportRows.npd.push({
+          date: visitDate,
+          visitId: v.visitId,
+          channel: ch,
+          manager: mgrName,
+          supervisor: supName,
+          routeCode: routeCode || '',
+          outletCode: customerCode || '',
+          outletName: custName,
+          classification: gr,
+          businessVertical: inferBusinessVertical(skuName),
+          skuName,
+          availability: response.status === 'Available' ? 'YES' : response.status === 'Not Available' ? 'NO' : 'NOT APPLICABLE',
+        });
+      });
+
+      visitPsku.forEach((result: any) => {
+        const sku = powerSkuMap.get(result.skuCode);
+        const skuName = sku?.skuName || result.skuCode;
+        reportRows.psku.push({
+          date: visitDate,
+          visitId: v.visitId,
+          channel: ch,
+          manager: mgrName,
+          supervisor: supName,
+          routeCode: routeCode || '',
+          outletCode: customerCode || '',
+          outletName: custName,
+          classification: gr,
+          businessVertical: inferBusinessVertical(skuName),
+          skuName,
+          availability: result.status === 'Available' ? 'YES' : result.status === 'Not Available' ? 'NO' : 'NOT APPLICABLE',
+        });
+      });
+
+      visitAssets.forEach((asset: any) => {
+        const assetType = asset.assetType || 'Chiller';
+        const tempValue = Number(asset.temperature);
+        const tempStatus = assetType === 'Freezer' ? (tempValue < -15 ? 'In Range' : 'Breach') : (tempValue >= 0 && tempValue <= 8 ? 'In Range' : 'Breach');
+        reportRows['cold-chain'].push({
+          date: visitDate,
+          visitId: v.visitId,
+          channel: ch,
+          manager: mgrName,
+          supervisor: supName,
+          routeCode: routeCode || '',
+          outletCode: customerCode || '',
+          outletName: custName,
+          classification: gr,
+          assetType,
+          assetTemp: formatTempContext(assetType, asset.temperature),
+          tempStatus,
+          ok: tempStatus === 'In Range',
+          actionRemarks: [asset.actionRequired && asset.actionRequired !== 'None' ? asset.actionRequired : null, asset.observation?.trim() || null].filter(Boolean).join(' · ') || 'None',
+        });
+      });
+
       return {
         sup: supName,
         mgr: mgrName,
@@ -151,6 +254,8 @@ export async function GET(req: NextRequest) {
         createdAt: (v.createdAt as any) instanceof Date ? (v.createdAt as any).toISOString() : v.createdAt
       };
     });
+
+    reportRows.classification = classificationRows;
 
     // 6. Compute aggregated statistics for the Reports & Routes pages
     const totalVisits = rows.length;
@@ -276,6 +381,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       rows,
+      reportRows,
       totalVisits,
       noVisitCount,
       todayVisits,

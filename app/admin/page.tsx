@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Chart } from 'chart.js/auto';
 import { useTheme } from '@/providers/theme-provider';
 import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
+import DrilldownReportModal from '@/components/dashboard/DrilldownReportModal';
 
 const SUPERVISOR_TO_MANAGER: Record<string, string> = {
   'YASAR': 'KHALID',
@@ -34,6 +35,7 @@ const GCOL: Record<string, string> = {
 
 export default function AdminDashboardPage() {
   const [rows, setRows] = useState<any[]>([]);
+  const [reportRows, setReportRows] = useState<any>({ npd: [], psku: [], 'cold-chain': [], classification: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isSyncing, setIsSyncing] = useState(false);
@@ -68,10 +70,14 @@ export default function AdminDashboardPage() {
       if (!silent) setIsLoading(true);
       else setIsSyncing(true);
       try {
-        const res = await fetch('/api/dashboard');
+        const params = new URLSearchParams();
+        if (fFrom) params.set('startDate', fFrom);
+        if (fTo) params.set('endDate', fTo);
+        const res = await fetch(`/api/dashboard${params.toString() ? `?${params.toString()}` : ''}`);
         const data = await res.json();
         if (data.success && active) {
           setRows(data.rows);
+          setReportRows(data.reportRows || { npd: [], psku: [], 'cold-chain': [], classification: [] });
           setLastUpdated(new Date());
         }
       } catch (err) {
@@ -93,7 +99,7 @@ export default function AdminDashboardPage() {
       active = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [fFrom, fTo]);
 
   const normalizeDate = (value: string) => value ? new Date(`${value}T00:00:00`) : null;
 
@@ -196,12 +202,51 @@ export default function AdminDashboardPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalData, setModalData] = useState<any[]>([]);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportModalTitle, setReportModalTitle] = useState('');
+  const [reportModalType, setReportModalType] = useState<'npd' | 'psku' | 'cold-chain' | 'classification'>('npd');
+  const [reportModalRows, setReportModalRows] = useState<any[]>([]);
+  const [reportFilterChip, setReportFilterChip] = useState<{ key: string; value: string; label: string } | null>(null);
 
   const handleChartClick = (chartTitle: string, filterFn: (row: any) => boolean) => {
     const matched = filtered.filter(filterFn);
     setModalTitle(chartTitle);
     setModalData(matched);
     setModalOpen(true);
+  };
+
+  const handleDrilldownChartClick = (
+    reportType: 'npd' | 'psku' | 'cold-chain' | 'classification',
+    chartTitle: string,
+    filterFn: (row: any) => boolean,
+    chipLabel?: string
+  ) => {
+    const visitLookup = new Map(filtered.map((row) => [row.visitId, row]));
+    const matched = (reportRows[reportType] || []).filter((row: any) => {
+      if (reportType === 'cold-chain') {
+        return filterFn(row);
+      }
+      const visit = visitLookup.get(row.visitId);
+      return visit ? filterFn(visit) : false;
+    });
+    setReportModalType(reportType);
+    setReportModalTitle(chartTitle);
+    setReportModalRows(matched);
+    setReportFilterChip(chipLabel ? { key: 'segment', value: chipLabel, label: chipLabel } : null);
+    setReportModalOpen(true);
+  };
+
+  const handleClearReportFilter = () => {
+    const visitLookup = new Map(filtered.map((row) => [row.visitId, row]));
+    const matched = (reportRows[reportModalType] || []).filter((row: any) => {
+      if (reportModalType === 'cold-chain') {
+        return true;
+      }
+      const visit = visitLookup.get(row.visitId);
+      return visit ? true : false;
+    });
+    setReportModalRows(matched);
+    setReportFilterChip(null);
   };
 
   // Compute KPI values
@@ -408,7 +453,7 @@ export default function AdminDashboardPage() {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
               const isOk = label === 'Within range';
-              handleChartClick(`Visits with Temperature Status: ${label}`, (r) => r.ok === isOk);
+              handleDrilldownChartClick('cold-chain', `Cold Chain Status · ${label}`, (r) => r.ok === isOk, label === 'Breach' ? 'Status: Breach' : 'Status: In Range');
             }
           },
           onHover: (e, el, chart) => {
@@ -441,7 +486,7 @@ export default function AdminDashboardPage() {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
               const npdCode = label === 'Available' ? 'A' : label === 'Not avail.' ? 'N' : 'X';
-              handleChartClick(`Visits with NPD Status: ${label}`, (r) => r.npd === npdCode);
+              handleDrilldownChartClick('npd', `NPD Availability · ${label}`, (r) => r.npd === npdCode, label === 'Available' || label === 'Not avail.' || label === 'Not req.' ? `Status: ${label}` : undefined);
             }
           },
           onHover: (e, el, chart) => {
@@ -478,7 +523,7 @@ export default function AdminDashboardPage() {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
               const pskuCode = label === 'Available' ? 'A' : label === 'Not avail.' ? 'N' : 'X';
-              handleChartClick(`Visits with Power SKU Status: ${label}`, (r) => r.psku === pskuCode);
+              handleDrilldownChartClick('psku', `Power SKU Availability · ${label}`, (r) => r.psku === pskuCode, label === 'Available' || label === 'Not avail.' || label === 'Not req.' ? `Status: ${label}` : undefined);
             }
           },
           onHover: (e, el, chart) => {
@@ -516,7 +561,7 @@ export default function AdminDashboardPage() {
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              handleChartClick(`Visits for Classification Grade ${label}`, (r) => r.gr === label);
+              handleDrilldownChartClick('classification', `Outlets by Classification · ${label}`, (r) => r.gr === label, `Class: ${label}`);
             }
           },
           onHover: (e, el, chart) => {
@@ -1220,6 +1265,15 @@ export default function AdminDashboardPage() {
         onClose={() => setModalOpen(false)}
         title={modalTitle}
         data={modalData}
+      />
+      <DrilldownReportModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        title={reportModalTitle}
+        rows={reportModalRows}
+        reportType={reportModalType}
+        filterChip={reportFilterChip}
+        onClearFilter={handleClearReportFilter}
       />
     </div>
   );

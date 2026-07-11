@@ -71,7 +71,7 @@ async function runMigration() {
         \`email\` VARCHAR(191) UNIQUE NOT NULL,
         \`passwordHash\` VARCHAR(191) NOT NULL,
         \`mobile\` VARCHAR(191) NOT NULL,
-        \`role\` ENUM('Admin', 'Supervisor') NOT NULL,
+        \`role\` VARCHAR(50) NOT NULL,
         \`status\` ENUM('Active', 'Inactive') NOT NULL,
         \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
         INDEX \`idx_user_email\` (\`email\`),
@@ -214,7 +214,7 @@ async function runMigration() {
       CREATE TABLE \`VisitPhoto\` (
         \`photoId\` VARCHAR(191) PRIMARY KEY,
         \`visitId\` VARCHAR(191) NOT NULL,
-        `category` ENUM('Dairy', 'Beverages', 'Ice Cream', 'Vegetables') NOT NULL,
+        \`category\` ENUM('Dairy', 'Beverages', 'Ice Cream', 'Vegetables') NOT NULL,
         \`cloudinaryUrl\` TEXT NOT NULL,
         \`publicId\` VARCHAR(191) NOT NULL,
         \`uploadedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

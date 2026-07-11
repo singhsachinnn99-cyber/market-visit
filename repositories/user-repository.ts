@@ -1,6 +1,17 @@
 import { User } from '@/types';
 import pool from '@/lib/db';
 
+async function ensureUserRoleColumn() {
+  try {
+    await pool.execute('ALTER TABLE `User` MODIFY COLUMN `role` VARCHAR(50) NOT NULL');
+  } catch (error: any) {
+    const message = error?.message || '';
+    if (message.includes('doesn\'t exist') || message.includes('Unknown column')) {
+      throw error;
+    }
+  }
+}
+
 // Maps raw database rows to the typed User domain model
 function mapRowToUser(row: any): User {
   return {
@@ -50,6 +61,8 @@ export const userRepository = {
   },
 
   async createUser(user: Omit<User, 'id' | 'createdAt'>): Promise<User> {
+    await ensureUserRoleColumn();
+
     const newUser: User = {
       ...user,
       id: 'usr_' + Math.random().toString(36).substring(2, 9),
@@ -75,6 +88,8 @@ export const userRepository = {
   },
 
   async updateUser(id: string, updates: Partial<Omit<User, 'id' | 'createdAt'>>): Promise<User> {
+    await ensureUserRoleColumn();
+
     const setClauses: string[] = [];
     const values: any[] = [];
 

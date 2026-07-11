@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { visitRepository } from '@/repositories/visit-repository';
 import { customerRepository } from '@/repositories/customer-repository';
 import pool from '@/lib/db';
+import { getDashboardScope, isFleetRole, isFullAccessRole, isSupervisorRole, isReportAllowed } from '@/lib/roles';
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,7 +12,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const userSession = session.user as any;
-    if (userSession.role !== 'Admin' && userSession.role !== 'Supervisor') {
+    const role = userSession.role as string | undefined;
+    const scope = getDashboardScope(role);
+    if (scope === 'full' || scope === 'supervisor' || scope === 'fleet') {
+      // allowed
+    } else {
       return NextResponse.json({ error: 'Unauthorized role' }, { status: 403 });
     }
 
@@ -21,8 +26,7 @@ export async function GET(req: NextRequest) {
       customerRepository.getAllCustomers(),
     ]);
 
-    // 2. Filter visits by Supervisor if logged in user is Supervisor
-    if (userSession.role === 'Supervisor') {
+    if (scope === 'supervisor') {
       visits = visits.filter((v) => v.supervisorId === userSession.id);
     }
 
@@ -30,6 +34,11 @@ export async function GET(req: NextRequest) {
     const endDateParam = req.nextUrl.searchParams.get('endDate');
     const supervisorIdParam = req.nextUrl.searchParams.get('supervisorId');
     const routeCodeParam = req.nextUrl.searchParams.get('routeCode');
+    const reportParam = req.nextUrl.searchParams.get('report');
+
+    if (scope === 'fleet' && reportParam && !isReportAllowed(role, reportParam)) {
+      return NextResponse.json({ error: 'Forbidden report for this role' }, { status: 403 });
+    }
 
     let filteredVisits = visits.filter((v) => v.status === 'Submitted');
 
@@ -41,7 +50,11 @@ export async function GET(req: NextRequest) {
       const end = new Date(endDateParam + 'T23:59:59');
       filteredVisits = filteredVisits.filter(v => new Date(v.createdAt) <= end);
     }
-    if (supervisorIdParam) {
+    if (scope === 'supervisor') {
+      filteredVisits = filteredVisits.filter(v => v.supervisorId === userSession.id);
+    }
+
+    if (supervisorIdParam && (scope === 'full' || isFullAccessRole(role))) {
       filteredVisits = filteredVisits.filter(v => v.supervisorId === supervisorIdParam);
     }
     if (routeCodeParam) {
@@ -284,10 +297,10 @@ export async function GET(req: NextRequest) {
     // Fetch routes and compute coverage stats
     const [dbRoutes]: any = await pool.execute('SELECT * FROM `Route`');
     let activeRoutes = dbRoutes;
-    if (userSession.role === 'Supervisor') {
+    if (scope === 'supervisor') {
       activeRoutes = activeRoutes.filter((r: any) => r.supervisorId === userSession.id);
     }
-    if (supervisorIdParam) {
+    if (supervisorIdParam && (scope === 'full' || isFullAccessRole(role))) {
       activeRoutes = activeRoutes.filter((r: any) => r.supervisorId === supervisorIdParam);
     }
     if (routeCodeParam) {
@@ -317,7 +330,7 @@ export async function GET(req: NextRequest) {
     const coveragePercent = totalAssignedOutlets > 0 ? Math.round((totalVisitedOutlets / totalAssignedOutlets) * 100) : 0;
 
     const supervisorPerformance = dbUsers
-      .filter((u: any) => u.role === 'Supervisor' && (!supervisorIdParam || u.id === supervisorIdParam) && (userSession.role !== 'Supervisor' || u.id === userSession.id))
+      .filter((u: any) => u.role === 'Supervisor' && (!supervisorIdParam || u.id === supervisorIdParam) && (scope === 'full' || u.id === userSession.id))
       .map((u: any) => {
         const supVisits = filteredVisits.filter(v => v.supervisorId === u.id);
         const visitsCount = supVisits.length;

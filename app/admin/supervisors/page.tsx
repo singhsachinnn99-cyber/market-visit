@@ -19,7 +19,7 @@ import {
 
 interface SupervisorVM {
   id: string; name: string; employeeCode: string; email: string;
-  mobile: string; role: 'Admin' | 'Supervisor'; status: 'Active' | 'Inactive'; createdAt: string;
+  mobile: string; role: 'GM' | 'BDM' | 'Sales Manager' | 'Admin' | 'Supervisor' | 'Fleet' | 'Maintenance'; status: 'Active' | 'Inactive'; createdAt: string;
 }
 
 function FormField({ label, error, children }: { label: React.ReactNode; error?: string; children: React.ReactNode }) {
@@ -253,7 +253,7 @@ export default function SupervisorsPage() {
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className={`badge ${sup.role === 'Admin' ? 'badge-accent' : 'badge-success'}`}>
+                      <span className={`badge ${['GM', 'BDM', 'Sales Manager', 'Admin'].includes(sup.role) ? 'badge-accent' : 'badge-success'}`}>
                         {sup.role}
                       </span>
                     </td>
@@ -366,7 +366,12 @@ export default function SupervisorsPage() {
                 <FormField label="Role" error={errors.role?.message}>
                   <select disabled={submitting} {...register('role')} className={inputCls}>
                     <option value="Supervisor">Supervisor</option>
+                    <option value="GM">GM</option>
+                    <option value="BDM">BDM</option>
+                    <option value="Sales Manager">Sales Manager</option>
                     <option value="Admin">Admin</option>
+                    <option value="Fleet">Fleet</option>
+                    <option value="Maintenance">Maintenance</option>
                   </select>
                 </FormField>
                 <FormField label="Status" error={errors.status?.message}>

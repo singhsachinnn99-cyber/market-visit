@@ -9,7 +9,7 @@ export const supervisorSchema = z.object({
     message: 'Mobile number must be a valid 10-digit number or international format',
   }),
   status: z.enum(['Active', 'Inactive'] as const),
-  role: z.enum(['Admin', 'Supervisor'] as const),
+  role: z.enum(['GM', 'BDM', 'Sales Manager', 'Admin', 'Supervisor', 'Fleet', 'Maintenance'] as const),
 });
 
 export type SupervisorInput = z.infer<typeof supervisorSchema>;

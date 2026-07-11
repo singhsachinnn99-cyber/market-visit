@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from 'next-auth';
+import { canAccessAdminRoute, canAccessSupervisorRoute, isFullAccessRole } from '@/lib/roles';
 
 export const authConfig = {
   pages: {
@@ -8,6 +9,7 @@ export const authConfig = {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const user = auth?.user as any;
+      const userRole = user?.role as string | undefined;
       const isAuthRoute = nextUrl.pathname.startsWith('/login');
       const isAdminRoute = nextUrl.pathname.startsWith('/admin');
       const isSupervisorRoute = nextUrl.pathname.startsWith('/supervisor');
@@ -20,36 +22,38 @@ export const authConfig = {
       if (isAuthRoute) {
         if (isLoggedIn) {
           if (user?.status !== 'Active') {
-            return true; // Let them hit login to see inactive error
+            return true;
           }
-          const destination = user?.role === 'Admin' ? '/admin' : '/supervisor';
+          const destination = canAccessAdminRoute(userRole) ? '/admin' : '/supervisor';
           return Response.redirect(new URL(destination, nextUrl));
         }
         return true;
       }
 
       if (!isLoggedIn) {
-        return false; // Redirects to signIn page
+        return false;
       }
 
-      // Check Status
       if (user?.status !== 'Active') {
         const url = new URL('/login', nextUrl);
         url.searchParams.set('error', 'Inactive');
         return Response.redirect(url);
       }
 
-      if (isAdminRoute && user?.role !== 'Admin') {
+      if (isAdminRoute && !canAccessAdminRoute(userRole)) {
         return Response.redirect(new URL('/supervisor', nextUrl));
       }
 
-      if (isSupervisorRoute && user?.role !== 'Supervisor') {
+      if (isSupervisorRoute && !canAccessSupervisorRoute(userRole)) {
         return Response.redirect(new URL('/admin', nextUrl));
       }
 
-      // Root path routing
+      if (isSupervisorRoute && isFullAccessRole(userRole)) {
+        return Response.redirect(new URL('/admin', nextUrl));
+      }
+
       if (nextUrl.pathname === '/') {
-        const destination = user?.role === 'Admin' ? '/admin' : '/supervisor';
+        const destination = canAccessAdminRoute(userRole) ? '/admin' : '/supervisor';
         return Response.redirect(new URL(destination, nextUrl));
       }
 
@@ -75,5 +79,5 @@ export const authConfig = {
       return session;
     },
   },
-  providers: [], // Added in lib/auth.ts
+  providers: [],
 } satisfies NextAuthConfig;

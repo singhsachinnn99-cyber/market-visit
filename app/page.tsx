@@ -1,4 +1,5 @@
 import { auth } from '@/lib/auth';
+import { canAccessAdminRoute } from '@/lib/roles';
 import { redirect } from 'next/navigation';
 
 export default async function Home() {
@@ -9,7 +10,7 @@ export default async function Home() {
   }
 
   const role = (session.user as any).role;
-  if (role === 'Admin') {
+  if (canAccessAdminRoute(role)) {
     redirect('/admin');
   } else {
     redirect('/supervisor');

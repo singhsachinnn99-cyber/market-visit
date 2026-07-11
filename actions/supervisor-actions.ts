@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { userRepository } from '@/repositories/user-repository';
 import { supervisorSchema, SupervisorInput } from '@/schemas/supervisor';
 import { auditService } from '@/services/audit-service';
+import { canAccessAdminRoute } from '@/lib/roles';
 import bcrypt from 'bcryptjs';
 
 const verifyAdminSession = async () => {
@@ -12,8 +13,8 @@ const verifyAdminSession = async () => {
     throw new Error('Authentication required');
   }
   const user = session.user as any;
-  if (user.role !== 'Admin') {
-    throw new Error('Access denied. Administrator privileges required.');
+  if (!canAccessAdminRoute(user.role)) {
+    throw new Error('Access denied. Administrative privileges required.');
   }
   if (user.status !== 'Active') {
     throw new Error('Your account is inactive.');

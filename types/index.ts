@@ -1,6 +1,6 @@
 // Shared TypeScript Type Definitions for Supervisor Field Visit Management System
 
-export type UserRole = 'Admin' | 'Supervisor';
+export type UserRole = 'GM' | 'BDM' | 'Sales Manager' | 'Admin' | 'Supervisor' | 'Fleet' | 'Maintenance';
 export type UserStatus = 'Active' | 'Inactive';
 export type VisitStatus = 'Draft' | 'Submitted';
 export type AssetType = 'Chiller' | 'Freezer';

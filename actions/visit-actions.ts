@@ -6,6 +6,7 @@ import { routeRepository } from '@/repositories/route-repository';
 import { visitSchema, visitDraftSchema, VisitInput, VisitDraftInput } from '@/schemas/visit';
 import { auditService } from '@/services/audit-service';
 import { Visit, VisitPhoto, NPDResponse, VisitAsset, VisitPowerSkuResult } from '@/types';
+import { isFullAccessRole, isSupervisorRole, isFleetRole } from '@/lib/roles';
 
 function generateVisitId(): string {
   const now = new Date();
@@ -34,11 +35,13 @@ const getAuthenticatedUser = async () => {
 export async function getVisitsAction() {
   const user = await getAuthenticatedUser();
   try {
-    let visits;
-    if (user.role === 'Admin') {
+    let visits: Visit[] = [];
+    if (isFullAccessRole(user.role) || isFleetRole(user.role)) {
       visits = await visitRepository.getAllVisits();
-    } else {
+    } else if (isSupervisorRole(user.role)) {
       visits = await visitRepository.getVisitsBySupervisor(user.id);
+    } else {
+      visits = [];
     }
 
     const enrichedVisits = await Promise.all(
@@ -67,8 +70,7 @@ export async function getVisitDetailsAction(visitId: string) {
     throw new Error('Visit record not found');
   }
 
-  // Enforce ownership: Supervisor can only view own visits
-  if (user.role === 'Supervisor' && visit.supervisorId !== user.id) {
+  if (isSupervisorRole(user.role) && visit.supervisorId !== user.id) {
     throw new Error('Access denied. You do not own this visit record.');
   }
 

@@ -16,6 +16,7 @@ import {
 import { Visit, VisitPhoto, VisitWizardState, NPDResponse, VisitAsset, VisitPowerSkuResult } from '@/types';
 import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
 import DrilldownReportModal from '@/components/dashboard/DrilldownReportModal';
+import { getAllowedReports, isFleetRole } from '@/lib/roles';
 
 const GCOL: Record<string, string> = {
   A: '#0b7a4c',
@@ -227,6 +228,8 @@ export default function SupervisorDashboard() {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportModalTitle, setReportModalTitle] = useState('');
   const [reportModalType, setReportModalType] = useState<'npd' | 'psku' | 'cold-chain' | 'classification'>('npd');
+  const userRole = (session?.user as any)?.role;
+  const allowedReports = useMemo(() => getAllowedReports(userRole), [userRole]);
   const [reportModalRows, setReportModalRows] = useState<any[]>([]);
   const [reportFilterChip, setReportFilterChip] = useState<{ key: string; value: string; label: string } | null>(null);
 
@@ -244,6 +247,7 @@ export default function SupervisorDashboard() {
     chipLabel?: string
   ) => {
     const visitLookup = new Map(filtered.map((row) => [row.visitId, row]));
+    if (!allowedReports.includes(reportType)) return;
     const matched = (reportRows[reportType] || []).filter((row: any) => {
       if (reportType === 'cold-chain') {
         return filterFn(row);
@@ -613,6 +617,11 @@ export default function SupervisorDashboard() {
 
   return (
     <div className="dandy-dashboard-body animate-fade-in">
+      {isFleetRole(userRole) && (
+        <div className="mx-3 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] font-semibold text-amber-700">
+          Fleet / Maintenance view: only the Cold Chain report is available.
+        </div>
+      )}
       <style dangerouslySetInnerHTML={{ __html: `
         .dandy-dashboard-body {
           --ink: var(--text-primary);

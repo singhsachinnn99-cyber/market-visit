@@ -5,6 +5,8 @@ import { Chart } from 'chart.js/auto';
 import { useTheme } from '@/providers/theme-provider';
 import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
 import DrilldownReportModal from '@/components/dashboard/DrilldownReportModal';
+import { useSession } from 'next-auth/react';
+import { isFleetRole, getAllowedReports } from '@/lib/roles';
 
 const SUPERVISOR_TO_MANAGER: Record<string, string> = {
   'YASAR': 'KHALID',
@@ -34,6 +36,8 @@ const GCOL: Record<string, string> = {
 };
 
 export default function AdminDashboardPage() {
+  const { data: session } = useSession();
+  const userRole = (session?.user as any)?.role;
   const [rows, setRows] = useState<any[]>([]);
   const [reportRows, setReportRows] = useState<any>({ npd: [], psku: [], 'cold-chain': [], classification: [] });
   const [isLoading, setIsLoading] = useState(true);
@@ -71,6 +75,7 @@ export default function AdminDashboardPage() {
       else setIsSyncing(true);
       try {
         const params = new URLSearchParams();
+        if (userRole) params.set('role', userRole);
         if (fFrom) params.set('startDate', fFrom);
         if (fTo) params.set('endDate', fTo);
         const res = await fetch(`/api/dashboard${params.toString() ? `?${params.toString()}` : ''}`);
@@ -99,7 +104,7 @@ export default function AdminDashboardPage() {
       active = false;
       clearInterval(timer);
     };
-  }, [fFrom, fTo]);
+  }, [fFrom, fTo, userRole]);
 
   const normalizeDate = (value: string) => value ? new Date(`${value}T00:00:00`) : null;
 
@@ -205,6 +210,7 @@ export default function AdminDashboardPage() {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportModalTitle, setReportModalTitle] = useState('');
   const [reportModalType, setReportModalType] = useState<'npd' | 'psku' | 'cold-chain' | 'classification'>('npd');
+  const allowedReports = useMemo(() => getAllowedReports(userRole), [userRole]);
   const [reportModalRows, setReportModalRows] = useState<any[]>([]);
   const [reportFilterChip, setReportFilterChip] = useState<{ key: string; value: string; label: string } | null>(null);
 
@@ -222,6 +228,7 @@ export default function AdminDashboardPage() {
     chipLabel?: string
   ) => {
     const visitLookup = new Map(filtered.map((row) => [row.visitId, row]));
+    if (!allowedReports.includes(reportType)) return;
     const matched = (reportRows[reportType] || []).filter((row: any) => {
       if (reportType === 'cold-chain') {
         return filterFn(row);
@@ -586,6 +593,11 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="dandy-dashboard-body">
+      {isFleetRole(userRole) && (
+        <div className="mx-3 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] font-semibold text-amber-700">
+          Fleet / Maintenance view: only the Cold Chain report is available.
+        </div>
+      )}
       <style dangerouslySetInnerHTML={{ __html: `
         .dandy-dashboard-body {
           --ink: var(--text-primary);

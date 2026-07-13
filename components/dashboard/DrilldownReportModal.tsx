@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { X, Search, Download, ArrowUpDown, ArrowUp, ArrowDown, FilterX } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -8,7 +8,7 @@ interface DrilldownReportModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
-  rows: Record<string, any>[];
+  rows: Record<string, unknown>[];
   reportType: 'npd' | 'psku' | 'cold-chain' | 'classification';
   filterChip?: { key: string; value: string; label: string } | null;
   onClearFilter?: () => void;
@@ -93,19 +93,19 @@ function formatDisplayDate(value?: string) {
   });
 }
 
-function getCellValue(row: Record<string, any>, key: string) {
-  if (key === 'date') return formatDisplayDate(row.date);
-  if (key === 'classification') return row.classification || '—';
-  if (key === 'class') return row.class || '—';
-  if (key === 'availability') return row.availability || '—';
-  if (key === 'tempStatus') return row.tempStatus || '—';
-  if (key === 'assetTemp') return row.assetTemp || '—';
-  if (key === 'actionRemarks') return row.actionRemarks || '—';
-  const value = row[key];
+function getCellValue(row: Record<string, unknown>, key: string) {
+  if (key === 'date') return formatDisplayDate(row.date as string | undefined);
+  if (key === 'classification') return (row.classification as string) || '—';
+  if (key === 'class') return (row.class as string) || '—';
+  if (key === 'availability') return (row.availability as string) || '—';
+  if (key === 'tempStatus') return (row.tempStatus as string) || '—';
+  if (key === 'assetTemp') return (row.assetTemp as string) || '—';
+  if (key === 'actionRemarks') return (row.actionRemarks as string) || '—';
+  const value = row[key] as string | undefined;
   return value ?? '—';
 }
 
-function buildSummaryText(reportType: string, rows: Record<string, any>[]) {
+function buildSummaryText(reportType: string, rows: Record<string, unknown>[]) {
   if (reportType === 'cold-chain') {
     const inRange = rows.filter((r) => r.tempStatus === 'In Range').length;
     const breach = rows.filter((r) => r.tempStatus === 'Breach').length;
@@ -130,7 +130,7 @@ function buildSummaryText(reportType: string, rows: Record<string, any>[]) {
   return `Showing ${rows.length} records · ${yes} YES · ${no} NO · ${na} N/A`;
 }
 
-function exportWorkbook(title: string, summary: string, rows: Record<string, any>[], reportType: string, filterChip?: { key: string; value: string; label: string } | null) {
+function exportWorkbook(title: string, summary: string, rows: Record<string, unknown>[], reportType: string, filterChip?: { key: string; value: string; label: string } | null) {
   const headers = REPORT_COLUMNS[reportType].map((col) => col.label);
   const sheetRows = [
     ['Summary', summary],
@@ -163,24 +163,119 @@ export default function DrilldownReportModal({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
-  useEffect(() => {
-    if (isOpen) {
-      setSearch('');
-      setPage(1);
-      setSortField(reportType === 'cold-chain' ? 'tempStatus' : 'date');
-      setSortOrder('desc');
-    }
-  }, [isOpen, reportType]);
+  const [fFrom, setFFrom] = useState('');
+  const [fTo, setFTo] = useState('');
+  const [fChannel, setFChannel] = useState('');
+  const [fManager, setFManager] = useState('');
+  const [fSupervisor, setFSupervisor] = useState('');
+  const [fRoute, setFRoute] = useState('');
+  const [fOutlet, setFOutlet] = useState('');
+  const [fClassification, setFClassification] = useState('');
+  const [fVertical, setFVertical] = useState('');
+  const [fSku, setFSku] = useState('');
+  const [fAssetType, setFAssetType] = useState('');
+  const [fTempStatus, setFTempStatus] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+
+  const normalizeDate = (value?: string) => (value ? new Date(`${value}T00:00:00`) : null);
+
 
   const columns = REPORT_COLUMNS[reportType];
 
+  const filterOptions = useMemo(() => {
+    const channels = new Set<string>();
+    const managers = new Set<string>();
+    const supervisors = new Set<string>();
+    const routes = new Set<string>();
+    const outlets = new Set<string>();
+    const classifications = new Set<string>();
+    const verticals = new Set<string>();
+    const skus = new Set<string>();
+    const assetTypes = new Set<string>();
+    const tempStatuses = new Set<string>();
+
+    rows.forEach((row: Record<string, unknown>) => {
+      const channel = row.channel as string | undefined;
+      const manager = row.manager as string | undefined;
+      const supervisor = row.supervisor as string | undefined;
+      const routeCode = row.routeCode as string | undefined;
+      const outletName = row.outletName as string | undefined;
+      const classification = row.classification as string | undefined;
+      const className = row.class as string | undefined;
+      const businessVertical = row.businessVertical as string | undefined;
+      const skuName = row.skuName as string | undefined;
+      const assetType = row.assetType as string | undefined;
+      const tempStatus = row.tempStatus as string | undefined;
+
+      if (channel) channels.add(channel);
+      if (manager) managers.add(manager);
+      if (supervisor) supervisors.add(supervisor);
+      if (routeCode) routes.add(routeCode);
+      if (outletName) outlets.add(outletName);
+      if (classification) classifications.add(classification);
+      if (className) classifications.add(className);
+      if (businessVertical) verticals.add(businessVertical);
+      if (skuName) skus.add(skuName);
+      if (assetType) assetTypes.add(assetType);
+      if (tempStatus) tempStatuses.add(tempStatus);
+    });
+
+    return {
+      channels: Array.from(channels).sort(),
+      managers: Array.from(managers).sort(),
+      supervisors: Array.from(supervisors).sort(),
+      routes: Array.from(routes).sort(),
+      outlets: Array.from(outlets).sort(),
+      classifications: Array.from(classifications).sort(),
+      verticals: Array.from(verticals).sort(),
+      skus: Array.from(skus).sort(),
+      assetTypes: Array.from(assetTypes).sort(),
+      tempStatuses: Array.from(tempStatuses).sort(),
+    };
+  }, [rows]);
+
+  const resetAdvancedFilters = () => {
+    setFFrom('');
+    setFTo('');
+    setFChannel('');
+    setFManager('');
+    setFSupervisor('');
+    setFRoute('');
+    setFOutlet('');
+    setFClassification('');
+    setFVertical('');
+    setFSku('');
+    setFAssetType('');
+    setFTempStatus('');
+  };
+
   const filteredData = useMemo(() => {
-    if (!search.trim()) return rows;
+    const filtered = rows.filter((row) => {
+      const rowDate = normalizeDate(row.date) || normalizeDate(row.createdAt);
+      const fromDate = normalizeDate(fFrom);
+      const toDate = normalizeDate(fTo);
+      const startsAfterFrom = !fromDate || (rowDate ? rowDate >= fromDate : true);
+      const endsBeforeTo = !toDate || (rowDate ? rowDate <= new Date(`${fTo}T23:59:59`) : true);
+      if (!startsAfterFrom || !endsBeforeTo) return false;
+      if (fChannel && row.channel !== fChannel) return false;
+      if (fManager && row.manager !== fManager) return false;
+      if (fSupervisor && row.supervisor !== fSupervisor) return false;
+      if (fRoute && row.routeCode !== fRoute) return false;
+      if (fOutlet && row.outletName !== fOutlet) return false;
+      if (fClassification && (row.classification !== fClassification && row.class !== fClassification)) return false;
+      if (fVertical && row.businessVertical !== fVertical) return false;
+      if (fSku && row.skuName !== fSku) return false;
+      if (fAssetType && row.assetType !== fAssetType) return false;
+      if (fTempStatus && row.tempStatus !== fTempStatus) return false;
+      return true;
+    });
+
+    if (!search.trim()) return filtered;
     const query = search.toLowerCase();
-    return rows.filter((row) =>
+    return filtered.filter((row) =>
       columns.some((col) => String(getCellValue(row, col.key)).toLowerCase().includes(query))
     );
-  }, [rows, search, columns]);
+  }, [rows, search, columns, fFrom, fTo, fChannel, fManager, fSupervisor, fRoute, fOutlet, fClassification, fVertical, fSku, fAssetType, fTempStatus]);
 
   const sortedData = useMemo(() => {
     const data = [...filteredData];
@@ -220,9 +315,6 @@ export default function DrilldownReportModal({
     return sortedData.slice(start, start + pageSize);
   }, [sortedData, currentPage, pageSize]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [search, pageSize]);
 
   if (!isOpen) return null;
 
@@ -259,11 +351,140 @@ export default function DrilldownReportModal({
                 </button>
               </div>
             ) : null}
-            <button onClick={onClose} className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-[var(--surface-2)] transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer">
+            <button onClick={() => setShowFilters((prev) => !prev)} className="h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors" type="button">
+              {showFilters ? 'Hide filters' : 'Show filters'}
+            </button>
+            <button onClick={() => { setShowFilters(false); onClose(); }} className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-[var(--surface-2)] transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer" type="button">
               <X className="h-4.5 w-4.5" />
             </button>
           </div>
         </div>
+
+        {showFilters && (
+          <div className="px-5 py-4 border-b border-[var(--border-soft)] bg-[var(--surface-2)] flex flex-col gap-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]">Report Filters</div>
+              <div>
+                <h3 className="text-[16px] font-bold text-[var(--text-primary)]">{title}</h3>
+                <p className="text-[12px] text-[var(--text-muted)] mt-1">{summaryText}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {filterChip ? (
+                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[11px] font-semibold text-[var(--text-primary)]">
+                  <span>{filterChip.label}</span>
+                  <button onClick={() => onClearFilter?.()} className="rounded-full p-1 hover:bg-[var(--surface-2)]" type="button">
+                    <FilterX className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : null}
+              <button onClick={onClose} className="h-10 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors" type="button">
+                Close
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-[28px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">From</label>
+                <input type="date" value={fFrom} onChange={(e) => { setFFrom(e.target.value); setPage(1); }} className="form-input w-full rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]" />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">To</label>
+                <input type="date" value={fTo} onChange={(e) => { setFTo(e.target.value); setPage(1); }} className="form-input w-full rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]" />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">Business Vertical</label>
+                <select value={fVertical} onChange={(e) => { setFVertical(e.target.value); setPage(1); }} className="form-input w-full rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]">
+                  <option value="">All verticals</option>
+                  {filterOptions.verticals.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 lg:grid-cols-4">
+              <div className="grid gap-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">Channel</label>
+                <select value={fChannel} onChange={(e) => { setFChannel(e.target.value); setPage(1); }} className="form-input w-full rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]">
+                  <option value="">All channels</option>
+                  {filterOptions.channels.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">Executive</label>
+                <select value={fManager} onChange={(e) => { setFManager(e.target.value); setPage(1); }} className="form-input w-full rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]">
+                  <option value="">All executives</option>
+                  {filterOptions.managers.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">Supervisor</label>
+                <select value={fSupervisor} onChange={(e) => { setFSupervisor(e.target.value); setPage(1); }} className="form-input w-full rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]">
+                  <option value="">All supervisors</option>
+                  {filterOptions.supervisors.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">Route</label>
+                <select value={fRoute} onChange={(e) => { setFRoute(e.target.value); setPage(1); }} className="form-input w-full rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]">
+                  <option value="">All routes</option>
+                  {filterOptions.routes.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 lg:grid-cols-4">
+              <div className="grid gap-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">Outlet</label>
+                <select value={fOutlet} onChange={(e) => { setFOutlet(e.target.value); setPage(1); }} className="form-input w-full rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]">
+                  <option value="">All outlets</option>
+                  {filterOptions.outlets.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">Outlet Classification</label>
+                <select value={fClassification} onChange={(e) => { setFClassification(e.target.value); setPage(1); }} className="form-input w-full rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]">
+                  <option value="">All classifications</option>
+                  {filterOptions.classifications.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">SKU / Product</label>
+                <select value={fSku} onChange={(e) => { setFSku(e.target.value); setPage(1); }} className="form-input w-full rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]">
+                  <option value="">All SKUs</option>
+                  {filterOptions.skus.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">Asset Type</label>
+                <select value={fAssetType} onChange={(e) => { setFAssetType(e.target.value); setPage(1); }} className="form-input w-full rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]">
+                  <option value="">All asset types</option>
+                  {filterOptions.assetTypes.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {filterOptions.tempStatuses.length > 0 && (
+              <div className="mt-4 grid gap-2 lg:grid-cols-1 xl:grid-cols-1">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]">Temperature Status</label>
+                <select value={fTempStatus} onChange={(e) => { setFTempStatus(e.target.value); setPage(1); }} className="form-input w-full rounded-2xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]">
+                  <option value="">All statuses</option>
+                  {filterOptions.tempStatuses.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-[11px] font-semibold text-[var(--text-muted)]">Filtered rows: {filteredData.length}</div>
+              <button type="button" onClick={() => { resetAdvancedFilters(); setPage(1); }} className="h-10 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-2)] transition-colors">
+                Clear filters
+              </button>
+            </div>
+          </div>
+        </div>
+        )}
 
         <div className="px-5 py-3 border-b border-[var(--border-soft)] bg-[var(--surface-2)] flex flex-col sm:flex-row items-center justify-between gap-3 flex-shrink-0">
           <div className="relative w-full sm:max-w-xs">

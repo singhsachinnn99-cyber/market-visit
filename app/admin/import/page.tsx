@@ -568,6 +568,7 @@ export default function MasterImportPage() {
       )}
 
       {/* ── STEP 3: Syncing ───────────────────────────────────── */}
+      
       {step === 'IMPORTING' && (
         <div className="card p-16 flex flex-col items-center gap-5 text-center">
           <div className="icon-wrap h-16 w-16 rounded-2xl" style={{ background: 'var(--accent-light)' }}>

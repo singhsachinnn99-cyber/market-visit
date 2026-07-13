@@ -1146,7 +1146,7 @@ function VisitWizardContent() {
             ].map(([label, value, style], i, arr) => (
               <div key={label as string} className="flex items-center justify-between px-4 py-3"
                 style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--border-soft)' : 'none', background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)' }}>
-                <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{label}</span>
+                <span className="text-[10px] font-extrabold uppercase tracking-wide" style={{ color: 'var(--surface)' }}>{label}</span>
                 <span className="text-[12px] font-bold font-mono"
                   style={{
                     color: style === 'accent' ? 'var(--accent)' : style === 'success' ? 'var(--success)' : style === 'danger' ? 'var(--danger)' : 'var(--text-primary)',

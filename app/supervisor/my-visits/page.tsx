@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { getVisitsAction, getVisitDetailsAction } from '@/actions/visit-actions';
 import { useToast } from '@/components/ui/toast';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,9 +11,19 @@ import {
 } from 'lucide-react';
 import BackHeader from '../components/BackHeader';
 import { Visit, VisitPhoto, NPDResponse, VisitAsset, VisitPowerSkuResult } from '@/types';
+import { isFleetRole } from '@/lib/roles';
 
 export default function MyVisitsPage() {
   const { showToast } = useToast();
+  const { data: session } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isFleetRole((session?.user as any)?.role)) {
+      router.replace('/supervisor');
+    }
+  }, [session, router]);
+
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewId, setReviewId] = useState<string | null>(null);

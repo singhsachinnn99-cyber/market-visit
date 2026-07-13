@@ -13,8 +13,8 @@ export const visitAssetSchema = z.object({
   assetType: z.enum(['Chiller', 'Freezer'] as const),
   temperature: z.number({ message: 'Temperature must be a number' }),
   tempInRange: z.boolean(),
-  actionRequired: z.enum(['Cleaning', 'Repair', 'Replacement', 'Gas Filling', 'Other', 'None'] as const),
-  observation: z.string().optional().default(''),
+  actionRequired: z.enum(['Replacement', 'Needs to be Checked', 'Other', 'None'] as const),
+  observation: z.string().min(1, { message: 'Observation is required.' }),
   isFirstInFlow: z.boolean().optional().default(false),
   fefoFollowed: z.boolean().optional().default(false),
 });
@@ -70,6 +70,8 @@ export const visitDraftSchema = z.object({
     actionRequired: true,
     isFirstInFlow: true,
     fefoFollowed: true,
+  }).extend({
+    observation: z.string().optional().default(''),
   })).default([]),
   photos: z.array(visitPhotoSchema).default([]),
   powerSkuResults: z.record(z.string(), z.enum(['Available', 'Not Available', 'Not Required'] as const)).optional().default({}),

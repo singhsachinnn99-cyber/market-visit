@@ -2,8 +2,11 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Chart } from 'chart.js/auto';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { useTheme } from '@/providers/theme-provider';
 import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
+import { isFleetRole } from '@/lib/roles';
 
 const SUPERVISOR_TO_MANAGER: Record<string, string> = {
   'YASAR': 'KHALID',
@@ -34,8 +37,16 @@ const GCOL: Record<string, string> = {
 
 export default function SupervisorReportsPage() {
   const { theme } = useTheme();
+  const { data: session } = useSession();
+  const router = useRouter();
   const [rows, setRows] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (isFleetRole((session?.user as any)?.role)) {
+      router.replace('/supervisor');
+    }
+  }, [session, router]);
 
   // Filter States
   const [fTime, setFTime] = useState('');

@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { userRepository } from '@/repositories/user-repository';
+import { isFleetRole } from '@/lib/roles';
 import { LogOut, Shield } from 'lucide-react';
 import InfoRowsClient from './InfoRowsClient';
 import BackHeader from '@/app/supervisor/components/BackHeader';
@@ -10,6 +11,7 @@ export default async function SupervisorProfilePage() {
   if (!session?.user) redirect('/login');
 
   const sessionUser = session.user as any;
+  if (isFleetRole(sessionUser.role)) redirect('/supervisor');
   const user = await userRepository.getUserByEmail(sessionUser.email);
 
   if (!user) {

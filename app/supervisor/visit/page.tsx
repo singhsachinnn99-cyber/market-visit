@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/toast';
 import { useGeolocation } from '@/hooks/use-geolocation';
 import { saveVisitDraftAction, submitVisitAction } from '@/actions/visit-actions';
+import { isFleetRole } from '@/lib/roles';
 import {
   ArrowLeft,
   Save,
@@ -47,8 +49,15 @@ const STEP_NAMES = [
 function VisitWizardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
   const { showToast } = useToast();
   const { latitude, longitude, accuracy, error: gpsError, loading: gpsLoading, getCoordinates } = useGeolocation();
+
+  useEffect(() => {
+    if (isFleetRole((session?.user as any)?.role)) {
+      router.replace('/supervisor');
+    }
+  }, [session, router]);
 
   // Wizard state parameters
   const [currentStep, setCurrentStep] = useState(0);
@@ -311,6 +320,16 @@ function VisitWizardContent() {
       }
     }
 
+    if (currentStep === 1 && powerSkus.length > 0 && !powerSkus.every((s) => powerSkuResults[s.skuCode])) {
+      showToast('Please respond to every item in the Power SKU Checklist before continuing.', 'warning');
+      return;
+    }
+
+    if (currentStep === 2 && npdSkus.length > 0 && !npdSkus.every((s) => npdResponses[s.skuCode])) {
+      showToast('Please respond to every item in the NPD Checklist before continuing.', 'warning');
+      return;
+    }
+
     const nextIndex = currentStep + 1;
     setCurrentStep(nextIndex);
     saveStateToLocalStorage(nextIndex);
@@ -353,7 +372,7 @@ function VisitWizardContent() {
         status: 'Draft' as const,
       };
 
-      await saveVisitDraftAction(draftPayload);
+      await saveVisitDraftAction(draftPayload as any);
       showToast('Draft successfully synced to server.', 'success');
       saveStateToLocalStorage(currentStep);
       router.push('/supervisor');
@@ -378,10 +397,23 @@ function VisitWizardContent() {
       showToast('Please select a reason category for no-visit reports.', 'warning');
       return;
     }
+    if (visitType !== 'No Visit' && powerSkus.length > 0 && !powerSkus.every((s) => powerSkuResults[s.skuCode])) {
+      showToast('Please respond to every item in the Power SKU Checklist before submitting.', 'error');
+      return;
+    }
+    if (visitType !== 'No Visit' && npdSkus.length > 0 && !npdSkus.every((s) => npdResponses[s.skuCode])) {
+      showToast('Please respond to every item in the NPD Checklist before submitting.', 'error');
+      return;
+    }
     setSubmittingVisit(true);
     try {
       if (visitType !== 'No Visit' && assets.some(a => a.temperature === undefined || a.temperature === null || (a.temperature as any) === '' || (a.temperature as any) === '-')) {
         showToast('Please record a valid temperature for all assets.', 'error');
+        setSubmittingVisit(false);
+        return;
+      }
+      if (visitType !== 'No Visit' && assets.some(a => !a.observation || !a.observation.trim())) {
+        showToast('Please provide an observation note for all assets.', 'error');
         setSubmittingVisit(false);
         return;
       }
@@ -409,7 +441,7 @@ function VisitWizardContent() {
         status: 'Submitted' as const,
       };
 
-      await submitVisitAction(finalPayload);
+      await submitVisitAction(finalPayload as any);
       showToast('Visit audit submitted successfully.', 'success');
 
       const stored = localStorage.getItem('supervisor_visit_drafts');
@@ -460,6 +492,16 @@ function VisitWizardContent() {
     c.customerCode.toLowerCase().includes(customerSearch.toLowerCase()) ||
     c.customerName.toLowerCase().includes(customerSearch.toLowerCase())
   );
+
+  // Item counts shown per step in the phase header
+  const stepItemCounts: (string | null)[] = [
+    `${filteredCustomers.length} outlets`,
+    `${powerSkus.length} items`,
+    `${npdSkus.length} items`,
+    `${assets.length} assets`,
+    `${photos.length} photos`,
+    null,
+  ];
 
   return (
     <div className="max-w-2xl mx-auto space-y-5 pb-28">
@@ -545,7 +587,7 @@ function VisitWizardContent() {
         </div>
 
         {/* Step Info Card Header */}
-        <div 
+        <div
           className="p-3 rounded-lg flex items-center justify-between border border-solid border-[var(--border-soft)]"
           style={{ background: 'var(--surface-2)' }}
         >
@@ -553,12 +595,22 @@ function VisitWizardContent() {
             <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Current Phase</p>
             <h3 className="text-[13px] font-extrabold text-[var(--text-primary)] leading-none">{STEP_NAMES[currentStep]}</h3>
           </div>
-          <span 
-            className="text-[10px] font-bold px-2.5 py-1 rounded-full text-white"
-            style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #7C3AED 100%)' }}
-          >
-            Step {currentStep + 1} / 6
-          </span>
+          <div className="flex items-center gap-1.5">
+            {stepItemCounts[currentStep] !== null && (
+              <span
+                className="text-[10px] font-bold px-2.5 py-1 rounded-full"
+                style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}
+              >
+                {stepItemCounts[currentStep]}
+              </span>
+            )}
+            <span
+              className="text-[10px] font-bold px-2.5 py-1 rounded-full text-white"
+              style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #7C3AED 100%)' }}
+            >
+              Step {currentStep + 1} / 6
+            </span>
+          </div>
         </div>
       </div>
 
@@ -666,7 +718,7 @@ function VisitWizardContent() {
                                   {c.customerCode}
                                 </span>
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-solid border-emerald-100">
-                                  Grade {c.classification}
+                                  Class {c.classification}
                                 </span>
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-solid border-blue-100">
                                   {c.channel}
@@ -701,7 +753,7 @@ function VisitWizardContent() {
                           {activeCustomer.customerName}
                         </h3>
                         <p className="text-[11.5px] text-[var(--text-secondary)]">
-                          Code: <b>{activeCustomer.customerCode}</b> · Channel: <b>{activeCustomer.channel}</b> · Classification: <b>Grade {activeCustomer.classification}</b>
+                          Code: <b>{activeCustomer.customerCode}</b> · Channel: <b>{activeCustomer.channel}</b> · Classification: <b>Class {activeCustomer.classification}</b>
                         </p>
                       </div>
                     </div>
@@ -893,17 +945,15 @@ function VisitWizardContent() {
                       <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Mandatory Action Required</label>
                       <select value={ast.actionRequired} onChange={(e) => updateAssetField(ast.assetId, 'actionRequired', e.target.value)} className="form-input h-9 text-[12px]">
                         <option value="None">None</option>
-                        <option value="Cleaning">Cleaning</option>
-                        <option value="Repair">Repair</option>
                         <option value="Replacement">Replacement</option>
-                        <option value="Gas Filling">Gas Filling</option>
+                        <option value="Needs to be Checked">Needs to be Checked</option>
                         <option value="Other">Other</option>
                       </select>
                     </div>
                   </div>
 
                   <div>
-                    <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Observations / Notes</label>
+                    <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Observations / Notes *</label>
                     <input type="text" placeholder="Write observation details…" value={ast.observation}
                       onChange={(e) => updateAssetField(ast.assetId, 'observation', e.target.value)}
                       className="form-input h-9 text-[12px]" />
@@ -1138,7 +1188,7 @@ function VisitWizardContent() {
           style={{ height: '40px', padding: '0 16px', opacity: currentStep === 0 ? 0.35 : 1 }}
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Back
+          {currentStep > 0 ? STEP_NAMES[currentStep - 1] : 'Back'}
         </button>
         {currentStep < 5 && (
           <button
@@ -1152,7 +1202,7 @@ function VisitWizardContent() {
               opacity: (savingDraft || submittingVisit) ? 0.5 : 1,
             }}
           >
-            {isNoVisitFlow ? 'Submit' : currentStep === 4 ? 'Review Summary' : 'Next'}
+            {isNoVisitFlow ? 'Submit' : currentStep === 4 ? 'Review Summary' : STEP_NAMES[currentStep + 1]}
             {isNoVisitFlow ? <ShieldCheck className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </button>
         )}

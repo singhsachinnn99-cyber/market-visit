@@ -54,6 +54,9 @@ export default function AdminDashboardPage() {
   const [fChannel, setFChannel] = useState('');
   const [fClass, setFClass] = useState('');
   const [fCust, setFCust] = useState('');
+  const [fRoute, setFRoute] = useState('');
+  const [fSku, setFSku] = useState('');
+  const [fVertical, setFVertical] = useState('');
 
   // Canvas Refs
   const canvasTrendRef = useRef<HTMLCanvasElement>(null);
@@ -189,7 +192,46 @@ export default function AdminDashboardPage() {
     setFChannel('');
     setFClass('');
     setFCust('');
+    setFRoute('');
+    setFSku('');
+    setFVertical('');
   };
+
+  // NPD Product report-level filter options (SKU-response granularity, not available on visit-level `rows`)
+  const npdRouteOptions = useMemo(
+    () => Array.from(new Set((reportRows.npd || []).map((r: any) => r.routeCode).filter((v: any) => !!v))).sort() as string[],
+    [reportRows]
+  );
+  const npdSkuOptions = useMemo(
+    () => Array.from(new Set((reportRows.npd || []).map((r: any) => r.skuName).filter((v: any) => !!v))).sort() as string[],
+    [reportRows]
+  );
+  const npdVerticalOptions = useMemo(
+    () => Array.from(new Set((reportRows.npd || []).map((r: any) => r.businessVertical).filter((v: any) => !!v))).sort() as string[],
+    [reportRows]
+  );
+
+  // NPD Product rows matching all active filters (date, manager, supervisor, channel, classification, outlet, route, SKU, business vertical)
+  const filteredNpdRows = useMemo(() => {
+    return (reportRows.npd || []).filter((r: any) => {
+      const rowDate = new Date(r.date);
+      const from = normalizeDate(fFrom);
+      const to = normalizeDate(fTo);
+      const week = Math.min(8, Math.max(1, Math.ceil(rowDate.getDate() / 4)));
+      const periodOk = !fTime || (fTime === 'recent' ? week >= 5 : week <= 4);
+      const fromOk = !from || rowDate >= from;
+      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
+      return periodOk && fromOk && toOk
+        && (!fMgr || r.manager === fMgr)
+        && (!fSuper || r.supervisor === fSuper)
+        && (!fChannel || r.channel === fChannel)
+        && (!fClass || r.classification === fClass)
+        && (!fCust || r.outletName === fCust)
+        && (!fRoute || r.routeCode === fRoute)
+        && (!fSku || r.skuName === fSku)
+        && (!fVertical || r.businessVertical === fVertical);
+    });
+  }, [reportRows, fTime, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fSku, fVertical, fFrom, fTo]);
 
   // Filtered rows matching selection
   const filtered = useMemo(() => {
@@ -244,6 +286,11 @@ export default function AdminDashboardPage() {
   };
 
   const handleClearReportFilter = () => {
+    if (reportModalType === 'npd') {
+      setReportModalRows(filteredNpdRows);
+      setReportFilterChip(null);
+      return;
+    }
     const visitLookup = new Map(filtered.map((row) => [row.visitId, row]));
     const matched = (reportRows[reportModalType] || []).filter((row: any) => {
       if (reportModalType === 'cold-chain') {
@@ -297,8 +344,11 @@ export default function AdminDashboardPage() {
     if (fChannel) parts.push(`Channel: <b>${fChannel}</b>`);
     if (fClass) parts.push(`Classification: <b>${fClass}</b>`);
     if (fCust) parts.push(`Outlet: <b>${fCust}</b>`);
+    if (fRoute) parts.push(`Route: <b>${fRoute}</b>`);
+    if (fSku) parts.push(`SKU: <b>${fSku}</b>`);
+    if (fVertical) parts.push(`Business Vertical: <b>${fVertical}</b>`);
     return parts.length ? 'Filtered by ' + parts.join(' · ') : 'Showing all visits';
-  }, [fFrom, fTo, fTime, fMgr, fSuper, fChannel, fClass, fCust]);
+  }, [fFrom, fTo, fTime, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fSku, fVertical]);
 
   // Chart Rendering Hook
   useEffect(() => {
@@ -470,30 +520,65 @@ export default function AdminDashboardPage() {
       });
     }
 
-    // 5. NPD Availability Bar Chart
+    // 5. NPD Availability Bar Chart (SKU-response granularity, percentage-based)
     if (canvasNpdRef.current) {
       if (chartsRef.current.cNpd) chartsRef.current.cNpd.destroy();
-      const npd = countFreq(filtered, (r) => r.npd);
+      const npdTotal = filteredNpdRows.length;
+      const npdCounts = { YES: 0, NO: 0, 'NOT APPLICABLE': 0 } as Record<string, number>;
+      filteredNpdRows.forEach((r: any) => {
+        npdCounts[r.availability] = (npdCounts[r.availability] || 0) + 1;
+      });
+      const npdPct = (key: string) => (npdTotal ? Math.round((npdCounts[key] / npdTotal) * 100) : 0);
+
+      const pctLabelPlugin = {
+        id: 'npdPctLabels',
+        afterDatasetsDraw(chart: any) {
+          const { ctx } = chart;
+          chart.getDatasetMeta(0).data.forEach((bar: any, index: number) => {
+            const value = chart.data.datasets[0].data[index];
+            ctx.save();
+            ctx.fillStyle = textColor;
+            ctx.font = 'bold 11px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${value}%`, bar.x, bar.y - 6);
+            ctx.restore();
+          });
+        },
+      };
+
       chartsRef.current.cNpd = new Chart(canvasNpdRef.current, {
         type: 'bar',
         data: {
           labels: ['Available', 'Not avail.', 'Not req.'],
           datasets: [
             {
-              data: [npd.A || 0, npd.N || 0, npd.X || 0],
+              data: [npdPct('YES'), npdPct('NO'), npdPct('NOT APPLICABLE')],
               backgroundColor: [GREEN, RED, GREY],
               borderRadius: 6,
             },
           ],
         },
+        plugins: [pctLabelPlugin],
         options: {
           maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `${ctx.raw}% of ${npdTotal} responses`,
+              },
+            },
+          },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const npdCode = label === 'Available' ? 'A' : label === 'Not avail.' ? 'N' : 'X';
-              handleDrilldownChartClick('npd', `NPD Availability · ${label}`, (r) => r.npd === npdCode, label === 'Available' || label === 'Not avail.' || label === 'Not req.' ? `Status: ${label}` : undefined);
+              const availabilityCode = label === 'Available' ? 'YES' : label === 'Not avail.' ? 'NO' : 'NOT APPLICABLE';
+              const matched = filteredNpdRows.filter((r: any) => r.availability === availabilityCode);
+              setReportModalType('npd');
+              setReportModalTitle(`NPD Availability · ${label}`);
+              setReportModalRows(matched);
+              setReportFilterChip({ key: 'segment', value: label, label: `Status: ${label}` });
+              setReportModalOpen(true);
             }
           },
           onHover: (e, el, chart) => {
@@ -501,7 +586,7 @@ export default function AdminDashboardPage() {
           },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
-            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: textColor, callback: (v: any) => `${v}%` } },
           },
         },
       });
@@ -581,7 +666,7 @@ export default function AdminDashboardPage() {
         },
       });
     }
-  }, [filtered, isLoading, theme]);
+  }, [filtered, filteredNpdRows, isLoading, theme]);
 
   if (isLoading) {
     return (
@@ -1020,6 +1105,36 @@ export default function AdminDashboardPage() {
               <option value="">All Outlets</option>
               {custOptions.map((c) => (
                 <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="fld">
+            <label>Route (NPD Product)</label>
+            <select value={fRoute} onChange={(e) => setFRoute(e.target.value)}>
+              <option value="">All Routes</option>
+              {npdRouteOptions.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="fld">
+            <label>SKU (NPD Product)</label>
+            <select value={fSku} onChange={(e) => setFSku(e.target.value)}>
+              <option value="">All SKUs</option>
+              {npdSkuOptions.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="fld">
+            <label>Business Vertical (NPD Product)</label>
+            <select value={fVertical} onChange={(e) => setFVertical(e.target.value)}>
+              <option value="">All Verticals</option>
+              {npdVerticalOptions.map((v) => (
+                <option key={v} value={v}>{v}</option>
               ))}
             </select>
           </div>

@@ -134,6 +134,10 @@ async function runMigration() {
       await connection.query('CREATE INDEX `idx_route_supervisor` ON `Route`(`supervisorId`)');
       await connection.query('CREATE INDEX `idx_route_manager` ON `Route`(`managerId`)');
     }
+    const hasSuperName = routeColumns.some((col: any) => col.Field === 'superName');
+    if (!hasSuperName) {
+      await connection.query('ALTER TABLE `Route` ADD COLUMN `superName` VARCHAR(191) NULL');
+    }
 
     // 6. Modify SKU Table
     console.log('Modifying SKU table...');
@@ -142,6 +146,10 @@ async function runMigration() {
     if (!hasSkuType) {
       await connection.query("ALTER TABLE `SKU` ADD COLUMN `type` VARCHAR(50) NOT NULL DEFAULT 'SKU'");
       await connection.query('CREATE INDEX `idx_sku_type` ON `SKU`(`type`)');
+    }
+    const hasBusinessVertical = skuColumns.some((col: any) => col.Field === 'businessVertical');
+    if (!hasBusinessVertical) {
+      await connection.query('ALTER TABLE `SKU` ADD COLUMN `businessVertical` VARCHAR(191) NULL');
     }
 
     // 7. Create PowerSKU Table

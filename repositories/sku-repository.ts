@@ -6,6 +6,7 @@ function mapRowToSKU(row: any): SKU {
     skuCode: row.skuCode,
     skuName: row.skuName,
     type: row.type || 'SKU',
+    businessVertical: row.businessVertical || '',
   };
 }
 
@@ -44,13 +45,15 @@ export const skuRepository = {
 
     for (const sku of skus) {
       const typeVal = sku.type || 'SKU';
+      const businessVerticalVal = sku.businessVertical || null;
       const [res]: any = await pool.execute(
-        `INSERT INTO \`SKU\` (\`skuCode\`, \`skuName\`, \`type\`) 
-         VALUES (?, ?, ?)
-         ON DUPLICATE KEY UPDATE 
+        `INSERT INTO \`SKU\` (\`skuCode\`, \`skuName\`, \`type\`, \`businessVertical\`)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
            \`skuName\` = VALUES(\`skuName\`),
-           \`type\` = VALUES(\`type\`)`,
-        [sku.skuCode, sku.skuName, typeVal]
+           \`type\` = VALUES(\`type\`),
+           \`businessVertical\` = VALUES(\`businessVertical\`)`,
+        [sku.skuCode, sku.skuName, typeVal, businessVerticalVal]
       );
       if (res.affectedRows === 1) {
         inserted++;

@@ -35,6 +35,7 @@ const DEFAULT_MAPPINGS: Record<string, string[]> = {
   Super: ['super', 'supervisor', 'supername', 'supervisorname', 'super_name'],
   Manager: ['manager', 'mgr', 'mngr', 'managername', 'manager_name'],
   Type: ['type', 'skutype', 'itemtype', 'sku_type', 'category_type'],
+  BusinessVertical: ['businessvertical', 'vertical', 'productvertical', 'bu', 'business_vertical'],
 };
 
 /**
@@ -169,12 +170,14 @@ export function checkMissingFields(
     }
   }
 
-  // Check optional fields too (like Type on skuMaster)
+  // Check optional fields too (like Type/BusinessVertical on skuMaster)
   if (type === 'skuMaster') {
-    const aliases = config['Type'] || [];
-    const { header, score } = findBestHeaderMatch(headers, 'Type', aliases);
-    if (score >= 0.6 && header) {
-      foundMapping['Type'] = header;
+    for (const optionalField of ['Type', 'BusinessVertical']) {
+      const aliases = config[optionalField] || [];
+      const { header, score } = findBestHeaderMatch(headers, optionalField, aliases);
+      if (score >= 0.6 && header) {
+        foundMapping[optionalField] = header;
+      }
     }
   }
 
@@ -347,12 +350,14 @@ export function mergeParsedData(parsedFiles: ParsedFileResult[]): { payload: Par
     const skuCodeCol = f.mapping['SKUCode'];
     const skuNameCol = f.mapping['SKUName'];
     const typeCol = f.mapping['Type'];
+    const businessVerticalCol = f.mapping['BusinessVertical'];
 
     f.data.forEach((row, index) => {
       const rowNum = index + 2;
       const skuCode = String(row[skuCodeCol] || '').trim();
       const skuName = String(row[skuNameCol] || '').trim();
       const typeVal = typeCol ? String(row[typeCol] || '').trim() : 'Standard';
+      const businessVerticalVal = businessVerticalCol ? String(row[businessVerticalCol] || '').trim() : '';
 
       if (!skuCode) {
         errors.push({ row: rowNum, error: `${f.fileName}: Row is missing SKUCode value.` });
@@ -362,7 +367,7 @@ export function mergeParsedData(parsedFiles: ParsedFileResult[]): { payload: Par
       }
 
       if (skuCode && skuName) {
-        skuMap.set(skuCode, { skuCode, skuName, type: typeVal });
+        skuMap.set(skuCode, { skuCode, skuName, type: typeVal, businessVertical: businessVerticalVal });
       }
     });
   });

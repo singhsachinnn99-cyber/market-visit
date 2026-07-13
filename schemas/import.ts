@@ -20,6 +20,7 @@ export const customerRouteMappingImportSchema = z.object({
 export const skuImportSchema = z.object({
   SKUCode: z.string().min(1, { message: 'SKUCode is required' }),
   SKUName: z.string().min(1, { message: 'SKUName is required' }),
+  BusinessVertical: z.string().optional(),
 });
 
 // Zod schemas for CUSTMASTER and Classification files

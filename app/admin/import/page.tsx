@@ -608,6 +608,27 @@ export default function MasterImportPage() {
             ))}
           </div>
 
+          {summary.unmappedSupervisors && summary.unmappedSupervisors.length > 0 && (
+            <div className="card p-5 w-full max-w-md text-left" style={{ borderColor: 'var(--warning)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="h-4 w-4" style={{ color: 'var(--warning)' }} />
+                <p className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>
+                  {summary.unmappedSupervisors.length} Supervisor Name(s) Not Found
+                </p>
+              </div>
+              <p className="text-[12px] mb-3" style={{ color: 'var(--text-muted)' }}>
+                These routes were imported without a supervisor because the name below does not match any existing account. Create the supervisor on the{' '}
+                <a href="/admin/supervisors" className="font-semibold underline" style={{ color: 'var(--accent)' }}>Supervisors page</a>{' '}
+                using the exact name — their routes and outlets will be linked automatically.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {summary.unmappedSupervisors.map((name) => (
+                  <span key={name} className="badge badge-warning">{name}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
           <button onClick={handleReset} className="btn-ghost">
             Import New Masters
           </button>

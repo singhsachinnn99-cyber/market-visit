@@ -3,6 +3,8 @@
 import { auth } from '@/lib/auth';
 import { visitRepository } from '@/repositories/visit-repository';
 import { routeRepository } from '@/repositories/route-repository';
+import { customerRepository } from '@/repositories/customer-repository';
+import { skuRepository } from '@/repositories/sku-repository';
 import { visitSchema, visitDraftSchema, VisitInput, VisitDraftInput } from '@/schemas/visit';
 import { auditService } from '@/services/audit-service';
 import { Visit, VisitPhoto, NPDResponse, VisitAsset, VisitPowerSkuResult } from '@/types';
@@ -221,6 +223,21 @@ export async function submitVisitAction(data: VisitInput) {
     const isAssigned = await routeRepository.isRouteAssignedToSupervisor(routeCode, user.id);
     if (!isAssigned) {
       throw new Error('Forbidden: Selected Route is not assigned to you.');
+    }
+  }
+
+  if (input.visit_type !== 'No Visit') {
+    const npdSkus = await skuRepository.getSkusByType('NPD');
+    if (npdSkus.length > 0 && Object.keys(input.npdResponses).length < npdSkus.length) {
+      throw new Error('Every item in the NPD Checklist must be answered before submitting.');
+    }
+
+    const customer = (await customerRepository.getAllCustomers()).find((c) => c.cust_rt_id === input.cust_rt_id);
+    if (customer) {
+      const powerSkus = await skuRepository.getPowerSkusByChannel(customer.channel);
+      if (powerSkus.length > 0 && Object.keys(input.powerSkuResults).length < powerSkus.length) {
+        throw new Error('Every item in the Power SKU Checklist must be answered before submitting.');
+      }
     }
   }
 

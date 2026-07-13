@@ -2,6 +2,7 @@
 
 import { auth } from '@/lib/auth';
 import { userRepository } from '@/repositories/user-repository';
+import { routeRepository } from '@/repositories/route-repository';
 import { supervisorSchema, SupervisorInput } from '@/schemas/supervisor';
 import { auditService } from '@/services/audit-service';
 import { canAccessAdminRoute } from '@/lib/roles';
@@ -78,14 +79,17 @@ export async function createSupervisorAction(data: SupervisorInput) {
     status,
   });
 
+  const backfilledRoutes = await routeRepository.backfillSupervisorByName(newUser.id, name);
+
   const adminUser = session.user?.email || 'Admin';
   await auditService.logAction(
     adminUser,
     'Create User',
-    `Created supervisor user: ${name} (${employeeCode})`
+    `Created supervisor user: ${name} (${employeeCode})` +
+      (backfilledRoutes > 0 ? `. Backfilled ${backfilledRoutes} previously-unmapped route(s) from Route Master import.` : '')
   );
 
-  return { success: true, userId: newUser.id };
+  return { success: true, userId: newUser.id, backfilledRoutes };
 }
 
 export async function updateSupervisorAction(id: string, data: SupervisorInput) {

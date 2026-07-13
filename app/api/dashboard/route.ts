@@ -197,7 +197,7 @@ export async function GET(req: NextRequest) {
           outletCode: customerCode || '',
           outletName: custName,
           classification: gr,
-          businessVertical: inferBusinessVertical(skuName),
+          businessVertical: sku?.businessVertical || inferBusinessVertical(skuName),
           skuName,
           availability: response.status === 'Available' ? 'YES' : response.status === 'Not Available' ? 'NO' : 'NOT APPLICABLE',
         });
@@ -216,7 +216,7 @@ export async function GET(req: NextRequest) {
           outletCode: customerCode || '',
           outletName: custName,
           classification: gr,
-          businessVertical: inferBusinessVertical(skuName),
+          businessVertical: sku?.businessVertical || inferBusinessVertical(skuName),
           skuName,
           availability: result.status === 'Available' ? 'YES' : result.status === 'Not Available' ? 'NO' : 'NOT APPLICABLE',
         });

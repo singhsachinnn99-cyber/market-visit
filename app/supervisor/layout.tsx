@@ -23,7 +23,18 @@ import {
   MapPin,
   BarChart3,
   ArrowLeft,
+  Thermometer,
 } from 'lucide-react';
+import { isFleetRole } from '@/lib/roles';
+
+const FLEET_NAV_GROUPS = [
+  {
+    label: 'Operations',
+    items: [
+      { name: 'Cold Chain Status', path: '/supervisor', icon: Thermometer },
+    ],
+  },
+];
 
 const navGroups = [
   {
@@ -125,6 +136,8 @@ export default function SupervisorLayout({ children }: { children: React.ReactNo
   const initial = user?.name ? user.name.charAt(0).toUpperCase() : 'S';
   const userName = user?.name || 'Supervisor';
   const userRole = user?.role || 'Supervisor';
+  const isFleet = isFleetRole(userRole);
+  const visibleNavGroups = isFleet ? FLEET_NAV_GROUPS : navGroups;
 
   // Close user menu on outside click
   useEffect(() => {
@@ -215,7 +228,7 @@ export default function SupervisorLayout({ children }: { children: React.ReactNo
 
         {/* Navigation */}
         <nav className="flex-grow overflow-y-auto px-3 py-4 space-y-5">
-          {navGroups.map((group) => (
+          {visibleNavGroups.map((group) => (
             <div key={group.label}>
               <p
                 className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-widest"
@@ -239,7 +252,7 @@ export default function SupervisorLayout({ children }: { children: React.ReactNo
                         style={{ opacity: active ? 1 : 0.6 }}
                       />
                       <span>{item.name}</span>
-                      {(item.path === '/supervisor' || item.path === '/supervisor/reports') && (
+                      {!isFleet && (item.path === '/supervisor' || item.path === '/supervisor/reports') && (
                         <span className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
                           No Visit {noVisitCount}
                         </span>
@@ -534,6 +547,22 @@ export default function SupervisorLayout({ children }: { children: React.ReactNo
       </div>
 
       {/* ── Bottom Sticky Tab-Bar (Mobile Devices Only) ── */}
+      {isFleet ? (
+        <footer
+          className="md:hidden fixed bottom-0 left-0 right-0 z-45 py-2 px-3 flex items-center justify-center"
+          style={{
+            background: 'var(--surface)',
+            borderTop: '1px solid var(--border)',
+            boxShadow: '0 -8px 24px rgba(0,0,0,0.05)',
+            height: '64px',
+          }}
+        >
+          <div className="flex flex-col items-center justify-center gap-0.5" style={{ color: 'var(--accent)' }}>
+            <Thermometer className="h-5 w-5" />
+            <span className="text-[9px] tracking-wide font-semibold" style={{ fontWeight: 700 }}>Cold Chain Status</span>
+          </div>
+        </footer>
+      ) : (
       <footer
         className="md:hidden fixed bottom-0 left-0 right-0 z-45 py-2 px-3 flex items-center justify-around"
         style={{
@@ -638,6 +667,7 @@ export default function SupervisorLayout({ children }: { children: React.ReactNo
           )}
         </Link>
       </footer>
+      )}
     </div>
   );
 }

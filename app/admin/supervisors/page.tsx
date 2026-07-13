@@ -4,10 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supervisorSchema, SupervisorInput } from '@/schemas/supervisor';
-import {
-  getSupervisorsAction, createSupervisorAction,
-  updateSupervisorAction, disableSupervisorAction,
-} from '@/actions/supervisor-actions';
+import { getSupervisorsAction, createSupervisorAction, updateSupervisorAction, disableSupervisorAction, } 
+from '@/actions/supervisor-actions';
 import { useToast } from '@/components/ui/toast';
 import { ConfirmationDialog } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -81,8 +79,13 @@ export default function SupervisorsPage() {
         showToast('Supervisor updated.', 'success');
       } else {
         if (!data.password?.trim()) { showToast('Password is required.', 'error'); setSubmitting(false); return; }
-        await createSupervisorAction(data);
-        showToast('Supervisor created.', 'success');
+        const result = await createSupervisorAction(data);
+        showToast(
+          result.backfilledRoutes > 0
+            ? `Supervisor created. Linked ${result.backfilledRoutes} previously-unmapped route(s) to this account.`
+            : 'Supervisor created.',
+          'success'
+        );
       }
       setModalOpen(false);
       fetchSupervisors();

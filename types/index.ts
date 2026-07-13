@@ -4,7 +4,7 @@ export type UserRole = 'GM' | 'BDM' | 'Sales Manager' | 'Admin' | 'Supervisor' |
 export type UserStatus = 'Active' | 'Inactive';
 export type VisitStatus = 'Draft' | 'Submitted';
 export type AssetType = 'Chiller' | 'Freezer';
-export type ActionRequiredType = 'Cleaning' | 'Repair' | 'Replacement' | 'Gas Filling' | 'Other' | 'None';
+export type ActionRequiredType = 'Cleaning' | 'Repair' | 'Replacement' | 'Gas Filling' | 'Needs to be Checked' | 'Other' | 'None';
 export type NPDStatus = 'Available' | 'Not Available' | 'Not Required';
 
 export interface User {
@@ -26,7 +26,7 @@ export interface Route {
   channel: string;
   supervisorId?: string | null;
   managerId?: string | null;
-  superName?: string; // transient for UI/parsing
+  superName?: string; // persisted intended supervisor name, kept even when unmapped so it can be backfilled later
   managerName?: string; // transient for UI/parsing
 }
 
@@ -49,6 +49,7 @@ export interface SKU {
   skuCode: string;
   skuName: string;
   type: string; // 'SKU', 'NPD'
+  businessVertical?: string;
 }
 
 export interface PowerSKU {

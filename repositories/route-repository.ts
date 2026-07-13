@@ -8,6 +8,7 @@ function mapRowToRoute(row: any): Route {
     channel: row.channel,
     supervisorId: row.supervisorId,
     managerId: row.managerId,
+    superName: row.superName,
   };
 }
 
@@ -41,16 +42,18 @@ export const routeRepository = {
       const supervisorId = route.supervisorId || null;
       const managerId = route.managerId || null;
       const channel = route.channel || 'GT';
+      const superName = route.superName || null;
 
       const [res]: any = await pool.execute(
-        `INSERT INTO \`Route\` (\`routeCode\`, \`routeName\`, \`channel\`, \`supervisorId\`, \`managerId\`) 
-         VALUES (?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE 
+        `INSERT INTO \`Route\` (\`routeCode\`, \`routeName\`, \`channel\`, \`supervisorId\`, \`managerId\`, \`superName\`)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
            \`routeName\` = VALUES(\`routeName\`),
            \`channel\` = VALUES(\`channel\`),
            \`supervisorId\` = VALUES(\`supervisorId\`),
-           \`managerId\` = VALUES(\`managerId\`)`,
-        [route.routeCode, route.routeName, channel, supervisorId, managerId]
+           \`managerId\` = VALUES(\`managerId\`),
+           \`superName\` = VALUES(\`superName\`)`,
+        [route.routeCode, route.routeName, channel, supervisorId, managerId, superName]
       );
       if (res.affectedRows === 1) {
         inserted++;
@@ -60,6 +63,23 @@ export const routeRepository = {
     }
 
     return { inserted, updated };
+  },
+
+  async backfillSupervisorByName(supervisorId: string, supervisorName: string): Promise<number> {
+    const normalizedName = supervisorName.trim().toLowerCase().replace(/\s+/g, '');
+    const [rows]: any = await pool.execute(
+      'SELECT `routeCode` FROM `Route` WHERE `supervisorId` IS NULL AND `superName` IS NOT NULL AND LOWER(REPLACE(`superName`, \' \', \'\')) = ?',
+      [normalizedName]
+    );
+    if (rows.length === 0) return 0;
+
+    const routeCodes = rows.map((r: any) => r.routeCode);
+    const placeholders = routeCodes.map(() => '?').join(',');
+    const [result]: any = await pool.execute(
+      `UPDATE \`Route\` SET \`supervisorId\` = ? WHERE \`routeCode\` IN (${placeholders})`,
+      [supervisorId, ...routeCodes]
+    );
+    return result.affectedRows || 0;
   },
 
   async clearObsoleteRoutes(activeCodes: string[]): Promise<number> {

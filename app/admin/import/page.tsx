@@ -226,7 +226,7 @@ export default function MasterImportPage() {
     {
       key: 'routeMaster' as const,
       name: 'ROUTE MASTER.xlsx',
-      label: 'Route Master File',
+      label: 'Route Master ',
       description: 'Contains RouteCode and RouteName columns.',
       required: true,
       ref: routeMasterRef,
@@ -237,7 +237,7 @@ export default function MasterImportPage() {
     {
       key: 'custMaster' as const,
       name: 'CUSTMASTER.xlsx',
-      label: 'Customer Mappings File',
+      label: 'Customer Mappings ',
       description: 'Contains CustomerCode, CustomerName, and RouteCode columns.',
       required: true,
       ref: custMasterRef,
@@ -248,7 +248,7 @@ export default function MasterImportPage() {
     {
       key: 'skuMaster' as const,
       name: 'SKUMASTER.xlsx',
-      label: 'SKU Master File',
+      label: 'SKU Master ',
       description: 'Contains SKUCode and SKUName columns.',
       required: true,
       ref: skuMasterRef,
@@ -259,7 +259,7 @@ export default function MasterImportPage() {
     {
       key: 'classification' as const,
       name: 'Customer_Classification_DUMMY.xlsx',
-      label: 'Customer Classification File',
+      label: 'Customer Classification ',
       description: 'Contains CustomerCode, Classification, and Channel columns.',
       required: true,
       ref: classificationRef,
@@ -270,9 +270,9 @@ export default function MasterImportPage() {
     {
       key: 'powerSkuMaster' as const,
       name: 'PowerSku_Master_DUMMY.xlsx',
-      label: 'Power SKU Master File (Optional)',
+      label: 'Power SKU Master  (Optional)',
       description: 'Contains additional Power SKU codes and names.',
-      required: false,
+      required: true,
       ref: powerSkuMasterRef,
       icon: Package,
       color: '#EC4899',
@@ -389,7 +389,7 @@ export default function MasterImportPage() {
                           e.stopPropagation();
                           handleValidateSingle(fdDef.key);
                         }}
-                        className="px-3 py-1.5 text-[11px] font-bold text-white rounded-lg bg-accent hover:bg-accent-hover transition-all flex items-center gap-1 shadow-sm"
+                        className="px-3 py-1.5 text-[11px] font-bold text-blue-600 rounded-lg bg-accent hover:bg-accent-hover transition-all flex items-center gap-1 shadow-sm"
                       >
                         <RefreshCw className="h-3 w-3" />
                         Import This

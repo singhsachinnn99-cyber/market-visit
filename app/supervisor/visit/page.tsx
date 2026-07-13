@@ -945,7 +945,7 @@ function VisitWizardContent() {
                       <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Mandatory Action Required</label>
                       <select value={ast.actionRequired} onChange={(e) => updateAssetField(ast.assetId, 'actionRequired', e.target.value)} className="form-input h-9 text-[12px]">
                         <option value="None">None</option>
-                        <option value="Replacement">Replacement</option>
+                        {/* <option value="Replacement">Replacement</option> */}
                         <option value="Needs to be Checked">Needs to be Checked</option>
                         <option value="Other">Other</option>
                       </select>

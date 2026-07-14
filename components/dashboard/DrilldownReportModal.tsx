@@ -114,7 +114,7 @@ function buildSummaryText(reportType: string, rows: Record<string, unknown>[]) {
 
   if (reportType === 'classification') {
     const counts = rows.reduce<Record<string, number>>((acc, row) => {
-      const cls = row.class || '—';
+      const cls = (row.class as string) || '—';
       acc[cls] = (acc[cls] || 0) + 1;
       return acc;
     }, {});
@@ -251,7 +251,7 @@ export default function DrilldownReportModal({
 
   const filteredData = useMemo(() => {
     const filtered = rows.filter((row) => {
-      const rowDate = normalizeDate(row.date) || normalizeDate(row.createdAt);
+      const rowDate = normalizeDate(row.date as string | undefined) || normalizeDate(row.createdAt as string | undefined);
       const fromDate = normalizeDate(fFrom);
       const toDate = normalizeDate(fTo);
       const startsAfterFrom = !fromDate || (rowDate ? rowDate >= fromDate : true);
@@ -286,8 +286,8 @@ export default function DrilldownReportModal({
       const isStatus = sortField === 'tempStatus';
 
       if (isDate) {
-        const aTime = new Date(a.date || 0).getTime();
-        const bTime = new Date(b.date || 0).getTime();
+        const aTime = new Date((a.date as string) || 0).getTime();
+        const bTime = new Date((b.date as string) || 0).getTime();
         return sortOrder === 'asc' ? aTime - bTime : bTime - aTime;
       }
 
@@ -523,12 +523,12 @@ export default function DrilldownReportModal({
                     {columns.map((column) => (
                       <td key={column.key} className="px-3 py-3 text-[12px] whitespace-nowrap text-[var(--text-primary)]">
                         {column.key === 'classification' && row.classification ? (
-                          <span className="inline-grid place-items-center w-6 h-6 rounded-md text-white font-bold text-[10px]" style={{ background: GCOL[row.classification] || '#9aa9b4' }}>
-                            {row.classification}
+                          <span className="inline-grid place-items-center w-6 h-6 rounded-md text-white font-bold text-[10px]" style={{ background: GCOL[row.classification as string] || '#9aa9b4' }}>
+                            {row.classification as string}
                           </span>
                         ) : column.key === 'class' && row.class ? (
-                          <span className="inline-grid place-items-center w-6 h-6 rounded-md text-white font-bold text-[10px]" style={{ background: GCOL[row.class] || '#9aa9b4' }}>
-                            {row.class}
+                          <span className="inline-grid place-items-center w-6 h-6 rounded-md text-white font-bold text-[10px]" style={{ background: GCOL[row.class as string] || '#9aa9b4' }}>
+                            {row.class as string}
                           </span>
                         ) : column.key === 'availability' && row.availability === 'NO' ? (
                           <span className="inline-flex items-center rounded-full bg-red-500/12 px-2.5 py-1 text-[10px] font-semibold text-red-600">{getCellValue(row, column.key)}</span>
@@ -554,14 +554,14 @@ export default function DrilldownReportModal({
             {paginatedData.length > 0 ? paginatedData.map((row, index) => (
               <div key={`${row.visitId}-${index}`} className="p-4 bg-[var(--surface)] hover:bg-[var(--surface-2)] transition-colors space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="font-mono text-[11px] font-bold text-[var(--accent)]">{row.visitId}</div>
-                  <div className="text-[11px] text-[var(--text-muted)]">{formatDisplayDate(row.date)}</div>
+                  <div className="font-mono text-[11px] font-bold text-[var(--accent)]">{row.visitId as string}</div>
+                  <div className="text-[11px] text-[var(--text-muted)]">{formatDisplayDate(row.date as string | undefined)}</div>
                 </div>
                 <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11.5px] text-[var(--text-muted)]">
-                  <div><span className="font-semibold text-[10px] uppercase block">Outlet</span>{row.outletName}</div>
-                  <div><span className="font-semibold text-[10px] uppercase block">Channel</span>{row.channel}</div>
-                  <div><span className="font-semibold text-[10px] uppercase block">Supervisor</span>{row.supervisor}</div>
-                  <div><span className="font-semibold text-[10px] uppercase block">Manager</span>{row.manager}</div>
+                  <div><span className="font-semibold text-[10px] uppercase block">Outlet</span>{row.outletName as string}</div>
+                  <div><span className="font-semibold text-[10px] uppercase block">Channel</span>{row.channel as string}</div>
+                  <div><span className="font-semibold text-[10px] uppercase block">Supervisor</span>{row.supervisor as string}</div>
+                  <div><span className="font-semibold text-[10px] uppercase block">Manager</span>{row.manager as string}</div>
                 </div>
               </div>
             )) : (

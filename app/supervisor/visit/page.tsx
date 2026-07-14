@@ -426,7 +426,7 @@ function VisitWizardContent() {
         cust_rt_id: effectiveCustomerId,
         routeCode: selectedRoute,
         customerCode: activeCustomer?.customerCode || '',
-        assets: assets.map(a => ({
+        assets: visitType === 'No Visit' ? [] : assets.map(a => ({
           ...a,
           temperature: Number(a.temperature) || 0,
           tempInRange: getTempInRange(a.assetType, Number(a.temperature))

@@ -368,11 +368,13 @@ export default function AdminDashboardPage() {
       return m;
     };
 
-    // 1. Trend Line Chart
+    // 1. Trend Line Chart (percentage-based)
     if (canvasTrendRef.current) {
       if (chartsRef.current.cTrend) chartsRef.current.cTrend.destroy();
       const wk = countFreq(filtered, (r) => r.week);
       const weeks = [1, 2, 3, 4, 5, 6, 7, 8];
+      const trendTotal = filtered.length;
+      const trendPct = (w: number) => (trendTotal ? Math.round(((wk[w] || 0) / trendTotal) * 100) : 0);
       chartsRef.current.cTrend = new Chart(canvasTrendRef.current, {
         type: 'line',
         data: {
@@ -380,7 +382,7 @@ export default function AdminDashboardPage() {
           datasets: [
             {
               label: 'Visits',
-              data: weeks.map((w) => wk[w] || 0),
+              data: weeks.map((w) => trendPct(w)),
               borderColor: BLUE,
               backgroundColor: 'rgba(79,70,229,.12)',
               fill: true,
@@ -392,7 +394,10 @@ export default function AdminDashboardPage() {
         },
         options: {
           maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.raw}% of ${trendTotal} visits` } },
+          },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
@@ -405,24 +410,26 @@ export default function AdminDashboardPage() {
           },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
-            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: textColor, callback: (v: any) => `${v}%` } },
           },
         },
       });
     }
 
-    // 2. Channel Doughnut Chart
+    // 2. Channel Doughnut Chart (percentage-based)
     if (canvasChannelRef.current) {
       if (chartsRef.current.cChannel) chartsRef.current.cChannel.destroy();
       const ch = countFreq(filtered, (r) => r.ch);
       const chL = ['TT', 'MT', 'INST', 'EXPORT'];
+      const chTotal = filtered.length;
+      const chPct = (c: string) => (chTotal ? Math.round(((ch[c] || 0) / chTotal) * 100) : 0);
       chartsRef.current.cChannel = new Chart(canvasChannelRef.current, {
         type: 'doughnut',
         data: {
           labels: chL,
           datasets: [
             {
-              data: chL.map((c) => ch[c] || 0),
+              data: chL.map((c) => chPct(c)),
               backgroundColor: [BLUE, GREEN, AMBER, BLUE_DEEP],
               borderWidth: 0,
             },
@@ -431,7 +438,10 @@ export default function AdminDashboardPage() {
         options: {
           maintainAspectRatio: false,
           cutout: '62%',
-          plugins: { legend: { position: 'bottom', labels: { color: textColor } } },
+          plugins: {
+            legend: { position: 'bottom', labels: { color: textColor } },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw}%` } },
+          },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
@@ -445,13 +455,32 @@ export default function AdminDashboardPage() {
       });
     }
 
-    // 3. Supervisor Scorecard Bar Chart
+    // 3. Supervisor Scorecard Bar Chart (percentage-based)
     if (canvasSuperRef.current) {
       if (chartsRef.current.cSuper) chartsRef.current.cSuper.destroy();
       const sc = countFreq(filtered, (r) => r.sup);
       const topSup = Object.entries(sc)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 8);
+      const superTotal = filtered.length;
+      const superPct = (count: number) => (superTotal ? Math.round((count / superTotal) * 100) : 0);
+
+      const superPctLabelPlugin = {
+        id: 'superPctLabels',
+        afterDatasetsDraw(chart: any) {
+          const { ctx } = chart;
+          chart.getDatasetMeta(0).data.forEach((bar: any, index: number) => {
+            const value = chart.data.datasets[0].data[index];
+            ctx.save();
+            ctx.fillStyle = textColor;
+            ctx.font = 'bold 11px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${value}%`, bar.x, bar.y - 6);
+            ctx.restore();
+          });
+        },
+      };
+
       chartsRef.current.cSuper = new Chart(canvasSuperRef.current, {
         type: 'bar',
         data: {
@@ -459,15 +488,19 @@ export default function AdminDashboardPage() {
           datasets: [
             {
               label: 'Visits',
-              data: topSup.map((x) => x[1]),
+              data: topSup.map((x) => superPct(x[1])),
               backgroundColor: BLUE,
               borderRadius: 6,
             },
           ],
         },
+        plugins: [superPctLabelPlugin],
         options: {
           maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.raw}% of ${superTotal} visits` } },
+          },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
@@ -479,24 +512,26 @@ export default function AdminDashboardPage() {
           },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
-            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: textColor, callback: (v: any) => `${v}%` } },
           },
         },
       });
     }
 
-    // 4. Cold Chain Doughnut Chart
+    // 4. Cold Chain Doughnut Chart (percentage-based)
     if (canvasTempRef.current) {
       if (chartsRef.current.cTemp) chartsRef.current.cTemp.destroy();
       const ok = filtered.filter((r) => r.ok).length;
       const breaches = filtered.filter((r) => !r.ok).length;
+      const tempTotal = filtered.length;
+      const tempPct = (count: number) => (tempTotal ? Math.round((count / tempTotal) * 100) : 0);
       chartsRef.current.cTemp = new Chart(canvasTempRef.current, {
         type: 'doughnut',
         data: {
           labels: ['Within range', 'Breach'],
           datasets: [
             {
-              data: [ok, breaches],
+              data: [tempPct(ok), tempPct(breaches)],
               backgroundColor: [GREEN, RED],
               borderWidth: 0,
             },
@@ -505,7 +540,10 @@ export default function AdminDashboardPage() {
         options: {
           maintainAspectRatio: false,
           cutout: '62%',
-          plugins: { legend: { position: 'bottom', labels: { color: textColor } } },
+          plugins: {
+            legend: { position: 'bottom', labels: { color: textColor } },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw}%` } },
+          },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
@@ -592,25 +630,48 @@ export default function AdminDashboardPage() {
       });
     }
 
-    // 6. Focus SKU Availability Bar Chart
+    // 6. Focus SKU Availability Bar Chart (percentage-based)
     if (canvasPskuRef.current) {
       if (chartsRef.current.cPsku) chartsRef.current.cPsku.destroy();
       const psku = countFreq(filtered, (r) => r.psku);
+      const pskuTotal = filtered.length;
+      const pskuPct = (count: number) => (pskuTotal ? Math.round((count / pskuTotal) * 100) : 0);
+
+      const pskuPctLabelPlugin = {
+        id: 'pskuPctLabels',
+        afterDatasetsDraw(chart: any) {
+          const { ctx } = chart;
+          chart.getDatasetMeta(0).data.forEach((bar: any, index: number) => {
+            const value = chart.data.datasets[0].data[index];
+            ctx.save();
+            ctx.fillStyle = textColor;
+            ctx.font = 'bold 11px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${value}%`, bar.x, bar.y - 6);
+            ctx.restore();
+          });
+        },
+      };
+
       chartsRef.current.cPsku = new Chart(canvasPskuRef.current, {
         type: 'bar',
         data: {
           labels: ['Available', 'Not avail.', 'Not req.'],
           datasets: [
             {
-              data: [psku.A || 0, psku.N || 0, psku.X || 0],
+              data: [pskuPct(psku.A || 0), pskuPct(psku.N || 0), pskuPct(psku.X || 0)],
               backgroundColor: [GREEN, RED, GREY],
               borderRadius: 6,
             },
           ],
         },
+        plugins: [pskuPctLabelPlugin],
         options: {
           maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.raw}% of ${pskuTotal} visits` } },
+          },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
@@ -623,17 +684,36 @@ export default function AdminDashboardPage() {
           },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
-            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: textColor, callback: (v: any) => `${v}%` } },
           },
         },
       });
     }
 
-    // 7. Classification Bar Chart
+    // 7. Classification Bar Chart (percentage-based)
     if (canvasClassRef.current) {
       if (chartsRef.current.cClass) chartsRef.current.cClass.destroy();
       const cl = countFreq(filtered, (r) => r.gr);
       const grades = ['A', 'B', 'C', 'D', 'E'];
+      const classTotal = filtered.length;
+      const classPct = (count: number) => (classTotal ? Math.round((count / classTotal) * 100) : 0);
+
+      const classPctLabelPlugin = {
+        id: 'classPctLabels',
+        afterDatasetsDraw(chart: any) {
+          const { ctx } = chart;
+          chart.getDatasetMeta(0).data.forEach((bar: any, index: number) => {
+            const value = chart.data.datasets[0].data[index];
+            ctx.save();
+            ctx.fillStyle = textColor;
+            ctx.font = 'bold 11px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${value}%`, bar.x, bar.y - 6);
+            ctx.restore();
+          });
+        },
+      };
+
       chartsRef.current.cClass = new Chart(canvasClassRef.current, {
         type: 'bar',
         data: {
@@ -641,15 +721,19 @@ export default function AdminDashboardPage() {
           datasets: [
             {
               label: 'Visits',
-              data: grades.map((g) => cl[g] || 0),
+              data: grades.map((g) => classPct(cl[g] || 0)),
               backgroundColor: grades.map((g) => GCOL[g]),
               borderRadius: 6,
             },
           ],
         },
+        plugins: [classPctLabelPlugin],
         options: {
           maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.raw}% of ${classTotal} visits` } },
+          },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
@@ -661,7 +745,7 @@ export default function AdminDashboardPage() {
           },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
-            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: textColor, callback: (v: any) => `${v}%` } },
           },
         },
       });
@@ -1253,7 +1337,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         </div>
-
+ 
         {/* Chart Row 3 */}
         <div className="grid3">
           <div className="panel">

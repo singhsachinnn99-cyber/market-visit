@@ -392,6 +392,27 @@ export default function SupervisorDashboard() {
       return m;
     };
 
+    const createBarPctLabelPlugin = () => ({
+      id: 'barPctLabels',
+      afterDatasetsDraw(chart: any) {
+        const { ctx } = chart;
+        const dataset = chart.data.datasets[0];
+        chart.getDatasetMeta(0).data.forEach((bar: any, index: number) => {
+          const value = dataset.data[index];
+          if (typeof value !== 'number') return;
+          ctx.save();
+          ctx.font = '600 11px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.24)';
+          ctx.shadowBlur = 4;
+          ctx.fillText(`${value}%`, bar.x, bar.y - 8);
+          ctx.restore();
+        });
+      },
+    });
+
     // 1. Trend Line Chart (percentage-based)
     if (canvasTrendRef.current) {
       if (chartsRef.current.cTrend) chartsRef.current.cTrend.destroy();
@@ -489,22 +510,6 @@ export default function SupervisorDashboard() {
       const superTotal = filtered.length;
       const superPct = (count: number) => (superTotal ? Math.round((count / superTotal) * 100) : 0);
 
-      const superPctLabelPlugin = {
-        id: 'superPctLabels',
-        afterDatasetsDraw(chart: any) {
-          const { ctx } = chart;
-          chart.getDatasetMeta(0).data.forEach((bar: any, index: number) => {
-            const value = chart.data.datasets[0].data[index];
-            ctx.save();
-            ctx.fillStyle = textColor;
-            ctx.font = 'bold 11px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`${value}%`, bar.x, bar.y - 6);
-            ctx.restore();
-          });
-        },
-      };
-
       chartsRef.current.cSuper = new Chart(canvasSuperRef.current, {
         type: 'bar',
         data: {
@@ -518,7 +523,7 @@ export default function SupervisorDashboard() {
             },
           ],
         },
-        plugins: [superPctLabelPlugin],
+        plugins: [createBarPctLabelPlugin()],
         options: {
           maintainAspectRatio: false,
           plugins: {
@@ -592,22 +597,6 @@ export default function SupervisorDashboard() {
       });
       const npdPct = (key: string) => (npdTotal ? Math.round((npdCounts[key] / npdTotal) * 100) : 0);
 
-      const pctLabelPlugin = {
-        id: 'npdPctLabels',
-        afterDatasetsDraw(chart: any) {
-          const { ctx } = chart;
-          chart.getDatasetMeta(0).data.forEach((bar: any, index: number) => {
-            const value = chart.data.datasets[0].data[index];
-            ctx.save();
-            ctx.fillStyle = textColor;
-            ctx.font = 'bold 11px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`${value}%`, bar.x, bar.y - 6);
-            ctx.restore();
-          });
-        },
-      };
-
       chartsRef.current.cNpd = new Chart(canvasNpdRef.current, {
         type: 'bar',
         data: {
@@ -620,7 +609,7 @@ export default function SupervisorDashboard() {
             },
           ],
         },
-        plugins: [pctLabelPlugin],
+        plugins: [createBarPctLabelPlugin()],
         options: {
           maintainAspectRatio: false,
           plugins: {
@@ -661,22 +650,6 @@ export default function SupervisorDashboard() {
       const pskuTotal = filtered.length;
       const pskuPct = (count: number) => (pskuTotal ? Math.round((count / pskuTotal) * 100) : 0);
 
-      const pskuPctLabelPlugin = {
-        id: 'pskuPctLabels',
-        afterDatasetsDraw(chart: any) {
-          const { ctx } = chart;
-          chart.getDatasetMeta(0).data.forEach((bar: any, index: number) => {
-            const value = chart.data.datasets[0].data[index];
-            ctx.save();
-            ctx.fillStyle = textColor;
-            ctx.font = 'bold 11px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`${value}%`, bar.x, bar.y - 6);
-            ctx.restore();
-          });
-        },
-      };
-
       chartsRef.current.cPsku = new Chart(canvasPskuRef.current, {
         type: 'bar',
         data: {
@@ -689,7 +662,7 @@ export default function SupervisorDashboard() {
             },
           ],
         },
-        plugins: [pskuPctLabelPlugin],
+        plugins: [createBarPctLabelPlugin()],
         options: {
           maintainAspectRatio: false,
           plugins: {
@@ -722,22 +695,6 @@ export default function SupervisorDashboard() {
       const classTotal = filtered.length;
       const classPct = (count: number) => (classTotal ? Math.round((count / classTotal) * 100) : 0);
 
-      const classPctLabelPlugin = {
-        id: 'classPctLabels',
-        afterDatasetsDraw(chart: any) {
-          const { ctx } = chart;
-          chart.getDatasetMeta(0).data.forEach((bar: any, index: number) => {
-            const value = chart.data.datasets[0].data[index];
-            ctx.save();
-            ctx.fillStyle = textColor;
-            ctx.font = 'bold 11px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`${value}%`, bar.x, bar.y - 6);
-            ctx.restore();
-          });
-        },
-      };
-
       chartsRef.current.cClass = new Chart(canvasClassRef.current, {
         type: 'bar',
         data: {
@@ -751,7 +708,7 @@ export default function SupervisorDashboard() {
             },
           ],
         },
-        plugins: [classPctLabelPlugin],
+        plugins: [createBarPctLabelPlugin()],
         options: {
           maintainAspectRatio: false,
           plugins: {

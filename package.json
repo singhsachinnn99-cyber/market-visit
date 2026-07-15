@@ -6,7 +6,9 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:reset-data": "node scripts/reset-data.js --confirm",
+    "db:create-admin": "node scripts/create-admin-user.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

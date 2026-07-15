@@ -183,7 +183,7 @@ function VisitWizardContent() {
           assetType: 'Chiller',
           temperature: undefined as number | undefined,
           tempInRange: true,
-          actionRequired: 'None',
+          actionRequired: 'Working',
           observation: '',
           isFirstInFlow: false,
           fefoFollowed: false,
@@ -468,7 +468,7 @@ function VisitWizardContent() {
         assetType: 'Chiller',
         temperature: undefined as number | undefined,
         tempInRange: true,
-        actionRequired: 'None',
+        actionRequired: 'Working',
         observation: '',
         isFirstInFlow: false,
         fefoFollowed: false,
@@ -942,12 +942,12 @@ function VisitWizardContent() {
                       />
                     </div>
                     <div>
-                      <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Mandatory Action Required</label>
+                      <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Asset Status / Reason</label>
                       <select value={ast.actionRequired} onChange={(e) => updateAssetField(ast.assetId, 'actionRequired', e.target.value)} className="form-input h-9 text-[12px]">
-                        <option value="None">None</option>
-                        {/* <option value="Replacement">Replacement</option> */}
-                        <option value="Needs to be Checked">Needs to be Checked</option>
-                        <option value="Other">Other</option>
+                        <option value="Working">Working</option>
+                        <option value="Not working">Not working</option>
+                        <option value="Working but Service Required">Working but Service Required</option>
+                        <option value="Others">Others</option>
                       </select>
                     </div>
                   </div>

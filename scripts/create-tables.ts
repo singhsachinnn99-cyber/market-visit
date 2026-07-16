@@ -43,6 +43,8 @@ async function createTables() {
       \`customerCode\` VARCHAR(191) PRIMARY KEY,
       \`customerName\` VARCHAR(191) NOT NULL,
       \`classification\` VARCHAR(50) NOT NULL,
+      \`dairyClassification\` VARCHAR(50) NULL,
+      \`iceCreamClassification\` VARCHAR(50) NULL,
       \`channel\` VARCHAR(191) NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
@@ -68,6 +70,9 @@ async function createTables() {
       \`supervisorId\` VARCHAR(191) NOT NULL,
       \`routeCode\` VARCHAR(191) NULL,
       \`customerCode\` VARCHAR(191) NULL,
+      \`cust_rt_id\` VARCHAR(191) NULL,
+      \`dairyClassification\` VARCHAR(50) NULL,
+      \`iceCreamClassification\` VARCHAR(50) NULL,
       \`assetType\` ENUM('Chiller', 'Freezer') NOT NULL,
       \`temperature\` DOUBLE NOT NULL,
       \`tempInRange\` TINYINT(1) NOT NULL,

@@ -22,6 +22,8 @@ function mapRowToVisit(row: any): Visit {
     sosAsPerBda: row.sosAsPerBda === null ? null : (row.sosAsPerBda === 1 || row.sosAsPerBda === true),
     routeCode: routeCode || '',
     customerCode: customerCode || '',
+    dairyClassification: row.dairyClassification || row.dairy_classification || undefined,
+    iceCreamClassification: row.iceCreamClassification || row.ice_cream_classification || undefined,
   };
 }
 
@@ -67,6 +69,16 @@ async function ensureVisitTableSchema(connection: mysql.Connection | mysql.PoolC
   }
   if (!existingColumns.has('visit_datetime')) {
     migrations.push("ALTER TABLE `Visit` ADD COLUMN `visit_datetime` DATETIME NULL");
+  }
+
+  if (!existingColumns.has('cust_rt_id')) {
+    migrations.push("ALTER TABLE `Visit` ADD COLUMN `cust_rt_id` VARCHAR(191) NULL");
+  }
+  if (!existingColumns.has('dairyClassification')) {
+    migrations.push("ALTER TABLE `Visit` ADD COLUMN `dairyClassification` VARCHAR(50) NULL");
+  }
+  if (!existingColumns.has('iceCreamClassification')) {
+    migrations.push("ALTER TABLE `Visit` ADD COLUMN `iceCreamClassification` VARCHAR(50) NULL");
   }
 
   const [custRtColumns]: any = await connection.execute("SHOW COLUMNS FROM `Visit` LIKE 'cust_rt_id'");
@@ -177,13 +189,15 @@ export const visitRepository = {
 
     const sql = `
       INSERT INTO \`Visit\` (
-        \`visitId\`, \`supervisorId\`, \`cust_rt_id\`, \`visit_type\`, \`reason_category\`, \`reason\`,
+        \`visitId\`, \`supervisorId\`, \`cust_rt_id\`, \`dairyClassification\`, \`iceCreamClassification\`, \`visit_type\`, \`reason_category\`, \`reason\`,
         \`latitude\`, \`longitude\`, \`accuracy\`, \`status\`, 
         \`createdBy\`, \`visit_datetime\`, \`createdAt\`, \`updatedAt\`, \`sosAsPerBda\`
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         \`supervisorId\` = VALUES(\`supervisorId\`),
         \`cust_rt_id\` = VALUES(\`cust_rt_id\`),
+        \`dairyClassification\` = VALUES(\`dairyClassification\`),
+        \`iceCreamClassification\` = VALUES(\`iceCreamClassification\`),
         \`visit_type\` = VALUES(\`visit_type\`),
         \`reason_category\` = VALUES(\`reason_category\`),
         \`reason\` = VALUES(\`reason\`),
@@ -203,6 +217,8 @@ export const visitRepository = {
       visit.visitId,
       visit.supervisorId,
       normalizedCustRtId,
+      visit.dairyClassification || null,
+      visit.iceCreamClassification || null,
       visit.visit_type || 'Visit',
       visit.reason_category || '',
       visit.reason || '',

@@ -717,9 +717,16 @@ function VisitWizardContent() {
                                 <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--accent)] border border-solid border-[var(--border-soft)]">
                                   {c.customerCode}
                                 </span>
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-solid border-emerald-100">
-                                  Class {c.classification}
-                                </span>
+                                {c.dairyClassification && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-solid border-emerald-100">
+                                    Class {c.dairyClassification} · Dairy
+                                  </span>
+                                )}
+                                {c.iceCreamClassification && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-50 text-pink-700 border border-solid border-pink-100">
+                                    Class {c.iceCreamClassification} · Ice Cream
+                                  </span>
+                                )}
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-solid border-blue-100">
                                   {c.channel}
                                 </span>
@@ -753,7 +760,13 @@ function VisitWizardContent() {
                           {activeCustomer.customerName}
                         </h3>
                         <p className="text-[11.5px] text-[var(--text-secondary)]">
-                          Code: <b>{activeCustomer.customerCode}</b> · Channel: <b>{activeCustomer.channel}</b> · Classification: <b>Class {activeCustomer.classification}</b>
+                          Code: <b>{activeCustomer.customerCode}</b> · Channel: <b>{activeCustomer.channel}</b>
+                          {activeCustomer.dairyClassification && (
+                            <>{' '}· Classification: <b>Class {activeCustomer.dairyClassification} · Dairy</b></>
+                          )}
+                          {activeCustomer.iceCreamClassification && (
+                            <>{' '}· Classification: <b>Class {activeCustomer.iceCreamClassification} · Ice Cream</b></>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -1131,7 +1144,10 @@ function VisitWizardContent() {
             {[
               ['Route Code', selectedRoute, 'mono'],
               ['Customer Outlet', activeCustomer ? `${activeCustomer.customerCode} - ${activeCustomer.customerName}` : '—', 'bold'],
-              ['Classification', activeCustomer?.classification || '—', 'accent'],
+              ['Classification', [
+                activeCustomer?.dairyClassification ? `Class ${activeCustomer.dairyClassification} · Dairy` : null,
+                activeCustomer?.iceCreamClassification ? `Class ${activeCustomer.iceCreamClassification} · Ice Cream` : null,
+              ].filter(Boolean).join(', ') || '—', 'accent'],
               ['Channel', activeCustomer?.channel || '—', 'accent'],
               ['Assets Monitored', `${assets.length} items`, 'bold'],
               ...assets.flatMap((ast, idx) => [

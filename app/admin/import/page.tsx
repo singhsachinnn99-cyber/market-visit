@@ -260,7 +260,7 @@ export default function MasterImportPage() {
       key: 'classification' as const,
       name: 'Customer_Classification_DUMMY.xlsx',
       label: 'Customer Classification ',
-      description: 'Contains CustomerCode, Classification, and Channel columns.',
+      description: 'Contains CustomerCode, Classification, Channel, and Business Vertical (Dairy / Ice Cream) columns. A customer may have one row per vertical.',
       required: true,
       ref: classificationRef,
       icon: Link2,
@@ -501,8 +501,8 @@ export default function MasterImportPage() {
                 },
                 {
                   label: 'Customers (Merged Classification)', rows: customersPreview,
-                  cols: ['customerCode', 'customerName', 'classification', 'channel'],
-                  heads: ['Code', 'Name', 'Class', 'Channel'],
+                  cols: ['customerCode', 'customerName', 'dairyClassification', 'iceCreamClassification', 'channel'],
+                  heads: ['Code', 'Name', 'Class (Dairy)', 'Class (Ice Cream)', 'Channel'],
                 },
                 {
                   label: 'Customer-Route Mappings', rows: mappingsPreview,

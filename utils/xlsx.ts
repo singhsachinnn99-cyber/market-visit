@@ -45,7 +45,25 @@ export function loadMappingConfig(): Record<string, string[]> {
   try {
     if (fs.existsSync(CONFIG_PATH)) {
       const content = fs.readFileSync(CONFIG_PATH, 'utf-8');
-      return JSON.parse(content);
+      const stored = JSON.parse(content);
+      // Merge with defaults so fields added to DEFAULT_MAPPINGS after this file was
+      // first generated (e.g. BusinessVertical) are still recognized on disk.
+      let changed = false;
+      const merged: Record<string, string[]> = { ...stored };
+      for (const [field, aliases] of Object.entries(DEFAULT_MAPPINGS)) {
+        if (!merged[field]) {
+          merged[field] = aliases;
+          changed = true;
+        }
+      }
+      if (changed) {
+        try {
+          fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf-8');
+        } catch (error) {
+          console.error('Error updating mappings config with new defaults:', error);
+        }
+      }
+      return merged;
     }
   } catch (error) {
     console.error('Error reading mappings config, falling back to defaults:', error);
@@ -68,6 +86,18 @@ export function loadMappingConfig(): Record<string, string[]> {
  */
 function cleanString(str: string): string {
   return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Normalizes a raw "Business vertical" cell value to a canonical key.
+ * Tolerates case/spacing/hyphen variants (e.g. "Ice-Cream", "ICE CREAM", "icecream").
+ * Returns '' if the value isn't recognized as dairy or ice cream.
+ */
+function normalizeBusinessVertical(raw: string): 'dairy' | 'icecream' | '' {
+  const clean = cleanString(raw);
+  if (clean === 'dairy') return 'dairy';
+  if (clean === 'icecream' || clean === 'icecreams') return 'icecream';
+  return '';
 }
 
 /**
@@ -151,7 +181,7 @@ export function checkMissingFields(
   const config = loadMappingConfig();
   const fields = {
     custMappings: ['CustomerCode', 'CustomerName', 'RouteCode'],
-    classification: ['CustomerCode', 'Classification', 'Channel'],
+    classification: ['CustomerCode', 'Classification', 'Channel', 'BusinessVertical'],
     routes: ['RouteCode', 'RouteName', 'Super', 'Manager', 'Channel'],
     skuMaster: ['SKUCode', 'SKUName'],
     powerSkus: ['SKUCode', 'SKUName', 'Channel'],
@@ -376,17 +406,22 @@ export function mergeParsedData(parsedFiles: ParsedFileResult[]): { payload: Par
   });
 
   // 3. Process Customer Classification Details
+  // Business vertical is normalized to a canonical key ('dairy' | 'icecream') so that
+  // spelling/spacing/case variants in the source sheet (e.g. "Ice-Cream", "ICE CREAM") match.
   const classificationMap = new Map<string, { classification: string; channel: string }>();
   filesByType.classification.forEach(f => {
     const customerCodeCol = f.mapping['CustomerCode'];
     const classificationCol = f.mapping['Classification'];
     const channelCol = f.mapping['Channel'];
+    const businessVerticalCol = f.mapping['BusinessVertical'];
 
     f.data.forEach((row, index) => {
       const rowNum = index + 2;
       const customerCode = String(row[customerCodeCol] || '').trim();
       const classification = String(row[classificationCol] || '').trim();
       const channel = String(row[channelCol] || '').trim();
+      const businessVerticalRaw = businessVerticalCol ? String(row[businessVerticalCol] || '').trim() : '';
+      const businessVertical = normalizeBusinessVertical(businessVerticalRaw);
 
       if (!customerCode) {
         errors.push({ row: rowNum, error: `${f.fileName}: Row is missing CustomerCode value.` });
@@ -397,9 +432,15 @@ export function mergeParsedData(parsedFiles: ParsedFileResult[]): { payload: Par
       if (!channel) {
         errors.push({ row: rowNum, error: `${f.fileName}: Row is missing Channel value.` });
       }
+      if (!businessVerticalRaw) {
+        errors.push({ row: rowNum, error: `${f.fileName}: Row is missing Business vertical value.` });
+      } else if (!businessVertical) {
+        errors.push({ row: rowNum, error: `${f.fileName}: Row has an unrecognized Business vertical value "${businessVerticalRaw}" (expected Dairy or Ice Cream).` });
+      }
 
-      if (customerCode && classification && channel) {
-        classificationMap.set(customerCode, { classification, channel: channel.toUpperCase() });
+      if (customerCode && classification && channel && businessVertical) {
+        const key = `${customerCode}|${businessVertical}`;
+        classificationMap.set(key, { classification, channel: channel.toUpperCase() });
       }
     });
   });
@@ -453,15 +494,20 @@ export function mergeParsedData(parsedFiles: ParsedFileResult[]): { payload: Par
   payload.mappings.forEach((m) => {
     const nameInfo = customerNamesMap.get(m.customerCode);
     const customerName = nameInfo ? nameInfo.customerName : m.customerCode;
-    const classInfo = classificationMap.get(m.customerCode);
-    const classification = classInfo?.classification || 'D';
-    const channel = classInfo?.channel || 'General Trade';
+    // lookup classifications per vertical
+    const dairyInfo = classificationMap.get(`${m.customerCode}|dairy`);
+    const iceInfo = classificationMap.get(`${m.customerCode}|icecream`);
+
+    const classification = dairyInfo?.classification || iceInfo?.classification || 'D';
+    const channel = (dairyInfo?.channel || iceInfo?.channel) || 'General Trade';
 
     payload.customers.push({
       cust_rt_id: m.cust_rt_id,
       customerCode: m.customerCode,
       customerName,
       classification,
+      dairyClassification: dairyInfo?.classification,
+      iceCreamClassification: iceInfo?.classification,
       channel: channel.toUpperCase(),
       routeCode: m.routeCode,
     });

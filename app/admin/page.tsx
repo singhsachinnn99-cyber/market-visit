@@ -66,6 +66,8 @@ export default function AdminDashboardPage() {
   const canvasNpdRef = useRef<HTMLCanvasElement>(null);
   const canvasPskuRef = useRef<HTMLCanvasElement>(null);
   const canvasClassRef = useRef<HTMLCanvasElement>(null);
+  const canvasClassDairyRef = useRef<HTMLCanvasElement>(null);
+  const canvasClassIceRef = useRef<HTMLCanvasElement>(null);
 
   // Chart instances
   const chartsRef = useRef<Record<string, any>>({});
@@ -246,12 +248,30 @@ export default function AdminDashboardPage() {
     });
   }, [rows, fTime, fMgr, fSuper, fChannel, fClass, fCust, fFrom, fTo]);
 
+  // Visit set for the two per-vertical Classification charts: respects Time Period, Manager,
+  // Supervisor, Channel, and Outlet/Customer, but not the legacy single-value Classification
+  // slicer (which no longer has one meaning now that Dairy and Ice Cream grade independently).
+  const filteredForClassCharts = useMemo(() => {
+    return rows.filter((r) => {
+      const rowDate = new Date(r.createdAt);
+      const from = normalizeDate(fFrom);
+      const to = normalizeDate(fTo);
+      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
+      const fromOk = !from || rowDate >= from;
+      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
+      return periodOk && (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fCust || r.cust === fCust) && fromOk && toOk;
+    });
+  }, [rows, fTime, fMgr, fSuper, fChannel, fCust, fFrom, fTo]);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalData, setModalData] = useState<any[]>([]);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportModalTitle, setReportModalTitle] = useState('');
   const [reportModalType, setReportModalType] = useState<'npd' | 'psku' | 'cold-chain' | 'classification'>('npd');
+  // Tracks which underlying reportRows array backs the open drilldown, since 'classification'
+  // now has two sources (Dairy / Ice Cream) that share the same reportModalType/columns.
+  const [reportModalSource, setReportModalSource] = useState<'npd' | 'psku' | 'cold-chain' | 'classificationDairy' | 'classificationIceCream'>('npd');
   const allowedReports = useMemo(() => getAllowedReports(userRole), [userRole]);
   const [reportModalRows, setReportModalRows] = useState<any[]>([]);
   const [reportFilterChip, setReportFilterChip] = useState<{ key: string; value: string; label: string } | null>(null);
@@ -264,7 +284,7 @@ export default function AdminDashboardPage() {
   };
 
   const handleDrilldownChartClick = (
-    reportType: 'npd' | 'psku' | 'cold-chain' | 'classification',
+    reportType: 'npd' | 'psku' | 'cold-chain',
     chartTitle: string,
     filterFn: (row: any) => boolean,
     chipLabel?: string
@@ -279,6 +299,7 @@ export default function AdminDashboardPage() {
       return visit ? filterFn(visit) : false;
     });
     setReportModalType(reportType);
+    setReportModalSource(reportType);
     setReportModalTitle(chartTitle);
     setReportModalRows(matched);
     setReportFilterChip(chipLabel ? { key: 'segment', value: chipLabel, label: chipLabel } : null);
@@ -286,14 +307,22 @@ export default function AdminDashboardPage() {
   };
 
   const handleClearReportFilter = () => {
-    if (reportModalType === 'npd') {
+    if (reportModalSource === 'npd') {
       setReportModalRows(filteredNpdRows);
       setReportFilterChip(null);
       return;
     }
+    if (reportModalSource === 'classificationDairy' || reportModalSource === 'classificationIceCream') {
+      const visitLookup = new Map(filteredForClassCharts.map((row) => [row.visitId, row]));
+      const sourceRows = reportModalSource === 'classificationDairy' ? reportRows.classificationDairy : reportRows.classificationIceCream;
+      const matched = (sourceRows || []).filter((row: any) => visitLookup.has(row.visitId));
+      setReportModalRows(matched);
+      setReportFilterChip(null);
+      return;
+    }
     const visitLookup = new Map(filtered.map((row) => [row.visitId, row]));
-    const matched = (reportRows[reportModalType] || []).filter((row: any) => {
-      if (reportModalType === 'cold-chain') {
+    const matched = (reportRows[reportModalSource] || []).filter((row: any) => {
+      if (reportModalSource === 'cold-chain') {
         return true;
       }
       const visit = visitLookup.get(row.visitId);
@@ -603,6 +632,7 @@ export default function AdminDashboardPage() {
               const availabilityCode = label === 'Available' ? 'YES' : label === 'Not avail.' ? 'NO' : 'NOT APPLICABLE';
               const matched = filteredNpdRows.filter((r: any) => r.availability === availabilityCode);
               setReportModalType('npd');
+              setReportModalSource('npd');
               setReportModalTitle(`NPD Availability · ${label}`);
               setReportModalRows(matched);
               setReportFilterChip({ key: 'segment', value: label, label: `Status: ${label}` });
@@ -664,22 +694,24 @@ export default function AdminDashboardPage() {
       });
     }
 
-    // 7. Classification Bar Chart (percentage-based)
-    if (canvasClassRef.current) {
-      if (chartsRef.current.cClass) chartsRef.current.cClass.destroy();
-      const cl = countFreq(filtered, (r) => r.gr);
+    // 7. Classification Bar Charts (Dairy & Ice Cream)
+    if (canvasClassDairyRef.current) {
+      if (chartsRef.current.cClassDairy) chartsRef.current.cClassDairy.destroy();
+      const visitLookup = new Map(filteredForClassCharts.map((row) => [row.visitId, row]));
+      const dairyRows = (reportRows.classificationDairy || []).filter((r: any) => visitLookup.has(r.visitId));
+      const cld = countFreq(dairyRows, (r) => r.class);
       const grades = ['A', 'B', 'C', 'D', 'E'];
-      const classTotal = filtered.length;
-      const classPct = (count: number) => (classTotal ? Math.round((count / classTotal) * 100) : 0);
+      const classTotalDairy = dairyRows.length;
+      const classPctDairy = (count: number) => (classTotalDairy ? Math.round((count / classTotalDairy) * 100) : 0);
 
-      chartsRef.current.cClass = new Chart(canvasClassRef.current, {
+      chartsRef.current.cClassDairy = new Chart(canvasClassDairyRef.current, {
         type: 'bar',
         data: {
           labels: grades,
           datasets: [
             {
               label: 'Visits',
-              data: grades.map((g) => classPct(cl[g] || 0)),
+              data: grades.map((g) => classPctDairy(cld[g] || 0)),
               backgroundColor: grades.map((g) => GCOL[g]),
               borderRadius: 6,
             },
@@ -690,12 +722,19 @@ export default function AdminDashboardPage() {
           maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
-            tooltip: { callbacks: { label: (ctx) => `${ctx.raw}% of ${classTotal} visits` } },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.raw}% of ${classTotalDairy} visits` } },
           },
           onClick: (e, el, chart) => {
-            if (el.length > 0) {
+            if (el.length > 0 && allowedReports.includes('classification')) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              handleDrilldownChartClick('classification', `Outlets by Classification · ${label}`, (r) => r.gr === label, `Class: ${label}`);
+              // Build matched rows from classificationDairy filtered by class and active visits
+              const matched = (reportRows.classificationDairy || []).filter((row: any) => row.class === label && visitLookup.has(row.visitId));
+              setReportModalType('classification');
+              setReportModalSource('classificationDairy');
+              setReportModalTitle(`Outlets by Classification · Dairy · ${label}`);
+              setReportModalRows(matched);
+              setReportFilterChip({ key: 'segment', value: `Class: ${label}`, label: `Class: ${label}` });
+              setReportModalOpen(true);
             }
           },
           onHover: (e, el, chart) => {
@@ -708,7 +747,59 @@ export default function AdminDashboardPage() {
         },
       });
     }
-  }, [filtered, filteredNpdRows, isLoading, theme]);
+
+    if (canvasClassIceRef.current) {
+      if (chartsRef.current.cClassIce) chartsRef.current.cClassIce.destroy();
+      const visitLookup = new Map(filteredForClassCharts.map((row) => [row.visitId, row]));
+      const iceRows = (reportRows.classificationIceCream || []).filter((r: any) => visitLookup.has(r.visitId));
+      const cli = countFreq(iceRows, (r) => r.class);
+      const grades = ['A', 'B', 'C', 'D', 'E'];
+      const classTotalIce = iceRows.length;
+      const classPctIce = (count: number) => (classTotalIce ? Math.round((count / classTotalIce) * 100) : 0);
+
+      chartsRef.current.cClassIce = new Chart(canvasClassIceRef.current, {
+        type: 'bar',
+        data: {
+          labels: grades,
+          datasets: [
+            {
+              label: 'Visits',
+              data: grades.map((g) => classPctIce(cli[g] || 0)),
+              backgroundColor: grades.map((g) => GCOL[g]),
+              borderRadius: 6,
+            },
+          ],
+        },
+        plugins: [createBarPctLabelPlugin()],
+        options: {
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.raw}% of ${classTotalIce} visits` } },
+          },
+          onClick: (e, el, chart) => {
+            if (el.length > 0 && allowedReports.includes('classification')) {
+              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
+              const matched = (reportRows.classificationIceCream || []).filter((row: any) => row.class === label && visitLookup.has(row.visitId));
+              setReportModalType('classification');
+              setReportModalSource('classificationIceCream');
+              setReportModalTitle(`Outlets by Classification · Ice Cream · ${label}`);
+              setReportModalRows(matched);
+              setReportFilterChip({ key: 'segment', value: `Class: ${label}`, label: `Class: ${label}` });
+              setReportModalOpen(true);
+            }
+          },
+          onHover: (e, el, chart) => {
+            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+          },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: textColor, callback: (v: any) => `${v}%` } },
+          },
+        },
+      });
+    }
+  }, [filtered, filteredForClassCharts, filteredNpdRows, isLoading, theme]);
 
   if (isLoading) {
     return (
@@ -1313,10 +1404,17 @@ export default function AdminDashboardPage() {
             </div>
           </div>
           <div className="panel">
-            <h3>Outlets by Classification</h3>
-            <div className="psub">Visit distribution A–E</div>
+            <h3>Outlets by Classification · Dairy</h3>
+            <div className="psub">Visit distribution A–E (Dairy)</div>
             <div className="chart-sm">
-              <canvas ref={canvasClassRef}></canvas>
+              <canvas ref={canvasClassDairyRef}></canvas>
+            </div>
+          </div>
+          <div className="panel">
+            <h3>Outlets by Classification · Ice Cream</h3>
+            <div className="psub">Visit distribution A–E (Ice Cream)</div>
+            <div className="chart-sm">
+              <canvas ref={canvasClassIceRef}></canvas>
             </div>
           </div>
         </div>

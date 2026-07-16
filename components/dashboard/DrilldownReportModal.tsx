@@ -75,6 +75,7 @@ const REPORT_COLUMNS: Record<string, { key: string; label: string }[]> = {
     { key: 'routeCode', label: 'Route Code' },
     { key: 'outletCode', label: 'Outlet (Shop) Code' },
     { key: 'outletName', label: 'Outlet Name' },
+    { key: 'businessVertical', label: 'Business Vertical' },
     { key: 'class', label: 'Class' },
   ],
 };

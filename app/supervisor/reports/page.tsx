@@ -63,7 +63,8 @@ export default function SupervisorReportsPage() {
   const canvasTempRef = useRef<HTMLCanvasElement>(null);
   const canvasNpdRef = useRef<HTMLCanvasElement>(null);
   const canvasPskuRef = useRef<HTMLCanvasElement>(null);
-  const canvasClassRef = useRef<HTMLCanvasElement>(null);
+  const canvasClassDairyRef = useRef<HTMLCanvasElement>(null);
+  const canvasClassIceRef = useRef<HTMLCanvasElement>(null);
 
   // Chart instances
   const chartsRef = useRef<Record<string, any>>({});
@@ -151,12 +152,38 @@ export default function SupervisorReportsPage() {
     );
   }, [rows, fTime, fMgr, fSuper, fChannel, fClass, fCust]);
 
+  // Visit set for the two per-vertical Classification charts: respects Time Period, Manager,
+  // Supervisor, Channel, and Outlet/Customer, but not the legacy single-value Classification
+  // slicer (which no longer has one meaning now that Dairy and Ice Cream grade independently).
+  const filteredForClassCharts = useMemo(() => {
+    return rows.filter(
+      (r) =>
+        (!fMgr || r.mgr === fMgr) &&
+        (!fSuper || r.sup === fSuper) &&
+        (!fChannel || r.ch === fChannel) &&
+        (!fCust || r.cust === fCust) &&
+        (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4))
+    );
+  }, [rows, fTime, fMgr, fSuper, fChannel, fCust]);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalData, setModalData] = useState<any[]>([]);
 
   const handleChartClick = (chartTitle: string, filterFn: (row: any) => boolean) => {
     const matched = filtered.filter(filterFn);
+    setModalTitle(chartTitle);
+    setModalData(matched);
+    setModalOpen(true);
+  };
+
+  // Same as handleChartClick, but filters the per-vertical Classification visit set and
+  // remaps each row's display grade (`gr`) to the vertical-specific grade being drilled into,
+  // since InteractiveChartTableModal always renders its Class column from `gr`.
+  const handleClassChartClick = (chartTitle: string, gradeField: 'dairyGr' | 'iceGr', label: string) => {
+    const matched = filteredForClassCharts
+      .filter((r) => r[gradeField] === label)
+      .map((r) => ({ ...r, gr: r[gradeField] }));
     setModalTitle(chartTitle);
     setModalData(matched);
     setModalOpen(true);
@@ -448,19 +475,20 @@ export default function SupervisorReportsPage() {
       });
     }
 
-    // 7. Classification Bar Chart
-    if (canvasClassRef.current) {
-      if (chartsRef.current.cClass) chartsRef.current.cClass.destroy();
-      const cl = countFreq(filtered, (r) => r.gr);
+    // 7. Classification Bar Charts (Dairy & Ice Cream)
+    if (canvasClassDairyRef.current) {
+      if (chartsRef.current.cClassDairy) chartsRef.current.cClassDairy.destroy();
+      const dairyRows = filteredForClassCharts.filter((r) => r.dairyGr);
+      const cld = countFreq(dairyRows, (r) => r.dairyGr);
       const grades = ['A', 'B', 'C', 'D', 'E'];
-      chartsRef.current.cClass = new Chart(canvasClassRef.current, {
+      chartsRef.current.cClassDairy = new Chart(canvasClassDairyRef.current, {
         type: 'bar',
         data: {
           labels: grades,
           datasets: [
             {
               label: 'Visits',
-              data: grades.map((g) => cl[g] || 0),
+              data: grades.map((g) => cld[g] || 0),
               backgroundColor: grades.map((g) => GCOL[g]),
               borderRadius: 6,
             },
@@ -472,7 +500,7 @@ export default function SupervisorReportsPage() {
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              handleChartClick(`Visits for Classification Grade ${label}`, (r) => r.gr === label);
+              handleClassChartClick(`Visits for Classification Grade ${label} · Dairy`, 'dairyGr', label);
             }
           },
           onHover: (e, el, chart) => {
@@ -485,7 +513,45 @@ export default function SupervisorReportsPage() {
         },
       });
     }
-  }, [filtered, isLoading, theme]);
+
+    if (canvasClassIceRef.current) {
+      if (chartsRef.current.cClassIce) chartsRef.current.cClassIce.destroy();
+      const iceRows = filteredForClassCharts.filter((r) => r.iceGr);
+      const cli = countFreq(iceRows, (r) => r.iceGr);
+      const grades = ['A', 'B', 'C', 'D', 'E'];
+      chartsRef.current.cClassIce = new Chart(canvasClassIceRef.current, {
+        type: 'bar',
+        data: {
+          labels: grades,
+          datasets: [
+            {
+              label: 'Visits',
+              data: grades.map((g) => cli[g] || 0),
+              backgroundColor: grades.map((g) => GCOL[g]),
+              borderRadius: 6,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          onClick: (e, el, chart) => {
+            if (el.length > 0) {
+              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
+              handleClassChartClick(`Visits for Classification Grade ${label} · Ice Cream`, 'iceGr', label);
+            }
+          },
+          onHover: (e, el, chart) => {
+            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+          },
+          scales: {
+            x: { grid: { color: gridColor }, ticks: { color: textColor } },
+            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+          },
+        },
+      });
+    }
+  }, [filtered, filteredForClassCharts, isLoading, theme]);
 
   if (isLoading) {
     return (
@@ -934,10 +1000,17 @@ export default function SupervisorReportsPage() {
             </div>
           </div>
           <div className="panel">
-            <h3>Outlets by Classification</h3>
-            <div className="psub">Visit distribution A–E</div>
+            <h3>Outlets by Classification · Dairy</h3>
+            <div className="psub">Visit distribution A–E (Dairy)</div>
             <div className="chart-sm">
-              <canvas ref={canvasClassRef}></canvas>
+              <canvas ref={canvasClassDairyRef}></canvas>
+            </div>
+          </div>
+          <div className="panel">
+            <h3>Outlets by Classification · Ice Cream</h3>
+            <div className="psub">Visit distribution A–E (Ice Cream)</div>
+            <div className="chart-sm">
+              <canvas ref={canvasClassIceRef}></canvas>
             </div>
           </div>
         </div>

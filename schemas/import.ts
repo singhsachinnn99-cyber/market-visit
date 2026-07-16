@@ -10,6 +10,7 @@ export const customerImportSchema = z.object({
   CustomerName: z.string().min(1, { message: 'CustomerName is required' }),
   Classification: z.string().min(1, { message: 'Classification is required' }),
   Channel: z.string().min(1, { message: 'Channel is required' }),
+  BusinessVertical: z.string().min(1, { message: 'Business vertical is required' }),
 });
 
 export const customerRouteMappingImportSchema = z.object({
@@ -34,6 +35,7 @@ export const customerClassificationSchema = z.object({
   CustomerCode: z.string().min(1, { message: 'CustomerCode is required' }),
   Classification: z.string().min(1, { message: 'Classification is required' }),
   Channel: z.string().min(1, { message: 'Channel is required' }),
+  BusinessVertical: z.string().min(1, { message: 'Business vertical is required' }),
 });
 
 export type RouteImportInput = z.infer<typeof routeImportSchema>;

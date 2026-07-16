@@ -131,8 +131,12 @@ export async function GET(req: NextRequest) {
       psku: [] as any[],
       'cold-chain': [] as any[],
       classification: [] as any[],
+      classificationDairy: [] as any[],
+      classificationIceCream: [] as any[],
     };
     const classificationRows: any[] = [];
+    const classificationRowsDairy: any[] = [];
+    const classificationRowsIceCream: any[] = [];
 
     const rows = filteredVisits.map((v) => {
       const userInfo = userMap.get(v.supervisorId) || { name: 'UNKNOWN', managerName: 'ADNAN' };
@@ -143,6 +147,8 @@ export async function GET(req: NextRequest) {
       const custName = customer ? customer.customerName : 'Unknown';
       const ch = customer ? customer.channel : 'General Trade';
       const gr = customer ? customer.classification : 'C';
+      const dairyGr = customer ? (customer.dairyClassification || null) : null;
+      const iceGr = customer ? (customer.iceCreamClassification || null) : null;
 
       const [customerCode, routeCode] = (v.cust_rt_id || '').split('|');
       const visitDate = (v.createdAt as any) instanceof Date ? (v.createdAt as any).toISOString() : v.createdAt;
@@ -183,6 +189,36 @@ export async function GET(req: NextRequest) {
         classification: gr,
         class: gr,
       });
+      if (dairyGr) {
+        classificationRowsDairy.push({
+          date: visitDate,
+          visitId: v.visitId,
+          channel: ch,
+          manager: mgrName,
+          supervisor: supName,
+          routeCode: routeCode || '',
+          outletCode: customerCode || '',
+          outletName: custName,
+          classification: dairyGr,
+          class: dairyGr,
+          businessVertical: 'Dairy',
+        });
+      }
+      if (iceGr) {
+        classificationRowsIceCream.push({
+          date: visitDate,
+          visitId: v.visitId,
+          channel: ch,
+          manager: mgrName,
+          supervisor: supName,
+          routeCode: routeCode || '',
+          outletCode: customerCode || '',
+          outletName: custName,
+          classification: iceGr,
+          class: iceGr,
+          businessVertical: 'Ice Cream',
+        });
+      }
 
       visitNpd.forEach((response: any) => {
         const sku = skuMap.get(response.skuCode);
@@ -252,6 +288,8 @@ export async function GET(req: NextRequest) {
         cust: custName,
         code: customerCode || '',
         gr,
+        dairyGr,
+        iceGr,
         week,
         atype: firstAsset.assetType,
         temp: temperature,
@@ -269,6 +307,8 @@ export async function GET(req: NextRequest) {
     });
 
     reportRows.classification = classificationRows;
+    reportRows.classificationDairy = classificationRowsDairy;
+    reportRows.classificationIceCream = classificationRowsIceCream;
 
     // 6. Compute aggregated statistics for the Reports & Routes pages
     const totalVisits = rows.length;

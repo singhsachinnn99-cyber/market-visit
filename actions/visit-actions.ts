@@ -181,7 +181,21 @@ export async function saveVisitDraftAction(data: VisitDraftInput) {
     sosAsPerBda: input.sosAsPerBda === undefined ? null : input.sosAsPerBda,
     routeCode: routeCode || '',
     customerCode: customerCode || '',
+    dairyClassification: undefined,
+    iceCreamClassification: undefined,
   };
+
+  // Attach customer classifications (dairy / ice-cream) if available
+  try {
+    const allCustomers = await customerRepository.getAllCustomers();
+    const matchedCust = allCustomers.find(c => c.cust_rt_id === visitRecord.cust_rt_id || (c.customerCode === customerCode && c.routeCode === routeCode));
+    if (matchedCust) {
+      visitRecord.dairyClassification = matchedCust.dairyClassification || undefined;
+      visitRecord.iceCreamClassification = matchedCust.iceCreamClassification || undefined;
+    }
+  } catch (e) {
+    // ignore classification enrichment failures
+  }
 
   const savedVisit = await visitRepository.saveVisit(
     visitRecord,
@@ -226,15 +240,17 @@ export async function submitVisitAction(data: VisitInput) {
     }
   }
 
+  const allCustomers = await customerRepository.getAllCustomers();
+  const matchedCust = allCustomers.find(c => c.cust_rt_id === input.cust_rt_id || (c.customerCode === customerCode && c.routeCode === routeCode));
+
   if (input.visit_type !== 'No Visit') {
     const npdSkus = await skuRepository.getSkusByType('NPD');
     if (npdSkus.length > 0 && Object.keys(input.npdResponses).length < npdSkus.length) {
       throw new Error('Every item in the NPD Checklist must be answered before submitting.');
     }
 
-    const customer = (await customerRepository.getAllCustomers()).find((c) => c.cust_rt_id === input.cust_rt_id);
-    if (customer) {
-      const powerSkus = await skuRepository.getPowerSkusByChannel(customer.channel);
+    if (matchedCust) {
+      const powerSkus = await skuRepository.getPowerSkusByChannel(matchedCust.channel);
       if (powerSkus.length > 0 && Object.keys(input.powerSkuResults).length < powerSkus.length) {
         throw new Error('Every item in the Power SKU Checklist must be answered before submitting.');
       }
@@ -319,7 +335,15 @@ export async function submitVisitAction(data: VisitInput) {
     sosAsPerBda: input.sosAsPerBda === undefined ? null : input.sosAsPerBda,
     routeCode: routeCode || '',
     customerCode: customerCode || '',
+    dairyClassification: undefined,
+    iceCreamClassification: undefined,
   };
+
+  // Attach customer classifications (dairy / ice-cream) if available
+  if (matchedCust) {
+    visitRecord.dairyClassification = matchedCust.dairyClassification || undefined;
+    visitRecord.iceCreamClassification = matchedCust.iceCreamClassification || undefined;
+  }
 
   const submittedVisit = await visitRepository.saveVisit(
     visitRecord,

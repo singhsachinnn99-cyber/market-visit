@@ -254,6 +254,26 @@ export default function MyVisitsPage() {
                     )}
                   </div>
 
+                  {/* Temperature Range Reference */}
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-700/30 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <Thermometer className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'var(--info)' }} />
+                      <div className="flex-1">
+                        <p className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>Temperature Ranges</p>
+                        <div className="mt-2 space-y-1.5">
+                          <div className="flex items-center justify-between text-[12px] bg-white dark:bg-surface p-2 rounded border border-blue-100 dark:border-blue-700/50">
+                            <span className="font-semibold text-[var(--text-primary)]">Chiller</span>
+                            <span className="font-mono font-bold" style={{ color: 'var(--accent)' }}>0 - 5 °C</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[12px] bg-white dark:bg-surface p-2 rounded border border-blue-100 dark:border-blue-700/50">
+                            <span className="font-semibold text-[var(--text-primary)]">Freezer</span>
+                            <span className="font-mono font-bold" style={{ color: 'var(--accent)' }}>≤ -18 °C</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
                     <p className="form-label mb-2">Assets Audited</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

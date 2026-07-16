@@ -722,19 +722,20 @@ export default function SupervisorDashboard() {
       const visitLookup = new Map(filteredForClassCharts.map((row) => [row.visitId, row]));
       const dairyRows = (reportRows.classificationDairy || []).filter((r: any) => visitLookup.has(r.visitId));
       const cld = countFreq(dairyRows, (r) => r.class);
-      const grades = ['A', 'B', 'C', 'D', 'E'];
+      const allGrades = ['A', 'B', 'C', 'D', 'E', '-'];
+      const gradeLabels = ['A', 'B', 'C', 'D', 'E', 'Not Classified'];
       const classTotalDairy = dairyRows.length;
       const classPctDairy = (count: number) => (classTotalDairy ? Math.round((count / classTotalDairy) * 100) : 0);
 
       chartsRef.current.cClassDairy = new Chart(canvasClassDairyRef.current, {
         type: 'bar',
         data: {
-          labels: grades,
+          labels: gradeLabels,
           datasets: [
             {
               label: 'Visits',
-              data: grades.map((g) => classPctDairy(cld[g] || 0)),
-              backgroundColor: grades.map((g) => GCOL[g]),
+              data: allGrades.map((g) => classPctDairy(cld[g] || 0)),
+              backgroundColor: allGrades.map((g) => g === '-' ? '#9aa9b4' : GCOL[g]),
               borderRadius: 6,
             },
           ],
@@ -750,7 +751,8 @@ export default function SupervisorDashboard() {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
               if (!allowedReports.includes('classification')) return;
-              const matched = (reportRows.classificationDairy || []).filter((row: any) => row.class === label && visitLookup.has(row.visitId));
+              const classValue = label === 'Not Classified' ? '-' : label;
+              const matched = (reportRows.classificationDairy || []).filter((row: any) => row.class === classValue && visitLookup.has(row.visitId));
               setReportModalType('classification');
               setReportModalSource('classificationDairy');
               setReportModalTitle(`Outlets by Classification · Dairy · ${label}`);
@@ -775,19 +777,20 @@ export default function SupervisorDashboard() {
       const visitLookup = new Map(filteredForClassCharts.map((row) => [row.visitId, row]));
       const iceRows = (reportRows.classificationIceCream || []).filter((r: any) => visitLookup.has(r.visitId));
       const cli = countFreq(iceRows, (r) => r.class);
-      const grades = ['A', 'B', 'C', 'D', 'E'];
+      const allGrades = ['A', 'B', 'C', 'D', 'E', '-'];
+      const gradeLabels = ['A', 'B', 'C', 'D', 'E', 'Not Classified'];
       const classTotalIce = iceRows.length;
       const classPctIce = (count: number) => (classTotalIce ? Math.round((count / classTotalIce) * 100) : 0);
 
       chartsRef.current.cClassIce = new Chart(canvasClassIceRef.current, {
         type: 'bar',
         data: {
-          labels: grades,
+          labels: gradeLabels,
           datasets: [
             {
               label: 'Visits',
-              data: grades.map((g) => classPctIce(cli[g] || 0)),
-              backgroundColor: grades.map((g) => GCOL[g]),
+              data: allGrades.map((g) => classPctIce(cli[g] || 0)),
+              backgroundColor: allGrades.map((g) => g === '-' ? '#9aa9b4' : GCOL[g]),
               borderRadius: 6,
             },
           ],
@@ -803,7 +806,8 @@ export default function SupervisorDashboard() {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
               if (!allowedReports.includes('classification')) return;
-              const matched = (reportRows.classificationIceCream || []).filter((row: any) => row.class === label && visitLookup.has(row.visitId));
+              const classValue = label === 'Not Classified' ? '-' : label;
+              const matched = (reportRows.classificationIceCream || []).filter((row: any) => row.class === classValue && visitLookup.has(row.visitId));
               setReportModalType('classification');
               setReportModalSource('classificationIceCream');
               setReportModalTitle(`Outlets by Classification · Ice Cream · ${label}`);

@@ -480,16 +480,17 @@ export default function SupervisorReportsPage() {
       if (chartsRef.current.cClassDairy) chartsRef.current.cClassDairy.destroy();
       const dairyRows = filteredForClassCharts.filter((r) => r.dairyGr);
       const cld = countFreq(dairyRows, (r) => r.dairyGr);
-      const grades = ['A', 'B', 'C', 'D', 'E'];
+      const allGrades = ['A', 'B', 'C', 'D', 'E', '-'];
+      const gradeLabels = ['A', 'B', 'C', 'D', 'E', 'Not Classified'];
       chartsRef.current.cClassDairy = new Chart(canvasClassDairyRef.current, {
         type: 'bar',
         data: {
-          labels: grades,
+          labels: gradeLabels,
           datasets: [
             {
               label: 'Visits',
-              data: grades.map((g) => cld[g] || 0),
-              backgroundColor: grades.map((g) => GCOL[g]),
+              data: allGrades.map((g) => cld[g] || 0),
+              backgroundColor: allGrades.map((g) => g === '-' ? '#9aa9b4' : GCOL[g]),
               borderRadius: 6,
             },
           ],
@@ -500,7 +501,8 @@ export default function SupervisorReportsPage() {
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              handleClassChartClick(`Visits for Classification Grade ${label} · Dairy`, 'dairyGr', label);
+              const gradeValue = label === 'Not Classified' ? '-' : label;
+              handleClassChartClick(`Visits for Classification Grade ${label} · Dairy`, 'dairyGr', gradeValue);
             }
           },
           onHover: (e, el, chart) => {
@@ -518,16 +520,17 @@ export default function SupervisorReportsPage() {
       if (chartsRef.current.cClassIce) chartsRef.current.cClassIce.destroy();
       const iceRows = filteredForClassCharts.filter((r) => r.iceGr);
       const cli = countFreq(iceRows, (r) => r.iceGr);
-      const grades = ['A', 'B', 'C', 'D', 'E'];
+      const allGrades = ['A', 'B', 'C', 'D', 'E', '-'];
+      const gradeLabels = ['A', 'B', 'C', 'D', 'E', 'Not Classified'];
       chartsRef.current.cClassIce = new Chart(canvasClassIceRef.current, {
         type: 'bar',
         data: {
-          labels: grades,
+          labels: gradeLabels,
           datasets: [
             {
               label: 'Visits',
-              data: grades.map((g) => cli[g] || 0),
-              backgroundColor: grades.map((g) => GCOL[g]),
+              data: allGrades.map((g) => cli[g] || 0),
+              backgroundColor: allGrades.map((g) => g === '-' ? '#9aa9b4' : GCOL[g]),
               borderRadius: 6,
             },
           ],
@@ -538,7 +541,8 @@ export default function SupervisorReportsPage() {
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              handleClassChartClick(`Visits for Classification Grade ${label} · Ice Cream`, 'iceGr', label);
+              const gradeValue = label === 'Not Classified' ? '-' : label;
+              handleClassChartClick(`Visits for Classification Grade ${label} · Ice Cream`, 'iceGr', gradeValue);
             }
           },
           onHover: (e, el, chart) => {

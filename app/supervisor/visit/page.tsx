@@ -719,12 +719,12 @@ function VisitWizardContent() {
                                 </span>
                                 {c.dairyClassification && (
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-solid border-emerald-100">
-                                    Class {c.dairyClassification} · Dairy
+                                    {c.dairyClassification === '-' ? 'Not classified' : `Class ${c.dairyClassification}`} · Dairy
                                   </span>
                                 )}
                                 {c.iceCreamClassification && (
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-50 text-pink-700 border border-solid border-pink-100">
-                                    Class {c.iceCreamClassification} · Ice Cream
+                                    {c.iceCreamClassification === '-' ? 'Not classified' : `Class ${c.iceCreamClassification}`} · Ice Cream
                                   </span>
                                 )}
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-solid border-blue-100">
@@ -762,10 +762,10 @@ function VisitWizardContent() {
                         <p className="text-[11.5px] text-[var(--text-secondary)]">
                           Code: <b>{activeCustomer.customerCode}</b> · Channel: <b>{activeCustomer.channel}</b>
                           {activeCustomer.dairyClassification && (
-                            <>{' '}· Classification: <b>Class {activeCustomer.dairyClassification} · Dairy</b></>
+                            <>{' '}· Classification: <b>{activeCustomer.dairyClassification === '-' ? 'Not classified' : `Class ${activeCustomer.dairyClassification}`} · Dairy</b></>
                           )}
                           {activeCustomer.iceCreamClassification && (
-                            <>{' '}· Classification: <b>Class {activeCustomer.iceCreamClassification} · Ice Cream</b></>
+                            <>{' '}· Classification: <b>{activeCustomer.iceCreamClassification === '-' ? 'Not classified' : `Class ${activeCustomer.iceCreamClassification}`} · Ice Cream</b></>
                           )}
                         </p>
                       </div>
@@ -1145,8 +1145,8 @@ function VisitWizardContent() {
               ['Route Code', selectedRoute, 'mono'],
               ['Customer Outlet', activeCustomer ? `${activeCustomer.customerCode} - ${activeCustomer.customerName}` : '—', 'bold'],
               ['Classification', [
-                activeCustomer?.dairyClassification ? `Class ${activeCustomer.dairyClassification} · Dairy` : null,
-                activeCustomer?.iceCreamClassification ? `Class ${activeCustomer.iceCreamClassification} · Ice Cream` : null,
+                activeCustomer?.dairyClassification ? (activeCustomer.dairyClassification === '-' ? 'Not classified · Dairy' : `Class ${activeCustomer.dairyClassification} · Dairy`) : null,
+                activeCustomer?.iceCreamClassification ? (activeCustomer.iceCreamClassification === '-' ? 'Not classified · Ice Cream' : `Class ${activeCustomer.iceCreamClassification} · Ice Cream`) : null,
               ].filter(Boolean).join(', ') || '—', 'accent'],
               ['Channel', activeCustomer?.channel || '—', 'accent'],
               ['Assets Monitored', `${assets.length} items`, 'bold'],

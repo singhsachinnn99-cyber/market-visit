@@ -97,7 +97,10 @@ function formatDisplayDate(value?: string) {
 function getCellValue(row: Record<string, unknown>, key: string) {
   if (key === 'date') return formatDisplayDate(row.date as string | undefined);
   if (key === 'classification') return (row.classification as string) || '—';
-  if (key === 'class') return (row.class as string) || '—';
+  if (key === 'class') {
+    const classVal = (row.class as string) || '—';
+    return classVal === '-' ? 'Not classified' : classVal;
+  }
   if (key === 'availability') return (row.availability as string) || '—';
   if (key === 'tempStatus') return (row.tempStatus as string) || '—';
   if (key === 'assetTemp') return (row.assetTemp as string) || '—';
@@ -528,9 +531,13 @@ export default function DrilldownReportModal({
                             {row.classification as string}
                           </span>
                         ) : column.key === 'class' && row.class ? (
-                          <span className="inline-grid place-items-center w-6 h-6 rounded-md text-white font-bold text-[10px]" style={{ background: GCOL[row.class as string] || '#9aa9b4' }}>
-                            {row.class as string}
-                          </span>
+                          row.class === '-' ? (
+                            <span className="text-[11px] text-[var(--text-secondary)]">Not classified</span>
+                          ) : (
+                            <span className="inline-grid place-items-center w-6 h-6 rounded-md text-white font-bold text-[10px]" style={{ background: GCOL[row.class as string] || '#9aa9b4' }}>
+                              {row.class as string}
+                            </span>
+                          )
                         ) : column.key === 'availability' && row.availability === 'NO' ? (
                           <span className="inline-flex items-center rounded-full bg-red-500/12 px-2.5 py-1 text-[10px] font-semibold text-red-600">{getCellValue(row, column.key)}</span>
                         ) : column.key === 'availability' && row.availability === 'YES' ? (

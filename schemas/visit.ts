@@ -13,7 +13,7 @@ export const visitAssetSchema = z.object({
   assetType: z.enum(['Chiller', 'Freezer'] as const),
   temperature: z.number({ message: 'Temperature must be a number' }),
   tempInRange: z.boolean(),
-  actionRequired: z.enum(['Working', 'Not working', 'Working but Service Required', 'Others', 'None'] as const),
+  actionRequired: z.enum(['Working', 'Not working', 'Working But Service Required', 'Others', 'None'] as const),
   observation: z.string().min(1, { message: 'Observation is required.' }),
   isFirstInFlow: z.boolean().optional().default(false),
   fefoFollowed: z.boolean().optional().default(false),

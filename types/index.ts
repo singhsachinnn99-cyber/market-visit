@@ -4,7 +4,7 @@ export type UserRole = 'GM' | 'BDM' | 'Sales Manager' | 'Admin' | 'Supervisor' |
 export type UserStatus = 'Active' | 'Inactive';
 export type VisitStatus = 'Draft' | 'Submitted';
 export type AssetType = 'Chiller' | 'Freezer';
-export type ActionRequiredType = 'Working' | 'Not working' | 'Working but Service Required' | 'Others' | 'None';
+export type ActionRequiredType = 'Working' | 'Not working' | 'Working But Service Required' | 'Others' | 'None';
 export type NPDStatus = 'Available' | 'Not Available' | 'Not Required';
 
 export interface User {

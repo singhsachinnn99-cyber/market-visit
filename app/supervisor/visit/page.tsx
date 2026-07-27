@@ -527,21 +527,21 @@ function VisitWizardContent() {
       <div className="space-y-4 card p-4">
         <div className="relative flex items-center justify-between w-full px-1 py-2">
           {/* Background track line */}
-          <div 
-            className="absolute left-4 right-4 h-[2px] z-0" 
+          <div
+            className="absolute left-4 right-4 h-[2px] z-0"
             style={{ background: 'var(--border-soft)', top: '50%', transform: 'translateY(-50%)' }}
           />
           {/* Active progress track line */}
-          <div 
+          <div
             className="absolute left-4 h-[2px] z-0 transition-all duration-300"
-            style={{ 
-              background: 'var(--accent)', 
-              top: '50%', 
+            style={{
+              background: 'var(--accent)',
+              top: '50%',
               transform: 'translateY(-50%)',
               width: currentStep === 0 ? '0px' : `calc(${(currentStep / 5) * 100}% - 8px)`
             }}
           />
-          
+
           {Array.from({ length: 6 }).map((_, i) => {
             const isActive = i === currentStep;
             const isCompleted = i < currentStep;
@@ -554,27 +554,25 @@ function VisitWizardContent() {
                     setCurrentStep(i);
                   }
                 }}
-                className={`h-7 w-7 sm:h-8 sm:w-8 rounded-full flex-shrink-0 flex items-center justify-center text-[11px] font-bold transition-all duration-200 z-10 relative cursor-pointer ${
-                  isCompleted ? 'hover:scale-105' : ''
-                }`}
+                className={`h-7 w-7 sm:h-8 sm:w-8 rounded-full flex-shrink-0 flex items-center justify-center text-[11px] font-bold transition-all duration-200 z-10 relative cursor-pointer ${isCompleted ? 'hover:scale-105' : ''
+                  }`}
                 style={{
-                  background: isActive 
-                    ? 'linear-gradient(135deg, var(--accent) 0%, #7C3AED 100%)' 
-                    : isCompleted 
-                      ? 'var(--accent)' 
+                  background: isActive
+                    ? 'linear-gradient(135deg, var(--accent) 0%, #7C3AED 100%)'
+                    : isCompleted
+                      ? 'var(--accent)'
                       : 'var(--surface)',
-                  color: isActive 
-                    ? 'white' 
-                    : isCompleted 
-                      ? 'white' 
+                  color: isActive
+                    ? 'white'
+                    : isCompleted
+                      ? 'white'
                       : 'var(--text-muted)',
-                  border: `2px solid ${
-                    isActive 
-                      ? 'transparent' 
-                      : isCompleted 
-                        ? 'var(--accent)' 
+                  border: `2px solid ${isActive
+                      ? 'transparent'
+                      : isCompleted
+                        ? 'var(--accent)'
                         : 'var(--border)'
-                  }`,
+                    }`,
                   boxShadow: isActive ? '0 0 10px rgba(79,70,229,0.4)' : 'none',
                   transform: isActive ? 'scale(1.15)' : 'scale(1)',
                 }}
@@ -717,14 +715,14 @@ function VisitWizardContent() {
                                 <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--accent)] border border-solid border-[var(--border-soft)]">
                                   {c.customerCode}
                                 </span>
-                                {c.dairyClassification && (
+                                { (c.dairyClassification || c.classification) && (
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-solid border-emerald-100">
-                                    {c.dairyClassification === '-' ? 'Not classified' : `Class ${c.dairyClassification}`} · Dairy
+                                    {(c.dairyClassification || c.classification) === '-' ? 'Not classified' : `Class ${c.dairyClassification || c.classification}`} · Dairy
                                   </span>
                                 )}
-                                {c.iceCreamClassification && (
+                                { (c.iceCreamClassification || c.classification) && (
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-50 text-pink-700 border border-solid border-pink-100">
-                                    {c.iceCreamClassification === '-' ? 'Not classified' : `Class ${c.iceCreamClassification}`} · Ice Cream
+                                    {(c.iceCreamClassification || c.classification) === '-' ? 'Not classified' : `Class ${c.iceCreamClassification || c.classification}`} · Ice Cream
                                   </span>
                                 )}
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-solid border-blue-100">
@@ -761,11 +759,11 @@ function VisitWizardContent() {
                         </h3>
                         <p className="text-[11.5px] text-[var(--text-secondary)]">
                           Code: <b>{activeCustomer.customerCode}</b> · Channel: <b>{activeCustomer.channel}</b>
-                          {activeCustomer.dairyClassification && (
-                            <>{' '}· Classification: <b>{activeCustomer.dairyClassification === '-' ? 'Not classified' : `Class ${activeCustomer.dairyClassification}`} · Dairy</b></>
+                          {(activeCustomer.dairyClassification || activeCustomer.classification) && (
+                            <>{' '}· Classification: <b>{(activeCustomer.dairyClassification || activeCustomer.classification) === '-' ? 'Not classified' : `Class ${activeCustomer.dairyClassification || activeCustomer.classification}`} · Dairy</b></>
                           )}
-                          {activeCustomer.iceCreamClassification && (
-                            <>{' '}· Classification: <b>{activeCustomer.iceCreamClassification === '-' ? 'Not classified' : `Class ${activeCustomer.iceCreamClassification}`} · Ice Cream</b></>
+                          {(activeCustomer.iceCreamClassification || activeCustomer.classification) && (
+                            <>{' '}· Classification: <b>{(activeCustomer.iceCreamClassification || activeCustomer.classification) === '-' ? 'Not classified' : `Class ${activeCustomer.iceCreamClassification || activeCustomer.classification}`} · Ice Cream</b></>
                           )}
                         </p>
                       </div>
@@ -803,15 +801,15 @@ function VisitWizardContent() {
                     <div className="flex items-center gap-2">
                       {['Available', 'Not Available', 'Not Required'].map((opt) => {
                         const isChecked = currentStatus === opt;
-                        const col = opt === 'Available' 
-                          ? 'var(--success)' 
-                          : opt === 'Not Available' 
-                            ? 'var(--danger)' 
+                        const col = opt === 'Available'
+                          ? 'var(--success)'
+                          : opt === 'Not Available'
+                            ? 'var(--danger)'
                             : '#d97706';
-                        const bg = opt === 'Available' 
-                          ? 'var(--success-light)' 
-                          : opt === 'Not Available' 
-                            ? 'var(--danger-light)' 
+                        const bg = opt === 'Available'
+                          ? 'var(--success-light)'
+                          : opt === 'Not Available'
+                            ? 'var(--danger-light)'
                             : '#fef3c7';
                         return (
                           <button key={opt} type="button"
@@ -855,15 +853,15 @@ function VisitWizardContent() {
                     <div className="flex items-center gap-2">
                       {['Available', 'Not Available', 'Not Required'].map((opt) => {
                         const isChecked = currentStatus === opt;
-                        const col = opt === 'Available' 
-                          ? 'var(--success)' 
-                          : opt === 'Not Available' 
-                            ? 'var(--danger)' 
+                        const col = opt === 'Available'
+                          ? 'var(--success)'
+                          : opt === 'Not Available'
+                            ? 'var(--danger)'
                             : '#d97706';
-                        const bg = opt === 'Available' 
-                          ? 'var(--success-light)' 
-                          : opt === 'Not Available' 
-                            ? 'var(--danger-light)' 
+                        const bg = opt === 'Available'
+                          ? 'var(--success-light)'
+                          : opt === 'Not Available'
+                            ? 'var(--danger-light)'
                             : '#fef3c7';
                         return (
                           <button key={opt} type="button"
@@ -940,10 +938,10 @@ function VisitWizardContent() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Temp (°C)</label>
-                      <input 
-                        type="text" 
-                        inputMode="decimal" 
-                        placeholder="e.g. -18" 
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="e.g. -18"
                         value={ast.temperature === undefined || ast.temperature === null ? '' : ast.temperature}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -951,7 +949,7 @@ function VisitWizardContent() {
                             updateAssetField(ast.assetId, 'temperature', val);
                           }
                         }}
-                        className="form-input font-mono h-9 text-[12px]" 
+                        className="form-input font-mono h-9 text-[12px]"
                       />
                     </div>
                     <div>
@@ -959,7 +957,7 @@ function VisitWizardContent() {
                       <select value={ast.actionRequired} onChange={(e) => updateAssetField(ast.assetId, 'actionRequired', e.target.value)} className="form-input h-9 text-[12px]">
                         <option value="Working">Working</option>
                         <option value="Not working">Not working</option>
-                        <option value="Working but Service Required">Working but Service Required</option>
+                        <option value="Working But Service Required">Working But Service Required</option>
                         <option value="Others">Others</option>
                       </select>
                     </div>
@@ -998,7 +996,7 @@ function VisitWizardContent() {
                         })}
                       </div>
                     </div>
-                    
+
                     <div>
                       <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>FEFO is Followed?</label>
                       <div className="flex items-center gap-2">
@@ -1139,7 +1137,7 @@ function VisitWizardContent() {
       {currentStep === 5 && (
         <div className="card p-5 space-y-4 animate-slide-up">
           <span className="badge badge-success">Summary Readback</span>
-          
+
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
             {[
               ['Route Code', selectedRoute, 'mono'],

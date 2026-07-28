@@ -35,8 +35,8 @@ export interface Customer {
   customerCode: string;
   customerName: string;
   classification: string; // legacy A-E (kept for backward compatibility)
-  dairyClassification?: string; // A-E for Dairy vertical
-  iceCreamClassification?: string; // A-E for Ice Cream vertical
+  dairyClassification?: string | null; // A-E for Dairy vertical
+  iceCreamClassification?: string | null; // A-E for Ice Cream vertical
   channel: string;
   routeCode: string;
 }
@@ -81,8 +81,8 @@ export interface Visit {
   temperature?: number;
   tempInRange?: boolean;
   assetType?: AssetType;
-  dairyClassification?: string;
-  iceCreamClassification?: string;
+  dairyClassification?: string | null;
+  iceCreamClassification?: string | null;
 }
 
 export interface VisitAsset {
@@ -180,8 +180,8 @@ export interface VisitWizardState {
   customerCode: string;
   customerName?: string;
   classification?: string;
-  dairyClassification?: string;
-  iceCreamClassification?: string;
+  dairyClassification?: string | null;
+  iceCreamClassification?: string | null;
   channel?: string;
   assetType?: AssetType;
   temperature?: number;

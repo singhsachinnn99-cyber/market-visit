@@ -522,8 +522,8 @@ export function mergeParsedData(parsedFiles: ParsedFileResult[]): { payload: Par
       if (!iceInfo) iceInfo = classificationMap.get(`${v}|icecream`);
     }
 
-    const dairyClassification = dairyInfo ? dairyInfo.classification : null;
-    const iceCreamClassification = iceInfo ? iceInfo.classification : null;
+    const dairyClassification = dairyInfo ? dairyInfo.classification : undefined;
+    const iceCreamClassification = iceInfo ? iceInfo.classification : undefined;
     const classification = dairyClassification || iceCreamClassification || 'D';
     const rawChannel = (dairyInfo?.channel || iceInfo?.channel || 'General Trade');
     const channel = rawChannel ? rawChannel.toUpperCase() : 'GENERAL TRADE';

@@ -36,6 +36,8 @@ async function ensureCustomerTableSchema(): Promise<void> {
       { code: '30440', dairy: 'A', ice: 'D' },
       { code: 'C38450', dairy: 'E', ice: '-' },
       { code: '38450', dairy: 'E', ice: '-' },
+      { code: 'C05450', dairy: '-', ice: '-' },
+      { code: '05450', dairy: '-', ice: '-' },
     ];
     for (const p of patches) {
       await pool.execute(

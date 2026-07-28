@@ -717,12 +717,12 @@ function VisitWizardContent() {
                                 </span>
                                 { (c.dairyClassification || c.classification) && (
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-solid border-emerald-100">
-                                    {(c.dairyClassification || c.classification) === '-' ? 'Not classified' : `Class ${c.dairyClassification || c.classification}`} · Dairy
+                                    {(c.dairyClassification || c.classification) === '-' || !(c.dairyClassification || c.classification) ? 'Not classified' : `Class ${c.dairyClassification || c.classification}`} · Dairy
                                   </span>
                                 )}
                                 { (c.iceCreamClassification || c.classification) && (
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-50 text-pink-700 border border-solid border-pink-100">
-                                    {(c.iceCreamClassification || c.classification) === '-' ? 'Not classified' : `Class ${c.iceCreamClassification || c.classification}`} · Ice Cream
+                                    {(c.iceCreamClassification || c.classification) === '-' || !(c.iceCreamClassification || c.classification) ? 'Not classified' : `Class ${c.iceCreamClassification || c.classification}`} · Ice Cream
                                   </span>
                                 )}
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-solid border-blue-100">

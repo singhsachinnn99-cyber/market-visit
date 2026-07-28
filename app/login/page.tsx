@@ -15,7 +15,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
-  
+
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -49,6 +49,7 @@ function LoginForm() {
       if (!res.success) {
         setResetError(res.error || 'Failed to verify email.');
       } else if (!res.allowed) {
+
         setResetMessage(res.message || 'Supervisors cannot reset password.');
         setForgotStep(2);
       } else {
@@ -134,7 +135,7 @@ function LoginForm() {
 
   return (
     <main className="min-h-screen flex flex-col justify-center items-center px-4 bg-[#F8FAFC] dark:bg-slate-950 relative overflow-hidden select-none animate-fade-in">
-      
+
       {/* Decorative ambient radial glows in background */}
       <div className="absolute top-[-10%] right-[-10%] h-[400px] w-[400px] rounded-full bg-[#5B5CEB]/5 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] left-[-10%] h-[400px] w-[400px] rounded-full bg-[#5B5CEB]/5 blur-[120px] pointer-events-none" />
@@ -262,7 +263,7 @@ function LoginForm() {
       {/* Forgot Password Modal Dialog */}
       {forgotOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
-          <div 
+          <div
             className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-solid border-[#E2E8F0] dark:border-slate-800 overflow-hidden p-6 space-y-4 animate-scale-up"
             onMouseDown={(e) => e.stopPropagation()}
           >
@@ -294,7 +295,7 @@ function LoginForm() {
                     style={{ height: '44px' }}
                   />
                 </div>
-                
+
                 {resetError && (
                   <p className="text-[#EF4444] text-[11px] font-semibold">{resetError}</p>
                 )}
@@ -344,7 +345,7 @@ function LoginForm() {
                     <p className="text-[12px] text-gray-600 dark:text-slate-300 leading-relaxed">
                       Email verified. Please enter your administrator verification details and your new password.
                     </p>
-                    
+
                     <div className="space-y-1.5">
                       <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider pl-1">
                         Employee Code (Verification)

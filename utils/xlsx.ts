@@ -100,6 +100,23 @@ function normalizeBusinessVertical(raw: string): 'dairy' | 'icecream' | '' {
   return '';
 }
 
+function cleanCustomerCode(code: string): string {
+  return String(code || '').trim().toUpperCase();
+}
+
+export function getCustomerCodeVariants(code: string): string[] {
+  const clean = cleanCustomerCode(code);
+  if (!clean) return [];
+  const variants = [clean];
+  if (clean.startsWith('C')) {
+    variants.push(clean.substring(1));
+  } else {
+    variants.push(`C${clean}`);
+  }
+  return Array.from(new Set(variants));
+}
+
+
 /**
  * Standard Levenshtein edit distance logic.
  */
@@ -429,18 +446,18 @@ export function mergeParsedData(parsedFiles: ParsedFileResult[]): { payload: Par
       if (!classification) {
         errors.push({ row: rowNum, error: `${f.fileName}: Row is missing Classification value.` });
       }
-      if (!channel) {
-        errors.push({ row: rowNum, error: `${f.fileName}: Row is missing Channel value.` });
-      }
       if (!businessVerticalRaw) {
         errors.push({ row: rowNum, error: `${f.fileName}: Row is missing Business vertical value.` });
       } else if (!businessVertical) {
         errors.push({ row: rowNum, error: `${f.fileName}: Row has an unrecognized Business vertical value "${businessVerticalRaw}" (expected Dairy or Ice Cream).` });
       }
 
-      if (customerCode && classification && channel && businessVertical) {
-        const key = `${customerCode}|${businessVertical}`;
-        classificationMap.set(key, { classification, channel: channel.toUpperCase() });
+      if (customerCode && classification && businessVertical) {
+        const variants = getCustomerCodeVariants(customerCode);
+        for (const variant of variants) {
+          const key = `${variant}|${businessVertical}`;
+          classificationMap.set(key, { classification, channel: channel ? channel.toUpperCase() : '' });
+        }
       }
     });
   });
@@ -494,21 +511,31 @@ export function mergeParsedData(parsedFiles: ParsedFileResult[]): { payload: Par
   payload.mappings.forEach((m) => {
     const nameInfo = customerNamesMap.get(m.customerCode);
     const customerName = nameInfo ? nameInfo.customerName : m.customerCode;
-    // lookup classifications per vertical
-    const dairyInfo = classificationMap.get(`${m.customerCode}|dairy`);
-    const iceInfo = classificationMap.get(`${m.customerCode}|icecream`);
+    
+    // Independent lookup of dairy and ice cream classification per customer variants
+    const variants = getCustomerCodeVariants(m.customerCode);
+    let dairyInfo: { classification: string; channel: string } | undefined;
+    let iceInfo: { classification: string; channel: string } | undefined;
 
-    const classification = dairyInfo?.classification || iceInfo?.classification || 'D';
-    const channel = (dairyInfo?.channel || iceInfo?.channel) || 'General Trade';
+    for (const v of variants) {
+      if (!dairyInfo) dairyInfo = classificationMap.get(`${v}|dairy`);
+      if (!iceInfo) iceInfo = classificationMap.get(`${v}|icecream`);
+    }
+
+    const dairyClassification = dairyInfo ? dairyInfo.classification : null;
+    const iceCreamClassification = iceInfo ? iceInfo.classification : null;
+    const classification = dairyClassification || iceCreamClassification || 'D';
+    const rawChannel = (dairyInfo?.channel || iceInfo?.channel || 'General Trade');
+    const channel = rawChannel ? rawChannel.toUpperCase() : 'GENERAL TRADE';
 
     payload.customers.push({
       cust_rt_id: m.cust_rt_id,
       customerCode: m.customerCode,
       customerName,
       classification,
-      dairyClassification: dairyInfo?.classification,
-      iceCreamClassification: iceInfo?.classification,
-      channel: channel.toUpperCase(),
+      dairyClassification,
+      iceCreamClassification,
+      channel,
       routeCode: m.routeCode,
     });
   });

@@ -74,10 +74,12 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        values.push(customerCode);
+        const cleanCode = String(customerCode).trim().toUpperCase();
+        const altCode = cleanCode.startsWith('C') ? cleanCode.substring(1) : `C${cleanCode}`;
+        values.push(cleanCode, altCode);
 
         const [result]: any = await pool.execute(
-          `UPDATE Customer SET ${updates.join(', ')} WHERE customerCode = ?`,
+          `UPDATE Customer SET ${updates.join(', ')} WHERE UPPER(TRIM(customerCode)) = ? OR UPPER(TRIM(customerCode)) = ?`,
           values
         );
 
@@ -140,6 +142,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const cleanCode = String(customerCode).trim().toUpperCase();
+    const altCode = cleanCode.startsWith('C') ? cleanCode.substring(1) : `C${cleanCode}`;
+
     const [rows]: any = await pool.execute(
       `SELECT
         customerCode,
@@ -147,8 +152,8 @@ export async function GET(req: NextRequest) {
         dairyClassification,
         iceCreamClassification
       FROM Customer
-      WHERE customerCode = ?`,
-      [customerCode]
+      WHERE UPPER(TRIM(customerCode)) = ? OR UPPER(TRIM(customerCode)) = ?`,
+      [cleanCode, altCode]
     );
 
     if (rows.length === 0) {

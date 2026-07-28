@@ -62,9 +62,12 @@ async function runImport() {
     const customers = readJsonFile<Customer>('customers.json');
     for (const c of customers) {
       await connection.execute(
-        `INSERT INTO Customer (customerCode, customerName, classification, channel) VALUES (?, ?, ?, ?) 
-         ON DUPLICATE KEY UPDATE customerName=VALUES(customerName), classification=VALUES(classification), channel=VALUES(channel)`,
-        [c.customerCode, c.customerName, c.classification, c.channel]
+        `INSERT INTO Customer (cust_rt_id, customerCode, customerName, classification, dairyClassification, iceCreamClassification, channel, routeCode)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?) 
+         ON DUPLICATE KEY UPDATE customerName=VALUES(customerName), classification=VALUES(classification), 
+                                 dairyClassification=VALUES(dairyClassification), iceCreamClassification=VALUES(iceCreamClassification), 
+                                 channel=VALUES(channel)`,
+        [c.cust_rt_id || `${c.customerCode}|${c.routeCode || ''}`, c.customerCode, c.customerName, c.classification, c.dairyClassification || null, c.iceCreamClassification || null, c.channel, c.routeCode || null]
       );
     }
     console.log(`Imported/Updated ${customers.length} Customers.`);

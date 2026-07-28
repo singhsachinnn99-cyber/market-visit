@@ -105,48 +105,52 @@ async function migrateClassifications() {
     const classificationMap = new Map<string, Map<string, string>>();
 
     for (const row of rawRows) {
-      const customerCode = String(row[customerCodeCol] || '').trim();
+      const customerCodeRaw = String(row[customerCodeCol] || '').trim();
       const classification = String(row[classificationCol] || '').trim();
       const businessVerticalRaw = String(row[businessVerticalCol] || '').trim();
       const businessVertical = normalizeBusinessVertical(businessVerticalRaw);
 
-      if (customerCode && classification && businessVertical) {
-        if (!classificationMap.has(customerCode)) {
-          classificationMap.set(customerCode, new Map());
+      if (customerCodeRaw && classification && businessVertical) {
+        const clean = customerCodeRaw.toUpperCase();
+        const alt = clean.startsWith('C') ? clean.substring(1) : `C${clean}`;
+        for (const code of [clean, alt]) {
+          if (!classificationMap.has(code)) {
+            classificationMap.set(code, new Map());
+          }
+          classificationMap.get(code)!.set(businessVertical, classification);
         }
-        classificationMap.get(customerCode)!.set(businessVertical, classification);
       }
     }
 
-    console.log(`\n📊 Loaded ${classificationMap.size} customers with classifications`);
+    console.log(`\n📊 Loaded ${classificationMap.size} customer variants with classifications`);
     console.log('🔄 Updating database...\n');
 
     let updatedDairy = 0;
     let updatedIce = 0;
 
-    // Update database
+    // Update database using flexible customerCode match
     for (const [customerCode, verticals] of classificationMap) {
       const dairyClass = verticals.get('dairy');
       const iceClass = verticals.get('icecream');
 
       if (dairyClass) {
         const [result]: any = await pool.execute(
-          'UPDATE Customer SET dairyClassification = ? WHERE customerCode = ?',
-          [dairyClass, customerCode]
+          'UPDATE Customer SET dairyClassification = ? WHERE UPPER(TRIM(customerCode)) = ? OR UPPER(TRIM(customerCode)) = ?',
+          [dairyClass, customerCode, customerCode.startsWith('C') ? customerCode.substring(1) : `C${customerCode}`]
         );
         if (result.affectedRows > 0) {
-          console.log(`✅ C${customerCode.padStart(5, '0')}: Dairy = ${dairyClass}`);
+          console.log(`✅ ${customerCode}: Dairy = ${dairyClass}`);
           updatedDairy += result.affectedRows;
         }
       }
 
       if (iceClass) {
         const [result]: any = await pool.execute(
-          'UPDATE Customer SET iceCreamClassification = ? WHERE customerCode = ?',
-          [iceClass, customerCode]
+          'UPDATE Customer SET iceCreamClassification = ? WHERE UPPER(TRIM(customerCode)) = ? OR UPPER(TRIM(customerCode)) = ?',
+          [iceClass, customerCode, customerCode.startsWith('C') ? customerCode.substring(1) : `C${customerCode}`]
         );
         if (result.affectedRows > 0) {
-          console.log(`✅ C${customerCode.padStart(5, '0')}: Ice Cream = ${iceClass}`);
+          console.log(`✅ ${customerCode}: Ice Cream = ${iceClass}`);
           updatedIce += result.affectedRows;
         }
       }

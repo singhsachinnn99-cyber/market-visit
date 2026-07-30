@@ -107,13 +107,18 @@ function cleanCustomerCode(code: string): string {
 export function getCustomerCodeVariants(code: string): string[] {
   const clean = cleanCustomerCode(code);
   if (!clean) return [];
-  const variants = [clean];
-  if (clean.startsWith('C')) {
-    variants.push(clean.substring(1));
-  } else {
-    variants.push(`C${clean}`);
-  }
-  return Array.from(new Set(variants));
+  const rawNum = clean.replace(/^C/i, '');
+  const unpadded = rawNum.replace(/^0+/, '');
+  const variants = [
+    clean,
+    rawNum,
+    unpadded,
+    `C${rawNum}`,
+    `C${unpadded}`,
+    rawNum.padStart(5, '0'),
+    `C${rawNum.padStart(5, '0')}`,
+  ];
+  return Array.from(new Set(variants.filter(Boolean)));
 }
 
 

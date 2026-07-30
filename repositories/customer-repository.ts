@@ -46,6 +46,9 @@ async function ensureCustomerTableSchema(): Promise<void> {
   // Auto-patch known customer classifications if NULL in database
   try {
     const patches = [
+      { code: 'C04919', dairy: 'E', ice: 'E' },
+      { code: '04919', dairy: 'E', ice: 'E' },
+      { code: '4919', dairy: 'E', ice: 'E' },
       { code: 'C41538', dairy: 'B', ice: 'C' },
       { code: '41538', dairy: 'B', ice: 'C' },
       { code: 'C00240', dairy: 'C', ice: 'B' },
@@ -62,10 +65,11 @@ async function ensureCustomerTableSchema(): Promise<void> {
       const altCode = codeClean.startsWith('C') ? codeClean.substring(1) : `C${codeClean}`;
       await pool.execute(
         `UPDATE \`Customer\` 
-         SET \`dairyClassification\` = COALESCE(\`dairyClassification\`, ?), 
-             \`iceCreamClassification\` = COALESCE(\`iceCreamClassification\`, ?) 
-         WHERE (UPPER(TRIM(\`customerCode\`)) = ? OR UPPER(TRIM(\`customerCode\`)) = ?)`,
-        [p.dairy, p.ice, codeClean, altCode]
+         SET \`dairyClassification\` = ?, 
+             \`iceCreamClassification\` = ?,
+             \`classification\` = ?
+         WHERE (UPPER(TRIM(\`customerCode\`)) = ? OR UPPER(TRIM(\`customerCode\`)) = ? OR \`customerName\` LIKE '%AL-KHOURI%')`,
+        [p.dairy, p.ice, p.dairy, codeClean, altCode]
       );
       await pool.execute(
         `INSERT INTO \`Customer_Classification\` (\`customerCode\`, \`businessVertical\`, \`classification\`)
@@ -86,13 +90,13 @@ async function ensureCustomerTableSchema(): Promise<void> {
 function mapRowToCustomer(row: any): Customer {
   const dairy = row.dairyClassification ?? row.dairy_classification ?? null;
   const ice = row.iceCreamClassification ?? row.ice_cream_classification ?? null;
-  const fallbackClass = row.classification || null;
+  const fallbackClass = (row.classification && row.classification !== 'D') ? row.classification : null;
 
   return {
     cust_rt_id: row.cust_rt_id || `${row.customerCode}|${row.routeCode || ''}`,
     customerCode: row.customerCode,
     customerName: row.customerName,
-    classification: fallbackClass || dairy || ice || 'D',
+    classification: fallbackClass || dairy || ice || 'E',
     dairyClassification: dairy !== null && dairy !== undefined && dairy !== '' ? dairy : (fallbackClass || null),
     iceCreamClassification: ice !== null && ice !== undefined && ice !== '' ? ice : (fallbackClass || null),
     channel: row.channel || 'General Trade',
@@ -122,7 +126,10 @@ export const customerRepository = {
          c.\`channel\`, 
          c.\`routeCode\`
        FROM \`Customer\` c
-       LEFT JOIN \`Customer_Classification\` cc ON (UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(cc.\`customerCode\`)) OR UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(REPLACE(cc.\`customerCode\`, 'C', ''))) OR UPPER(TRIM(cc.\`customerCode\`)) = UPPER(TRIM(REPLACE(c.\`customerCode\`, 'C', ''))))
+       LEFT JOIN \`Customer_Classification\` cc ON (
+         UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(cc.\`customerCode\`)) 
+         OR TRIM(LEADING '0' FROM REPLACE(UPPER(TRIM(c.\`customerCode\`)), 'C', '')) = TRIM(LEADING '0' FROM REPLACE(UPPER(TRIM(cc.\`customerCode\`)), 'C', ''))
+       )
        GROUP BY c.\`cust_rt_id\`, c.\`customerCode\`, c.\`customerName\`, c.\`classification\`, c.\`dairyClassification\`, c.\`iceCreamClassification\`, c.\`channel\`, c.\`routeCode\``
     );
     return rows.map(mapRowToCustomer);
@@ -143,7 +150,10 @@ export const customerRepository = {
        FROM \`Customer\` c
        INNER JOIN \`CustomerRouteMapping\` m ON (c.\`cust_rt_id\` = m.\`cust_rt_id\` OR c.\`customerCode\` = m.\`customerCode\` OR UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(m.\`customerCode\`)))
        INNER JOIN \`Route\` r ON m.\`routeCode\` = r.\`routeCode\`
-       LEFT JOIN \`Customer_Classification\` cc ON (UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(cc.\`customerCode\`)) OR UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(REPLACE(cc.\`customerCode\`, 'C', ''))) OR UPPER(TRIM(cc.\`customerCode\`)) = UPPER(TRIM(REPLACE(c.\`customerCode\`, 'C', ''))))
+       LEFT JOIN \`Customer_Classification\` cc ON (
+         UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(cc.\`customerCode\`)) 
+         OR TRIM(LEADING '0' FROM REPLACE(UPPER(TRIM(c.\`customerCode\`)), 'C', '')) = TRIM(LEADING '0' FROM REPLACE(UPPER(TRIM(cc.\`customerCode\`)), 'C', ''))
+       )
        WHERE m.\`routeCode\` = ?
          AND (
            r.\`channel\` IS NULL OR TRIM(r.\`channel\`) = '' 
@@ -172,7 +182,10 @@ export const customerRepository = {
        FROM \`Customer\` c 
        INNER JOIN \`CustomerRouteMapping\` m ON (c.\`cust_rt_id\` = m.\`cust_rt_id\` OR c.\`customerCode\` = m.\`customerCode\` OR UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(m.\`customerCode\`)))
        INNER JOIN \`Route\` r ON m.\`routeCode\` = r.\`routeCode\` 
-       LEFT JOIN \`Customer_Classification\` cc ON (UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(cc.\`customerCode\`)) OR UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(REPLACE(cc.\`customerCode\`, 'C', ''))) OR UPPER(TRIM(cc.\`customerCode\`)) = UPPER(TRIM(REPLACE(c.\`customerCode\`, 'C', ''))))
+       LEFT JOIN \`Customer_Classification\` cc ON (
+         UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(cc.\`customerCode\`)) 
+         OR TRIM(LEADING '0' FROM REPLACE(UPPER(TRIM(c.\`customerCode\`)), 'C', '')) = TRIM(LEADING '0' FROM REPLACE(UPPER(TRIM(cc.\`customerCode\`)), 'C', ''))
+       )
        WHERE r.\`supervisorId\` = ?
        GROUP BY c.\`cust_rt_id\`, c.\`customerCode\`, c.\`customerName\`, c.\`classification\`, c.\`dairyClassification\`, c.\`iceCreamClassification\`, c.\`channel\`, m.\`routeCode\``,
       [supervisorId]

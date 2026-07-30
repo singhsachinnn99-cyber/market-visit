@@ -715,16 +715,25 @@ function VisitWizardContent() {
                                 <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[var(--accent)] border border-solid border-[var(--border-soft)]">
                                   {c.customerCode}
                                 </span>
-                                { (c.dairyClassification || c.classification) && (
+                                {c.dairyClassification ? (
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-solid border-emerald-100">
-                                    {(c.dairyClassification || c.classification) === '-' || !(c.dairyClassification || c.classification) ? 'Not classified' : `Class ${c.dairyClassification || c.classification}`} · Dairy
+                                    {c.dairyClassification === '-' ? 'Not classified' : `Class ${c.dairyClassification}`} · Dairy
                                   </span>
-                                )}
-                                { (c.iceCreamClassification || c.classification) && (
+                                ) : c.classification ? (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-solid border-emerald-100">
+                                    {c.classification === '-' ? 'Not classified' : `Class ${c.classification}`} · Dairy
+                                  </span>
+                                ) : null}
+
+                                {c.iceCreamClassification ? (
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-50 text-pink-700 border border-solid border-pink-100">
-                                    {(c.iceCreamClassification || c.classification) === '-' || !(c.iceCreamClassification || c.classification) ? 'Not classified' : `Class ${c.iceCreamClassification || c.classification}`} · Ice Cream
+                                    {c.iceCreamClassification === '-' ? 'Not classified' : `Class ${c.iceCreamClassification}`} · Ice Cream
                                   </span>
-                                )}
+                                ) : c.classification && !c.dairyClassification ? (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-50 text-pink-700 border border-solid border-pink-100">
+                                    {c.classification === '-' ? 'Not classified' : `Class ${c.classification}`} · Ice Cream
+                                  </span>
+                                ) : null}
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-solid border-blue-100">
                                   {c.channel}
                                 </span>

@@ -65,10 +65,27 @@ async function runImport() {
         `INSERT INTO Customer (cust_rt_id, customerCode, customerName, classification, dairyClassification, iceCreamClassification, channel, routeCode)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?) 
          ON DUPLICATE KEY UPDATE customerName=VALUES(customerName), classification=VALUES(classification), 
-                                 dairyClassification=VALUES(dairyClassification), iceCreamClassification=VALUES(iceCreamClassification), 
+                                 dairyClassification=COALESCE(VALUES(dairyClassification), Customer.dairyClassification), 
+                                 iceCreamClassification=COALESCE(VALUES(iceCreamClassification), Customer.iceCreamClassification), 
                                  channel=VALUES(channel)`,
         [c.cust_rt_id || `${c.customerCode}|${c.routeCode || ''}`, c.customerCode, c.customerName, c.classification, c.dairyClassification || null, c.iceCreamClassification || null, c.channel, c.routeCode || null]
       );
+      if (c.dairyClassification) {
+        await connection.execute(
+          `INSERT INTO Customer_Classification (customerCode, businessVertical, classification, channel)
+           VALUES (?, 'Dairy', ?, ?)
+           ON DUPLICATE KEY UPDATE classification=VALUES(classification), channel=VALUES(channel)`,
+          [c.customerCode, c.dairyClassification, c.channel]
+        );
+      }
+      if (c.iceCreamClassification) {
+        await connection.execute(
+          `INSERT INTO Customer_Classification (customerCode, businessVertical, classification, channel)
+           VALUES (?, 'Ice Cream', ?, ?)
+           ON DUPLICATE KEY UPDATE classification=VALUES(classification), channel=VALUES(channel)`,
+          [c.customerCode, c.iceCreamClassification, c.channel]
+        );
+      }
     }
     console.log(`Imported/Updated ${customers.length} Customers.`);
 

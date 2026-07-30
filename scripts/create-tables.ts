@@ -48,6 +48,19 @@ async function createTables() {
       \`channel\` VARCHAR(191) NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
+    // 3b. Customer_Classification
+    `CREATE TABLE IF NOT EXISTS \`Customer_Classification\` (
+      \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+      \`customerCode\` VARCHAR(191) NOT NULL,
+      \`businessVertical\` VARCHAR(50) NOT NULL,
+      \`classification\` VARCHAR(50) NOT NULL,
+      \`channel\` VARCHAR(100) NULL,
+      \`updatedAt\` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY \`uk_customer_vertical\` (\`customerCode\`, \`businessVertical\`),
+      INDEX \`idx_cust_class_code\` (\`customerCode\`),
+      FOREIGN KEY (\`customerCode\`) REFERENCES \`Customer\`(\`customerCode\`) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
     // 4. CustomerRouteMapping
     `CREATE TABLE IF NOT EXISTS \`CustomerRouteMapping\` (
       \`customerCode\` VARCHAR(191) NOT NULL,

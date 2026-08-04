@@ -17,6 +17,12 @@ async function createTables() {
   ];
 
   const ddlStatements = [
+    // 0. Manager
+    `CREATE TABLE IF NOT EXISTS \`Manager\` (
+      \`id\` VARCHAR(191) PRIMARY KEY,
+      \`name\` VARCHAR(191) UNIQUE NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
     // 1. User
     `CREATE TABLE IF NOT EXISTS \`User\` (
       \`id\` VARCHAR(191) PRIMARY KEY,
@@ -27,6 +33,7 @@ async function createTables() {
       \`mobile\` VARCHAR(191) NOT NULL,
       \`role\` VARCHAR(50) NOT NULL,
       \`status\` ENUM('Active', 'Inactive') NOT NULL,
+      \`managerId\` VARCHAR(191) NULL,
       \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       INDEX \`idx_user_email\` (\`email\`),
       INDEX \`idx_user_employee_code\` (\`employeeCode\`)
@@ -40,12 +47,14 @@ async function createTables() {
 
     // 3. Customer
     `CREATE TABLE IF NOT EXISTS \`Customer\` (
+      \`cust_rt_id\` VARCHAR(191) NULL,
       \`customerCode\` VARCHAR(191) PRIMARY KEY,
       \`customerName\` VARCHAR(191) NOT NULL,
       \`classification\` VARCHAR(50) NOT NULL,
       \`dairyClassification\` VARCHAR(50) NULL,
       \`iceCreamClassification\` VARCHAR(50) NULL,
-      \`channel\` VARCHAR(191) NOT NULL
+      \`channel\` VARCHAR(191) NOT NULL,
+      \`routeCode\` VARCHAR(191) NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
     // 3b. Customer_Classification
@@ -75,6 +84,15 @@ async function createTables() {
     `CREATE TABLE IF NOT EXISTS \`SKU\` (
       \`skuCode\` VARCHAR(191) PRIMARY KEY,
       \`skuName\` VARCHAR(191) NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+
+    // 5b. PowerSKU
+    `CREATE TABLE IF NOT EXISTS \`PowerSKU\` (
+      \`skuCode\` VARCHAR(191) NOT NULL,
+      \`skuName\` VARCHAR(191) NOT NULL,
+      \`channel\` VARCHAR(191) NOT NULL,
+      PRIMARY KEY (\`skuCode\`, \`channel\`),
+      INDEX \`idx_powersku_channel\` (\`channel\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
     // 6. Visit

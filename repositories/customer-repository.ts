@@ -8,6 +8,12 @@ async function ensureCustomerTableSchema(): Promise<void> {
   const existingColumns = new Set((columnsResult as any[]).map((row: any) => row.COLUMN_NAME));
 
   const migrations: string[] = [];
+  if (!existingColumns.has('cust_rt_id')) {
+    migrations.push("ALTER TABLE `Customer` ADD COLUMN `cust_rt_id` VARCHAR(191) NULL");
+  }
+  if (!existingColumns.has('routeCode')) {
+    migrations.push("ALTER TABLE `Customer` ADD COLUMN `routeCode` VARCHAR(191) NULL");
+  }
   if (!existingColumns.has('dairyClassification')) {
     migrations.push("ALTER TABLE `Customer` ADD COLUMN `dairyClassification` VARCHAR(50) NULL");
   }

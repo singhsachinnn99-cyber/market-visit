@@ -22,7 +22,7 @@ async function createAdminUser() {
   try {
     const adminEmail = process.env.ADMIN_EMAIL || 'admin@marketvisit.com';
     const adminEmployeeCode = process.env.ADMIN_EMPLOYEE_CODE || 'ADMIN001';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@12345';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin@123';
 
     const [existingRows] = await connection.query(
       'SELECT id FROM `User` WHERE LOWER(email) = LOWER(?) OR employeeCode = ? LIMIT 1',
@@ -30,7 +30,12 @@ async function createAdminUser() {
     );
 
     if (existingRows.length > 0) {
-      console.log('Admin user already exists. No new user created.');
+      const passwordHash = await bcrypt.hash(adminPassword, 10);
+      await connection.query(
+        'UPDATE `User` SET passwordHash = ?, status = "Active", name = ? WHERE id = ?',
+        [passwordHash, process.env.ADMIN_NAME || 'Admin', existingRows[0].id]
+      );
+      console.log(`Admin user updated successfully with password: ${adminPassword}`);
       return;
     }
 

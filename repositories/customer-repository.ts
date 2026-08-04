@@ -7,6 +7,15 @@ async function ensureCustomerTableSchema(): Promise<void> {
   );
   const existingColumns = new Set((columnsResult as any[]).map((row: any) => row.COLUMN_NAME));
 
+
+
+
+
+
+
+
+
+
   const migrations: string[] = [];
   if (!existingColumns.has('cust_rt_id')) {
     migrations.push("ALTER TABLE `Customer` ADD COLUMN `cust_rt_id` VARCHAR(191) NULL");

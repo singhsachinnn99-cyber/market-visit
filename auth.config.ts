@@ -2,6 +2,7 @@ import type { NextAuthConfig } from 'next-auth';
 import { canAccessAdminRoute, canAccessSupervisorRoute, isFullAccessRole } from '@/lib/roles';
 
 export const authConfig = {
+  trustHost: true,
   pages: {
     signIn: '/login',
   },

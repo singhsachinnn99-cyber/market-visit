@@ -20,7 +20,7 @@ async function createAdminUser() {
   const connection = await pool.getConnection();
 
   try {
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@marketvisit.com';
     const adminEmployeeCode = process.env.ADMIN_EMPLOYEE_CODE || 'ADMIN001';
     const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@12345';
 

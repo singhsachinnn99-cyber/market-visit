@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "db:reset-data": "node scripts/reset-data.js --confirm",
-    "db:create-admin": "node scripts/create-admin-user.js"
+    "db:create-admin": "node scripts/create-admin-user.js",
+    "db:create-tables": "npx tsx scripts/create-tables.ts",
+    "db:check": "node scripts/test-connection.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

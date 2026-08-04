@@ -66,10 +66,11 @@ export async function GET(req: NextRequest) {
 
     // Ensure foundational tables exist to prevent ER_NO_SUCH_TABLE errors
     try {
-      await pool.execute(`CREATE TABLE IF NOT EXISTS \`Manager\` (\`id\` VARCHAR(191) PRIMARY KEY, \`name\` VARCHAR(191) UNIQUE NOT NULL) ENGINE=InnoDB;`);
-      await pool.execute(`CREATE TABLE IF NOT EXISTS \`PowerSKU\` (\`skuCode\` VARCHAR(191) NOT NULL, \`skuName\` VARCHAR(191) NOT NULL, \`channel\` VARCHAR(191) NOT NULL, PRIMARY KEY (\`skuCode\`, \`channel\`)) ENGINE=InnoDB;`);
-      await pool.execute(`CREATE TABLE IF NOT EXISTS \`VisitAsset\` (\`visitId\` VARCHAR(191) NOT NULL, \`assetType\` VARCHAR(50) NOT NULL, \`temperature\` DOUBLE NOT NULL, \`tempInRange\` TINYINT(1) NOT NULL, \`actionRequired\` VARCHAR(50) NOT NULL, \`observation\` TEXT NULL, PRIMARY KEY (\`visitId\`, \`assetType\`)) ENGINE=InnoDB;`);
-      await pool.execute(`CREATE TABLE IF NOT EXISTS \`VisitPowerSkuResult\` (\`visitId\` VARCHAR(191) NOT NULL, \`skuCode\` VARCHAR(191) NOT NULL, \`status\` VARCHAR(50) NOT NULL, PRIMARY KEY (\`visitId\`, \`skuCode\`)) ENGINE=InnoDB;`);
+      await pool.execute(`CREATE TABLE IF NOT EXISTS \`Manager\` (\`id\` VARCHAR(191) PRIMARY KEY, \`name\` VARCHAR(191) UNIQUE NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
+      await pool.execute(`ALTER TABLE \`Manager\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+      await pool.execute(`CREATE TABLE IF NOT EXISTS \`PowerSKU\` (\`skuCode\` VARCHAR(191) NOT NULL, \`skuName\` VARCHAR(191) NOT NULL, \`channel\` VARCHAR(191) NOT NULL, PRIMARY KEY (\`skuCode\`, \`channel\`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
+      await pool.execute(`CREATE TABLE IF NOT EXISTS \`VisitAsset\` (\`visitId\` VARCHAR(191) NOT NULL, \`assetType\` VARCHAR(50) NOT NULL, \`temperature\` DOUBLE NOT NULL, \`tempInRange\` TINYINT(1) NOT NULL, \`actionRequired\` VARCHAR(50) NOT NULL, \`observation\` TEXT NULL, PRIMARY KEY (\`visitId\`, \`assetType\`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
+      await pool.execute(`CREATE TABLE IF NOT EXISTS \`VisitPowerSkuResult\` (\`visitId\` VARCHAR(191) NOT NULL, \`skuCode\` VARCHAR(191) NOT NULL, \`status\` VARCHAR(50) NOT NULL, PRIMARY KEY (\`visitId\`, \`skuCode\`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
       const [uCols]: any = await pool.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'User' AND COLUMN_NAME = 'managerId'");
       if (!uCols || uCols.length === 0) {
         await pool.execute("ALTER TABLE `User` ADD COLUMN `managerId` VARCHAR(191) NULL");
@@ -82,7 +83,7 @@ export async function GET(req: NextRequest) {
     const [dbUsers]: any = await pool.execute(`
       SELECT u.id, u.name, u.role, m.name as managerName 
       FROM User u 
-      LEFT JOIN Manager m ON u.managerId = m.id
+      LEFT JOIN Manager m ON (u.managerId = m.id OR u.managerId = m.id COLLATE utf8mb4_unicode_ci)
     `);
     const [skuRows]: any = await pool.execute('SELECT * FROM `SKU`');
     const skuMap = new Map<string, any>(skuRows.map((sku: any) => [sku.skuCode, sku]));

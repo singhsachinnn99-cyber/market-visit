@@ -19,7 +19,8 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
           throw new Error('Please enter both email and password.');
         }
 
-        const user = await userRepository.getUserByEmail(credentials.email as string);
+        const loginInput = (credentials.email as string).trim();
+        const user = (await userRepository.getUserByEmail(loginInput)) || (await userRepository.getUserByEmployeeCode(loginInput));
         if (!user) {
           throw new Error('No user found with this email/Login ID.');
         }

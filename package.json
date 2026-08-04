@@ -10,7 +10,8 @@
     "db:reset-data": "node scripts/reset-data.js --confirm",
     "db:create-admin": "node scripts/create-admin-user.js",
     "db:create-tables": "npx tsx scripts/create-tables.ts",
-    "db:check": "node scripts/test-connection.js"
+    "db:check": "node scripts/test-connection.js",
+    "db:inspect-users": "node scripts/inspect-users.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",

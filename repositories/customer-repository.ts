@@ -143,82 +143,148 @@ function mapRowToMapping(row: any): CustomerRouteMapping {
 export const customerRepository = {
   async getAllCustomers(): Promise<Customer[]> {
     await ensureCustomerTableSchema();
-    const [rows]: any = await pool.execute(
-      `SELECT 
-         c.\`cust_rt_id\`, 
-         c.\`customerCode\`, 
-         c.\`customerName\`, 
-         c.\`classification\`, 
-         COALESCE(MAX(CASE WHEN LOWER(TRIM(cc.\`businessVertical\`)) = 'dairy' THEN cc.\`classification\` END), c.\`dairyClassification\`, c.\`classification\`) AS \`dairyClassification\`, 
-         COALESCE(MAX(CASE WHEN LOWER(TRIM(cc.\`businessVertical\`)) IN ('ice cream', 'icecream', 'ice-cream') THEN cc.\`classification\` END), c.\`iceCreamClassification\`, c.\`classification\`) AS \`iceCreamClassification\`, 
-         c.\`channel\`, 
-         c.\`routeCode\`
-       FROM \`Customer\` c
-       LEFT JOIN \`Customer_Classification\` cc ON (
-         UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(cc.\`customerCode\`)) 
-         OR TRIM(LEADING '0' FROM REPLACE(UPPER(TRIM(c.\`customerCode\`)), 'C', '')) = TRIM(LEADING '0' FROM REPLACE(UPPER(TRIM(cc.\`customerCode\`)), 'C', ''))
-       )
-       GROUP BY c.\`cust_rt_id\`, c.\`customerCode\`, c.\`customerName\`, c.\`classification\`, c.\`dairyClassification\`, c.\`iceCreamClassification\`, c.\`channel\`, c.\`routeCode\``
-    );
-    return rows.map(mapRowToCustomer);
+    const [customers]: any = await pool.execute('SELECT * FROM `Customer`');
+    let classifications: any[] = [];
+    try {
+      const [ccRows]: any = await pool.execute('SELECT * FROM `Customer_Classification`');
+      classifications = ccRows;
+    } catch (e) {}
+
+    const classMap = new Map<string, { dairy?: string; iceCream?: string }>();
+    classifications.forEach((cc: any) => {
+      const code = cc.customerCode ? cc.customerCode.trim().toUpperCase() : '';
+      const altCode = code.replace(/^0+/, '').replace(/^C/, '');
+      const vert = (cc.businessVertical || '').toLowerCase();
+
+      const setVert = (key: string) => {
+        let entry = classMap.get(key);
+        if (!entry) {
+          entry = {};
+          classMap.set(key, entry);
+        }
+        if (vert === 'dairy') entry.dairy = cc.classification;
+        if (vert.includes('ice')) entry.iceCream = cc.classification;
+      };
+
+      if (code) setVert(code);
+      if (altCode) setVert(altCode);
+    });
+
+    return customers.map((c: any) => {
+      const codeClean = c.customerCode ? c.customerCode.trim().toUpperCase() : '';
+      const altClean = codeClean.replace(/^0+/, '').replace(/^C/, '');
+      const mapped = classMap.get(codeClean) || classMap.get(altClean) || {};
+
+      const dairy = mapped.dairy || c.dairyClassification || c.classification;
+      const ice = mapped.iceCream || c.iceCreamClassification || c.classification;
+
+      return mapRowToCustomer({
+        ...c,
+        dairyClassification: dairy,
+        iceCreamClassification: ice,
+      });
+    });
   },
 
   async getCustomersByRoute(routeCode: string): Promise<Customer[]> {
     await ensureCustomerTableSchema();
     const [rows]: any = await pool.execute(
-      `SELECT 
-         c.\`cust_rt_id\`, 
-         c.\`customerCode\`, 
-         c.\`customerName\`, 
-         c.\`classification\`, 
-         COALESCE(MAX(CASE WHEN LOWER(TRIM(cc.\`businessVertical\`)) = 'dairy' THEN cc.\`classification\` END), c.\`dairyClassification\`, c.\`classification\`) AS \`dairyClassification\`, 
-         COALESCE(MAX(CASE WHEN LOWER(TRIM(cc.\`businessVertical\`)) IN ('ice cream', 'icecream', 'ice-cream') THEN cc.\`classification\` END), c.\`iceCreamClassification\`, c.\`classification\`) AS \`iceCreamClassification\`, 
-         c.\`channel\`, 
-         m.\`routeCode\`
+      `SELECT c.*, m.\`routeCode\` as mappedRouteCode
        FROM \`Customer\` c
-       INNER JOIN \`CustomerRouteMapping\` m ON (c.\`cust_rt_id\` = m.\`cust_rt_id\` OR c.\`customerCode\` = m.\`customerCode\` OR UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(m.\`customerCode\`)))
-       INNER JOIN \`Route\` r ON m.\`routeCode\` = r.\`routeCode\`
-       LEFT JOIN \`Customer_Classification\` cc ON (
-         UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(cc.\`customerCode\`)) 
-         OR TRIM(LEADING '0' FROM REPLACE(UPPER(TRIM(c.\`customerCode\`)), 'C', '')) = TRIM(LEADING '0' FROM REPLACE(UPPER(TRIM(cc.\`customerCode\`)), 'C', ''))
-       )
-       WHERE m.\`routeCode\` = ?
-         AND (
-           r.\`channel\` IS NULL OR TRIM(r.\`channel\`) = '' 
-           OR UPPER(TRIM(c.\`channel\`)) = UPPER(TRIM(r.\`channel\`))
-           OR (UPPER(TRIM(r.\`channel\`)) IN ('TT', 'GT', 'GENERAL TRADE', 'TRADITIONAL TRADE') AND UPPER(TRIM(c.\`channel\`)) IN ('TT', 'GT', 'GENERAL TRADE', 'TRADITIONAL TRADE'))
-           OR (UPPER(TRIM(r.\`channel\`)) IN ('MT', 'MODERN TRADE') AND UPPER(TRIM(c.\`channel\`)) IN ('MT', 'MODERN TRADE'))
-         )
-       GROUP BY c.\`cust_rt_id\`, c.\`customerCode\`, c.\`customerName\`, c.\`classification\`, c.\`dairyClassification\`, c.\`iceCreamClassification\`, c.\`channel\`, m.\`routeCode\``,
+       INNER JOIN \`CustomerRouteMapping\` m ON (c.\`cust_rt_id\` = m.\`cust_rt_id\` OR c.\`customerCode\` = m.\`customerCode\`)
+       WHERE m.\`routeCode\` = ?`,
       [routeCode]
     );
-    return rows.map(mapRowToCustomer);
+
+    let classifications: any[] = [];
+    try {
+      const [ccRows]: any = await pool.execute('SELECT * FROM `Customer_Classification`');
+      classifications = ccRows;
+    } catch (e) {}
+
+    const classMap = new Map<string, { dairy?: string; iceCream?: string }>();
+    classifications.forEach((cc: any) => {
+      const code = cc.customerCode ? cc.customerCode.trim().toUpperCase() : '';
+      const altCode = code.replace(/^0+/, '').replace(/^C/, '');
+      const vert = (cc.businessVertical || '').toLowerCase();
+
+      const setVert = (key: string) => {
+        let entry = classMap.get(key);
+        if (!entry) {
+          entry = {};
+          classMap.set(key, entry);
+        }
+        if (vert === 'dairy') entry.dairy = cc.classification;
+        if (vert.includes('ice')) entry.iceCream = cc.classification;
+      };
+
+      if (code) setVert(code);
+      if (altCode) setVert(altCode);
+    });
+
+    return rows.map((c: any) => {
+      const codeClean = c.customerCode ? c.customerCode.trim().toUpperCase() : '';
+      const altClean = codeClean.replace(/^0+/, '').replace(/^C/, '');
+      const mapped = classMap.get(codeClean) || classMap.get(altClean) || {};
+
+      return mapRowToCustomer({
+        ...c,
+        routeCode: c.mappedRouteCode || c.routeCode,
+        dairyClassification: mapped.dairy || c.dairyClassification || c.classification,
+        iceCreamClassification: mapped.iceCream || c.iceCreamClassification || c.classification,
+      });
+    });
   },
 
   async getCustomersBySupervisor(supervisorId: string): Promise<Customer[]> {
     await ensureCustomerTableSchema();
     const [rows]: any = await pool.execute(
-      `SELECT 
-         c.\`cust_rt_id\`, 
-         c.\`customerCode\`, 
-         c.\`customerName\`, 
-         c.\`classification\`, 
-         COALESCE(MAX(CASE WHEN LOWER(TRIM(cc.\`businessVertical\`)) = 'dairy' THEN cc.\`classification\` END), c.\`dairyClassification\`, c.\`classification\`) AS \`dairyClassification\`, 
-         COALESCE(MAX(CASE WHEN LOWER(TRIM(cc.\`businessVertical\`)) IN ('ice cream', 'icecream', 'ice-cream') THEN cc.\`classification\` END), c.\`iceCreamClassification\`, c.\`classification\`) AS \`iceCreamClassification\`, 
-         c.\`channel\`, 
-         m.\`routeCode\`
+      `SELECT c.*, m.\`routeCode\` as mappedRouteCode
        FROM \`Customer\` c 
-       INNER JOIN \`CustomerRouteMapping\` m ON (c.\`cust_rt_id\` = m.\`cust_rt_id\` OR c.\`customerCode\` = m.\`customerCode\` OR UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(m.\`customerCode\`)))
+       INNER JOIN \`CustomerRouteMapping\` m ON (c.\`cust_rt_id\` = m.\`cust_rt_id\` OR c.\`customerCode\` = m.\`customerCode\`)
        INNER JOIN \`Route\` r ON m.\`routeCode\` = r.\`routeCode\` 
-       LEFT JOIN \`Customer_Classification\` cc ON (
-         UPPER(TRIM(c.\`customerCode\`)) = UPPER(TRIM(cc.\`customerCode\`)) 
-         OR TRIM(LEADING '0' FROM REPLACE(UPPER(TRIM(c.\`customerCode\`)), 'C', '')) = TRIM(LEADING '0' FROM REPLACE(UPPER(TRIM(cc.\`customerCode\`)), 'C', ''))
-       )
-       WHERE r.\`supervisorId\` = ?
-       GROUP BY c.\`cust_rt_id\`, c.\`customerCode\`, c.\`customerName\`, c.\`classification\`, c.\`dairyClassification\`, c.\`iceCreamClassification\`, c.\`channel\`, m.\`routeCode\``,
+       WHERE r.\`supervisorId\` = ?`,
       [supervisorId]
     );
-    return rows.map(mapRowToCustomer);
+
+    let classifications: any[] = [];
+    try {
+      const [ccRows]: any = await pool.execute('SELECT * FROM `Customer_Classification`');
+      classifications = ccRows;
+    } catch (e) {}
+
+    const classMap = new Map<string, { dairy?: string; iceCream?: string }>();
+    classifications.forEach((cc: any) => {
+      const code = cc.customerCode ? cc.customerCode.trim().toUpperCase() : '';
+      const altCode = code.replace(/^0+/, '').replace(/^C/, '');
+      const vert = (cc.businessVertical || '').toLowerCase();
+
+      const setVert = (key: string) => {
+        let entry = classMap.get(key);
+        if (!entry) {
+          entry = {};
+          classMap.set(key, entry);
+        }
+        if (vert === 'dairy') entry.dairy = cc.classification;
+        if (vert.includes('ice')) entry.iceCream = cc.classification;
+      };
+
+      if (code) setVert(code);
+      if (altCode) setVert(altCode);
+    });
+
+    return rows.map((c: any) => {
+      const codeClean = c.customerCode ? c.customerCode.trim().toUpperCase() : '';
+      const altClean = codeClean.replace(/^0+/, '').replace(/^C/, '');
+      const mapped = classMap.get(codeClean) || classMap.get(altClean) || {};
+
+      return mapRowToCustomer({
+        ...c,
+        routeCode: c.mappedRouteCode || c.routeCode,
+        dairyClassification: mapped.dairy || c.dairyClassification || c.classification,
+        iceCreamClassification: mapped.iceCream || c.iceCreamClassification || c.classification,
+      });
+    });
   },
 
   async getMappings(): Promise<CustomerRouteMapping[]> {

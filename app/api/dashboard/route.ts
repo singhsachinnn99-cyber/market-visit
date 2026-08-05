@@ -5,6 +5,21 @@ import { customerRepository } from '@/repositories/customer-repository';
 import pool from '@/lib/db';
 import { getDashboardScope, isFleetRole, isFullAccessRole, isSupervisorRole, isReportAllowed } from '@/lib/roles';
 
+let dashboardSchemaChecked = false;
+async function ensureDashboardSchema() {
+  if (dashboardSchemaChecked) return;
+  try {
+    await pool.execute(`CREATE TABLE IF NOT EXISTS \`Manager\` (\`id\` VARCHAR(191) PRIMARY KEY, \`name\` VARCHAR(191) UNIQUE NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
+    await pool.execute(`CREATE TABLE IF NOT EXISTS \`PowerSKU\` (\`skuCode\` VARCHAR(191) NOT NULL, \`skuName\` VARCHAR(191) NOT NULL, \`channel\` VARCHAR(191) NOT NULL, PRIMARY KEY (\`skuCode\`, \`channel\`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
+    await pool.execute(`CREATE TABLE IF NOT EXISTS \`VisitAsset\` (\`visitId\` VARCHAR(191) NOT NULL, \`assetType\` VARCHAR(50) NOT NULL, \`temperature\` DOUBLE NOT NULL, \`tempInRange\` TINYINT(1) NOT NULL, \`actionRequired\` VARCHAR(50) NOT NULL, \`observation\` TEXT NULL, PRIMARY KEY (\`visitId\`, \`assetType\`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
+    await pool.execute(`CREATE TABLE IF NOT EXISTS \`VisitPowerSkuResult\` (\`visitId\` VARCHAR(191) NOT NULL, \`skuCode\` VARCHAR(191) NOT NULL, \`status\` VARCHAR(50) NOT NULL, PRIMARY KEY (\`visitId\`, \`skuCode\`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
+    dashboardSchemaChecked = true;
+  } catch (e) {}
+}
+
+const cacheStore = new Map<string, { timestamp: number; data: any }>();
+const CACHE_TTL_MS = 3000; // 3 seconds cache for deduplicating simultaneous page/layout requests
+
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
@@ -20,12 +35,31 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized role' }, { status: 403 });
     }
 
-    // 1. Fetch raw datasets from database
-    let [visits, customers] = await Promise.all([
+    const cacheKey = `${userSession.id}_${role}_${req.nextUrl.searchParams.toString()}`;
+    const cached = cacheStore.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+      return NextResponse.json(cached.data);
+    }
+
+    await ensureDashboardSchema();
+
+    // 1. Fetch raw datasets concurrently in parallel
+    const [visitsRaw, customers, dbUsers, skuRows, powerSkuRows, assets, pskuResults, npdResults] = await Promise.all([
       visitRepository.getAllVisits(),
       customerRepository.getAllCustomers(),
+      pool.execute(`
+        SELECT u.id, u.name, u.role, m.name as managerName 
+        FROM User u 
+        LEFT JOIN Manager m ON u.managerId = m.id
+      `).then(([rows]: any) => rows).catch(() => []),
+      pool.execute('SELECT * FROM `SKU`').then(([rows]: any) => rows).catch(() => []),
+      pool.execute('SELECT * FROM `PowerSKU`').then(([rows]: any) => rows).catch(() => []),
+      pool.execute('SELECT * FROM `VisitAsset`').then(([rows]: any) => rows).catch(() => []),
+      pool.execute('SELECT * FROM `VisitPowerSkuResult`').then(([rows]: any) => rows).catch(() => []),
+      pool.execute('SELECT * FROM `NPDResponse`').then(([rows]: any) => rows).catch(() => []),
     ]);
 
+    let visits = visitsRaw;
     if (scope === 'supervisor') {
       visits = visits.filter((v) => v.supervisorId === userSession.id);
     }
@@ -64,37 +98,12 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Ensure foundational tables exist to prevent ER_NO_SUCH_TABLE errors
-    try {
-      await pool.execute(`CREATE TABLE IF NOT EXISTS \`Manager\` (\`id\` VARCHAR(191) PRIMARY KEY, \`name\` VARCHAR(191) UNIQUE NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
-      await pool.execute(`ALTER TABLE \`Manager\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-      await pool.execute(`CREATE TABLE IF NOT EXISTS \`PowerSKU\` (\`skuCode\` VARCHAR(191) NOT NULL, \`skuName\` VARCHAR(191) NOT NULL, \`channel\` VARCHAR(191) NOT NULL, PRIMARY KEY (\`skuCode\`, \`channel\`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
-      await pool.execute(`CREATE TABLE IF NOT EXISTS \`VisitAsset\` (\`visitId\` VARCHAR(191) NOT NULL, \`assetType\` VARCHAR(50) NOT NULL, \`temperature\` DOUBLE NOT NULL, \`tempInRange\` TINYINT(1) NOT NULL, \`actionRequired\` VARCHAR(50) NOT NULL, \`observation\` TEXT NULL, PRIMARY KEY (\`visitId\`, \`assetType\`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
-      await pool.execute(`CREATE TABLE IF NOT EXISTS \`VisitPowerSkuResult\` (\`visitId\` VARCHAR(191) NOT NULL, \`skuCode\` VARCHAR(191) NOT NULL, \`status\` VARCHAR(50) NOT NULL, PRIMARY KEY (\`visitId\`, \`skuCode\`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
-      const [uCols]: any = await pool.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'User' AND COLUMN_NAME = 'managerId'");
-      if (!uCols || uCols.length === 0) {
-        await pool.execute("ALTER TABLE `User` ADD COLUMN `managerId` VARCHAR(191) NULL");
-      }
-    } catch (e) {
-      // Non-blocking fallback
-    }
-
-    // 3. Load dynamic User & Manager mappings (include role for supervisor count)
-    const [dbUsers]: any = await pool.execute(`
-      SELECT u.id, u.name, u.role, m.name as managerName 
-      FROM User u 
-      LEFT JOIN Manager m ON (u.managerId = m.id OR u.managerId = m.id COLLATE utf8mb4_unicode_ci)
-    `);
-    const [skuRows]: any = await pool.execute('SELECT * FROM `SKU`');
     const skuMap = new Map<string, any>(skuRows.map((sku: any) => [sku.skuCode, sku]));
-    const [powerSkuRows]: any = await pool.execute('SELECT * FROM `PowerSKU`');
     const powerSkuMap = new Map<string, any>(powerSkuRows.map((sku: any) => [sku.skuCode, sku]));
     const userMap = new Map<string, { name: string; managerName: string }>(
       dbUsers.map((u: any) => [u.id, { name: u.name.toUpperCase(), managerName: (u.managerName || 'ADNAN').toUpperCase() }])
     );
 
-    // 4. Load child tables
-    const [assets]: any = await pool.execute('SELECT * FROM `VisitAsset`');
     const assetMap = new Map<string, any[]>();
     assets.forEach((ast: any) => {
       if (!assetMap.has(ast.visitId)) {
@@ -103,7 +112,6 @@ export async function GET(req: NextRequest) {
       assetMap.get(ast.visitId)!.push(ast);
     });
 
-    const [pskuResults]: any = await pool.execute('SELECT * FROM `VisitPowerSkuResult`');
     const pskuMap = new Map<string, any[]>();
     pskuResults.forEach((r: any) => {
       if (!pskuMap.has(r.visitId)) {
@@ -112,7 +120,6 @@ export async function GET(req: NextRequest) {
       pskuMap.get(r.visitId)!.push(r);
     });
 
-    const [npdResults]: any = await pool.execute('SELECT * FROM `NPDResponse`');
     const npdMap = new Map<string, any[]>();
     npdResults.forEach((r: any) => {
       if (!npdMap.has(r.visitId)) {
@@ -446,7 +453,7 @@ export async function GET(req: NextRequest) {
         };
       });
 
-    return NextResponse.json({
+    const payload = {
       success: true,
       rows,
       reportRows,
@@ -460,7 +467,11 @@ export async function GET(req: NextRequest) {
       coveragePerRoute,
       supervisorPerformance,
       temperatureBreaches
-    });
+    };
+
+    cacheStore.set(cacheKey, { timestamp: Date.now(), data: payload });
+
+    return NextResponse.json(payload);
   } catch (error: any) {
     console.error('Dashboard aggregation failed:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

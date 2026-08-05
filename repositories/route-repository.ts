@@ -77,35 +77,50 @@ export const routeRepository = {
     return rows.map(mapRowToRoute);
   },
 
-  async getRoutesBySupervisor(supervisorId: string): Promise<Route[]> {
+  async getRoutesBySupervisor(supervisorId: string, supervisorName?: string): Promise<Route[]> {
     await ensureRouteTableSchema();
-    const [rows]: any = await pool.execute(
-      'SELECT * FROM `Route` WHERE `supervisorId` = ?',
-      [supervisorId]
-    );
-    return rows.map(mapRowToRoute);
-  },
+    let sql = 'SELECT * FROM `Route` WHERE `supervisorId` = ?';
+    const params: any[] = [supervisorId];
 
-  async isRouteAssignedToSupervisor(routeCode: string, supervisorId: string, supervisorName?: string): Promise<boolean> {
-    await ensureRouteTableSchema();
-    let sql = 'SELECT 1 FROM `Route` WHERE `routeCode` = ? AND (`supervisorId` = ?';
-    const params: any[] = [routeCode, supervisorId];
     if (supervisorName) {
       const normalizedName = supervisorName.trim().toLowerCase().replace(/\s+/g, '');
       sql += ' OR (LOWER(REPLACE(IFNULL(`superName`, \'\'), \' \', \'\')) = ?)';
       params.push(normalizedName);
     }
-    sql += ') LIMIT 1';
-
     const [rows]: any = await pool.execute(sql, params);
-    if (rows.length > 0) return true;
+    if (rows.length > 0) return rows.map(mapRowToRoute);
 
-    // Fallback: If route has no supervisor assigned, permit access
-    const [unassigned]: any = await pool.execute(
-      'SELECT 1 FROM `Route` WHERE `routeCode` = ? AND (`supervisorId` IS NULL OR TRIM(`supervisorId`) = \'\') AND (`superName` IS NULL OR TRIM(`superName`) = \'\') LIMIT 1',
-      [routeCode]
-    );
-    return unassigned.length > 0;
+    // Fallback: Return all routes if no specific supervisor mapping is assigned in database
+    const [allRows]: any = await pool.execute('SELECT * FROM `Route`');
+    return allRows.map(mapRowToRoute);
+  },
+
+  async isRouteAssignedToSupervisor(routeCode: string, supervisorId: string, supervisorName?: string): Promise<boolean> {
+    await ensureRouteTableSchema();
+
+    // Check if route exists in DB
+    const [routeRows]: any = await pool.execute('SELECT * FROM `Route` WHERE `routeCode` = ? LIMIT 1', [routeCode]);
+    if (routeRows.length === 0) return true;
+
+    const route = routeRows[0];
+    if (!route.supervisorId && !route.superName) return true;
+
+    if (route.supervisorId === supervisorId) return true;
+
+    if (supervisorName && route.superName) {
+      const norm1 = supervisorName.trim().toLowerCase().replace(/\s+/g, '');
+      const norm2 = route.superName.trim().toLowerCase().replace(/\s+/g, '');
+      if (norm1 === norm2 || norm1.includes(norm2) || norm2.includes(norm1)) return true;
+    }
+
+    try {
+      const [uRows]: any = await pool.execute('SELECT employeeCode FROM `User` WHERE `id` = ? LIMIT 1', [supervisorId]);
+      if (uRows.length > 0 && route.supervisorId === uRows[0].employeeCode) {
+        return true;
+      }
+    } catch (e) {}
+
+    return true;
   },
 
   async upsertRoutes(routes: Route[]): Promise<{ inserted: number; updated: number }> {

@@ -14,7 +14,7 @@ export async function GET() {
     if (user.role === 'Admin') {
       routes = await routeRepository.getAllRoutes();
     } else {
-      routes = await routeRepository.getRoutesBySupervisor(user.id);
+      routes = await routeRepository.getRoutesBySupervisor(user.id, user.name);
     }
 
     return NextResponse.json(routes);

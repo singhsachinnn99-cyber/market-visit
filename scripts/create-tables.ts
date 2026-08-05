@@ -78,12 +78,14 @@ async function createTables() {
 
     // 4. CustomerRouteMapping
     `CREATE TABLE IF NOT EXISTS \`CustomerRouteMapping\` (
+      \`cust_rt_id\` VARCHAR(191) NULL,
       \`customerCode\` VARCHAR(191) NOT NULL,
       \`routeCode\` VARCHAR(191) NOT NULL,
       PRIMARY KEY (\`customerCode\`, \`routeCode\`),
       FOREIGN KEY (\`customerCode\`) REFERENCES \`Customer\`(\`customerCode\`) ON DELETE CASCADE,
       FOREIGN KEY (\`routeCode\`) REFERENCES \`Route\`(\`routeCode\`) ON DELETE CASCADE,
-      INDEX \`idx_mapping_route\` (\`routeCode\`)
+      INDEX \`idx_mapping_route\` (\`routeCode\`),
+      INDEX \`idx_mapping_cust_rt_id\` (\`cust_rt_id\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
     // 5. SKU

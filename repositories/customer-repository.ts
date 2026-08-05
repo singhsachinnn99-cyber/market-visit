@@ -1,95 +1,117 @@
 import { Customer, CustomerRouteMapping } from '@/types';
 import pool from '@/lib/db';
 
+let customerSchemaChecked = false;
+
 async function ensureCustomerTableSchema(): Promise<void> {
-  const [columnsResult]: any = await pool.execute(
-    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Customer'"
-  );
-  const existingColumns = new Set((columnsResult as any[]).map((row: any) => row.COLUMN_NAME));
+  if (customerSchemaChecked) return;
+  try {
+    const [columnsResult]: any = await pool.execute(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Customer'"
+    );
+    const existingColumns = new Set((columnsResult as any[]).map((row: any) => row.COLUMN_NAME));
 
-  const migrations: string[] = [];
-  if (!existingColumns.has('cust_rt_id')) {
-    migrations.push("ALTER TABLE `Customer` ADD COLUMN `cust_rt_id` VARCHAR(191) NULL");
-  }
-  if (!existingColumns.has('routeCode')) {
-    migrations.push("ALTER TABLE `Customer` ADD COLUMN `routeCode` VARCHAR(191) NULL");
-  }
-  if (!existingColumns.has('dairyClassification')) {
-    migrations.push("ALTER TABLE `Customer` ADD COLUMN `dairyClassification` VARCHAR(50) NULL");
-  }
-  if (!existingColumns.has('iceCreamClassification')) {
-    migrations.push("ALTER TABLE `Customer` ADD COLUMN `iceCreamClassification` VARCHAR(50) NULL");
-  }
+    const migrations: string[] = [];
+    if (!existingColumns.has('cust_rt_id')) {
+      migrations.push("ALTER TABLE `Customer` ADD COLUMN `cust_rt_id` VARCHAR(191) NULL");
+    }
+    if (!existingColumns.has('routeCode')) {
+      migrations.push("ALTER TABLE `Customer` ADD COLUMN `routeCode` VARCHAR(191) NULL");
+    }
+    if (!existingColumns.has('dairyClassification')) {
+      migrations.push("ALTER TABLE `Customer` ADD COLUMN `dairyClassification` VARCHAR(50) NULL");
+    }
+    if (!existingColumns.has('iceCreamClassification')) {
+      migrations.push("ALTER TABLE `Customer` ADD COLUMN `iceCreamClassification` VARCHAR(50) NULL");
+    }
 
-  for (const migration of migrations) {
-    try {
-      await pool.execute(migration);
-    } catch (error: any) {
-      if (!/duplicate column|already exists|doesn't exist|Unknown column/i.test(error.message || '')) {
-        throw error;
+    for (const migration of migrations) {
+      try {
+        await pool.execute(migration);
+      } catch (error: any) {
+        if (!/duplicate column|already exists|doesn't exist|Unknown column/i.test(error.message || '')) {
+          // ignore duplicate column errors
+        }
       }
     }
-  }
 
-  // Create dedicated relational table Customer_Classification if it doesn't exist
-  try {
-    await pool.execute(`
-      CREATE TABLE IF NOT EXISTS \`Customer_Classification\` (
-        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-        \`customerCode\` VARCHAR(191) NOT NULL,
-        \`businessVertical\` VARCHAR(50) NOT NULL,
-        \`classification\` VARCHAR(50) NOT NULL,
-        \`channel\` VARCHAR(100) NULL,
-        \`updatedAt\` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY \`uk_customer_vertical\` (\`customerCode\`, \`businessVertical\`),
-        INDEX \`idx_cust_class_code\` (\`customerCode\`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-    `);
-  } catch (e) {
-    // Non-blocking schema check
-  }
-
-  // Auto-patch known customer classifications if NULL in database
-  try {
-    const patches = [
-      { code: 'C04919', dairy: 'E', ice: 'E' },
-      { code: '04919', dairy: 'E', ice: 'E' },
-      { code: '4919', dairy: 'E', ice: 'E' },
-      { code: 'C41538', dairy: 'B', ice: 'C' },
-      { code: '41538', dairy: 'B', ice: 'C' },
-      { code: 'C00240', dairy: 'C', ice: 'B' },
-      { code: '00240', dairy: 'C', ice: 'B' },
-      { code: 'C30440', dairy: 'A', ice: 'D' },
-      { code: '30440', dairy: 'A', ice: 'D' },
-      { code: 'C38450', dairy: 'E', ice: '-' },
-      { code: '38450', dairy: 'E', ice: '-' },
-      { code: 'C05450', dairy: '-', ice: '-' },
-      { code: '05450', dairy: '-', ice: '-' },
-    ];
-    for (const p of patches) {
-      const codeClean = p.code.toUpperCase();
-      const altCode = codeClean.startsWith('C') ? codeClean.substring(1) : `C${codeClean}`;
-      await pool.execute(
-        `UPDATE \`Customer\` 
-         SET \`dairyClassification\` = ?, 
-             \`iceCreamClassification\` = ?,
-             \`classification\` = ?
-         WHERE (UPPER(TRIM(\`customerCode\`)) = ? OR UPPER(TRIM(\`customerCode\`)) = ? OR \`customerName\` LIKE '%AL-KHOURI%')`,
-        [p.dairy, p.ice, p.dairy, codeClean, altCode]
+    // Ensure CustomerRouteMapping has cust_rt_id column
+    try {
+      const [crmColumnsResult]: any = await pool.execute(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'CustomerRouteMapping'"
       );
-      await pool.execute(
-        `INSERT INTO \`Customer_Classification\` (\`customerCode\`, \`businessVertical\`, \`classification\`)
-         VALUES (?, 'Dairy', ?) ON DUPLICATE KEY UPDATE \`classification\` = VALUES(\`classification\`)`,
-        [p.code, p.dairy]
-      );
-      await pool.execute(
-        `INSERT INTO \`Customer_Classification\` (\`customerCode\`, \`businessVertical\`, \`classification\`)
-         VALUES (?, 'Ice Cream', ?) ON DUPLICATE KEY UPDATE \`classification\` = VALUES(\`classification\`)`,
-        [p.code, p.ice]
-      );
+      const existingCrmColumns = new Set((crmColumnsResult as any[]).map((row: any) => row.COLUMN_NAME));
+      if (!existingCrmColumns.has('cust_rt_id')) {
+        await pool.execute("ALTER TABLE `CustomerRouteMapping` ADD COLUMN `cust_rt_id` VARCHAR(191) NULL");
+      }
+    } catch (e) {
+      // Non-blocking schema check
     }
-  } catch (e) {
-    // Non-blocking patch check
+
+    // Create dedicated relational table Customer_Classification if it doesn't exist
+    try {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS \`Customer_Classification\` (
+          \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+          \`customerCode\` VARCHAR(191) NOT NULL,
+          \`businessVertical\` VARCHAR(50) NOT NULL,
+          \`classification\` VARCHAR(50) NOT NULL,
+          \`channel\` VARCHAR(100) NULL,
+          \`updatedAt\` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY \`uk_customer_vertical\` (\`customerCode\`, \`businessVertical\`),
+          INDEX \`idx_cust_class_code\` (\`customerCode\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      `);
+    } catch (e) {
+      // Non-blocking schema check
+    }
+
+    // Auto-patch known customer classifications if NULL in database
+    try {
+      const patches = [
+        { code: 'C04919', dairy: 'E', ice: 'E' },
+        { code: '04919', dairy: 'E', ice: 'E' },
+        { code: '4919', dairy: 'E', ice: 'E' },
+        { code: 'C41538', dairy: 'B', ice: 'C' },
+        { code: '41538', dairy: 'B', ice: 'C' },
+        { code: 'C00240', dairy: 'C', ice: 'B' },
+        { code: '00240', dairy: 'C', ice: 'B' },
+        { code: 'C30440', dairy: 'A', ice: 'D' },
+        { code: '30440', dairy: 'A', ice: 'D' },
+        { code: 'C38450', dairy: 'E', ice: '-' },
+        { code: '38450', dairy: 'E', ice: '-' },
+        { code: 'C05450', dairy: '-', ice: '-' },
+        { code: '05450', dairy: '-', ice: '-' },
+      ];
+      for (const p of patches) {
+        const codeClean = p.code.toUpperCase();
+        const altCode = codeClean.startsWith('C') ? codeClean.substring(1) : `C${codeClean}`;
+        await pool.execute(
+          `UPDATE \`Customer\` 
+           SET \`dairyClassification\` = ?, 
+               \`iceCreamClassification\` = ?,
+               \`classification\` = ?
+           WHERE (UPPER(TRIM(\`customerCode\`)) = ? OR UPPER(TRIM(\`customerCode\`)) = ? OR \`customerName\` LIKE '%AL-KHOURI%')`,
+          [p.dairy, p.ice, p.dairy, codeClean, altCode]
+        );
+        await pool.execute(
+          `INSERT INTO \`Customer_Classification\` (\`customerCode\`, \`businessVertical\`, \`classification\`)
+           VALUES (?, 'Dairy', ?) ON DUPLICATE KEY UPDATE \`classification\` = VALUES(\`classification\`)`,
+          [p.code, p.dairy]
+        );
+        await pool.execute(
+          `INSERT INTO \`Customer_Classification\` (\`customerCode\`, \`businessVertical\`, \`classification\`)
+           VALUES (?, 'Ice Cream', ?) ON DUPLICATE KEY UPDATE \`classification\` = VALUES(\`classification\`)`,
+          [p.code, p.ice]
+        );
+      }
+    } catch (e) {
+      // Non-blocking patch check
+    }
+
+    customerSchemaChecked = true;
+  } catch (err) {
+    console.error('Failed to ensure Customer table schema:', err);
   }
 }
 
@@ -200,6 +222,7 @@ export const customerRepository = {
   },
 
   async getMappings(): Promise<CustomerRouteMapping[]> {
+    await ensureCustomerTableSchema();
     const [rows]: any = await pool.execute('SELECT * FROM `CustomerRouteMapping`');
     return rows.map(mapRowToMapping);
   },
@@ -251,6 +274,7 @@ export const customerRepository = {
   },
 
   async upsertMappings(mappings: CustomerRouteMapping[]): Promise<{ inserted: number; updated: number }> {
+    await ensureCustomerTableSchema();
     let inserted = 0;
     let updated = 0;
 
@@ -277,6 +301,7 @@ export const customerRepository = {
   },
 
   async clearObsoleteCustomers(activeCodes: string[]): Promise<number> {
+    await ensureCustomerTableSchema();
     if (activeCodes.length === 0) {
       const [result]: any = await pool.execute('DELETE FROM `Customer`');
       return result.affectedRows || 0;
@@ -289,6 +314,7 @@ export const customerRepository = {
   },
 
   async clearObsoleteMappings(activeIds: string[]): Promise<number> {
+    await ensureCustomerTableSchema();
     if (activeIds.length === 0) {
       const [result]: any = await pool.execute('DELETE FROM `CustomerRouteMapping`');
       return result.affectedRows || 0;

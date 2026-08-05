@@ -412,11 +412,7 @@ function VisitWizardContent() {
         setSubmittingVisit(false);
         return;
       }
-      if (visitType !== 'No Visit' && assets.some(a => !a.observation || !a.observation.trim())) {
-        showToast('Please provide an observation note for all assets.', 'error');
-        setSubmittingVisit(false);
-        return;
-      }
+
 
       const finalPayload = {
         visitId,
@@ -973,7 +969,7 @@ function VisitWizardContent() {
                   </div>
 
                   <div>
-                    <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Observations / Notes *</label>
+                    <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Observations / Notes (Optional)</label>
                     <input type="text" placeholder="Write observation details…" value={ast.observation}
                       onChange={(e) => updateAssetField(ast.assetId, 'observation', e.target.value)}
                       className="form-input h-9 text-[12px]" />

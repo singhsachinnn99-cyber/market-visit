@@ -86,13 +86,26 @@ export const routeRepository = {
     return rows.map(mapRowToRoute);
   },
 
-  async isRouteAssignedToSupervisor(routeCode: string, supervisorId: string): Promise<boolean> {
+  async isRouteAssignedToSupervisor(routeCode: string, supervisorId: string, supervisorName?: string): Promise<boolean> {
     await ensureRouteTableSchema();
-    const [rows]: any = await pool.execute(
-      'SELECT 1 FROM `Route` WHERE `routeCode` = ? AND `supervisorId` = ? LIMIT 1',
-      [routeCode, supervisorId]
+    let sql = 'SELECT 1 FROM `Route` WHERE `routeCode` = ? AND (`supervisorId` = ?';
+    const params: any[] = [routeCode, supervisorId];
+    if (supervisorName) {
+      const normalizedName = supervisorName.trim().toLowerCase().replace(/\s+/g, '');
+      sql += ' OR (LOWER(REPLACE(IFNULL(`superName`, \'\'), \' \', \'\')) = ?)';
+      params.push(normalizedName);
+    }
+    sql += ') LIMIT 1';
+
+    const [rows]: any = await pool.execute(sql, params);
+    if (rows.length > 0) return true;
+
+    // Fallback: If route has no supervisor assigned, permit access
+    const [unassigned]: any = await pool.execute(
+      'SELECT 1 FROM `Route` WHERE `routeCode` = ? AND (`supervisorId` IS NULL OR TRIM(`supervisorId`) = \'\') AND (`superName` IS NULL OR TRIM(`superName`) = \'\') LIMIT 1',
+      [routeCode]
     );
-    return rows.length > 0;
+    return unassigned.length > 0;
   },
 
   async upsertRoutes(routes: Route[]): Promise<{ inserted: number; updated: number }> {

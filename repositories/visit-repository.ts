@@ -86,6 +86,22 @@ async function ensureVisitTableSchema(connection: mysql.Connection | mysql.PoolC
     migrations.push("ALTER TABLE `Visit` MODIFY COLUMN `cust_rt_id` VARCHAR(191) NULL");
   }
 
+  if (existingColumns.has('temperature')) {
+    migrations.push("ALTER TABLE `Visit` MODIFY COLUMN `temperature` DOUBLE NULL");
+  }
+  if (existingColumns.has('assetType')) {
+    migrations.push("ALTER TABLE `Visit` MODIFY COLUMN `assetType` VARCHAR(50) NULL");
+  }
+  if (existingColumns.has('tempInRange')) {
+    migrations.push("ALTER TABLE `Visit` MODIFY COLUMN `tempInRange` TINYINT(1) NULL");
+  }
+  if (existingColumns.has('actionRequired')) {
+    migrations.push("ALTER TABLE `Visit` MODIFY COLUMN `actionRequired` VARCHAR(50) NULL");
+  }
+  if (existingColumns.has('observation')) {
+    migrations.push("ALTER TABLE `Visit` MODIFY COLUMN `observation` TEXT NULL");
+  }
+
   for (const migration of migrations) {
     try {
       await connection.execute(migration);

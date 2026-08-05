@@ -111,29 +111,82 @@ async function ensureVisitTableSchema(connection: mysql.Connection | mysql.PoolC
       }
     }
   }
+
+  // Ensure VisitAsset table exists and has all required columns
+  try {
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS \`VisitAsset\` (
+        \`assetId\` VARCHAR(191) PRIMARY KEY,
+        \`visitId\` VARCHAR(191) NOT NULL,
+        \`assetType\` VARCHAR(50) NOT NULL,
+        \`temperature\` DOUBLE NULL,
+        \`tempInRange\` TINYINT(1) NULL,
+        \`actionRequired\` VARCHAR(50) NULL,
+        \`observation\` TEXT NULL,
+        \`isFirstInFlow\` TINYINT(1) NULL DEFAULT 0,
+        \`fefoFollowed\` TINYINT(1) NULL DEFAULT 0,
+        INDEX \`idx_asset_visit\` (\`visitId\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    const [vaColumnsResult]: any = await connection.execute(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'VisitAsset'"
+    );
+    const existingVaColumns = new Set((vaColumnsResult as any[]).map((row: any) => row.COLUMN_NAME));
+
+    if (!existingVaColumns.has('assetId')) {
+      await connection.execute("ALTER TABLE `VisitAsset` ADD COLUMN `assetId` VARCHAR(191) NULL");
+    }
+    if (!existingVaColumns.has('isFirstInFlow')) {
+      await connection.execute("ALTER TABLE `VisitAsset` ADD COLUMN `isFirstInFlow` TINYINT(1) NULL DEFAULT 0");
+    }
+    if (!existingVaColumns.has('fefoFollowed')) {
+      await connection.execute("ALTER TABLE `VisitAsset` ADD COLUMN `fefoFollowed` TINYINT(1) NULL DEFAULT 0");
+    }
+  } catch (e) {
+    // Non-blocking VisitAsset migration
+  }
 }
 
 export const visitRepository = {
   async getVisitById(visitId: string): Promise<Visit | null> {
-    const [rows]: any = await pool.execute(
-      'SELECT * FROM `Visit` WHERE `visitId` = ? LIMIT 1',
-      [visitId]
-    );
-    if (rows.length === 0) return null;
-    return mapRowToVisit(rows[0]);
+    const connection = await pool.getConnection();
+    try {
+      await ensureVisitTableSchema(connection);
+      const [rows]: any = await connection.execute(
+        'SELECT * FROM `Visit` WHERE `visitId` = ? LIMIT 1',
+        [visitId]
+      );
+      if (rows.length === 0) return null;
+      return mapRowToVisit(rows[0]);
+    } finally {
+      connection.release();
+    }
   },
 
   async getVisitsBySupervisor(supervisorId: string): Promise<Visit[]> {
-    const [rows]: any = await pool.execute(
-      'SELECT * FROM `Visit` WHERE `supervisorId` = ?',
-      [supervisorId]
-    );
-    return rows.map(mapRowToVisit);
+    const connection = await pool.getConnection();
+    try {
+      await ensureVisitTableSchema(connection);
+      const [rows]: any = await connection.execute(
+        'SELECT * FROM `Visit` WHERE `supervisorId` = ?',
+        [supervisorId]
+      );
+      return rows.map(mapRowToVisit);
+    } finally {
+      connection.release();
+    }
   },
 
   async getAllVisits(): Promise<Visit[]> {
-    const [rows]: any = await pool.execute('SELECT * FROM `Visit`');
-    return rows.map(mapRowToVisit);
+    const connection = await pool.getConnection();
+    try {
+      await ensureVisitTableSchema(connection);
+      const [rows]: any = await connection.execute('SELECT * FROM `Visit`');
+      return rows.map(mapRowToVisit);
+    } finally {
+      connection.release();
+    }
   },
 
   async getVisitPhotos(visitId: string): Promise<VisitPhoto[]> {
@@ -163,13 +216,13 @@ export const visitRepository = {
       [visitId]
     );
     return rows.map((r: any) => ({
-      assetId: r.assetId,
+      assetId: r.assetId || `ast_${Math.random().toString(36).substring(2, 9)}`,
       visitId: r.visitId,
       assetType: r.assetType as any,
       temperature: r.temperature,
       tempInRange: r.tempInRange === 1 || r.tempInRange === true,
       actionRequired: r.actionRequired as any,
-      observation: r.observation,
+      observation: r.observation || '',
       isFirstInFlow: r.isFirstInFlow === 1 || r.isFirstInFlow === true,
       fefoFollowed: r.fefoFollowed === 1 || r.fefoFollowed === true,
     }));
@@ -189,21 +242,10 @@ export const visitRepository = {
 
   async saveVisitRecord(visit: Visit, connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
     const executor = connection || pool;
-    const createdAt = visit.createdAt ? new Date(visit.createdAt) : new Date();
-    if (connection) {
-      await ensureVisitTableSchema(connection);
-    } else {
-      const fallbackConnection = await pool.getConnection();
-      try {
-        await ensureVisitTableSchema(fallbackConnection);
-      } finally {
-        fallbackConnection.release();
-      }
-    }
-    const updatedAt = visit.updatedAt ? new Date(visit.updatedAt) : new Date();
-    const visitDatetime = visit.visit_datetime ? new Date(visit.visit_datetime) : new Date();
+    const isNoVisit = visit.visit_type === 'No Visit';
 
-    const sql = `
+    await executor.execute(
+      `
       INSERT INTO \`Visit\` (
         \`visitId\`, \`supervisorId\`, \`cust_rt_id\`, \`dairyClassification\`, \`iceCreamClassification\`, \`visit_type\`, \`reason_category\`, \`reason\`,
         \`latitude\`, \`longitude\`, \`accuracy\`, \`status\`, 
@@ -225,29 +267,27 @@ export const visitRepository = {
         \`visit_datetime\` = VALUES(\`visit_datetime\`),
         \`updatedAt\` = VALUES(\`updatedAt\`),
         \`sosAsPerBda\` = VALUES(\`sosAsPerBda\`)
-    `;
-
-    const normalizedCustRtId = visit.cust_rt_id && visit.cust_rt_id.trim() !== '' ? visit.cust_rt_id : null;
-
-    await executor.execute(sql, [
-      visit.visitId,
-      visit.supervisorId,
-      normalizedCustRtId,
-      visit.dairyClassification || null,
-      visit.iceCreamClassification || null,
-      visit.visit_type || 'Visit',
-      visit.reason_category || '',
-      visit.reason || '',
-      visit.latitude,
-      visit.longitude,
-      visit.accuracy,
-      visit.status,
-      visit.createdBy,
-      visitDatetime,
-      createdAt,
-      updatedAt,
-      visit.sosAsPerBda === undefined || visit.sosAsPerBda === null ? null : (visit.sosAsPerBda ? 1 : 0)
-    ]);
+    `,
+      [
+        visit.visitId,
+        visit.supervisorId,
+        visit.cust_rt_id || null,
+        visit.dairyClassification || null,
+        visit.iceCreamClassification || null,
+        visit.visit_type || 'Visit',
+        isNoVisit ? (visit.reason_category || null) : null,
+        isNoVisit ? (visit.reason || null) : null,
+        visit.latitude,
+        visit.longitude,
+        visit.accuracy,
+        visit.status,
+        visit.createdBy,
+        visit.visit_datetime || visit.createdAt,
+        visit.createdAt,
+        visit.updatedAt,
+        visit.sosAsPerBda === null ? null : (visit.sosAsPerBda ? 1 : 0),
+      ]
+    );
   },
 
   async deletePhotosForVisit(visitId: string, connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
@@ -258,11 +298,10 @@ export const visitRepository = {
   async insertPhotos(photos: VisitPhoto[], connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
     const executor = connection || pool;
     for (const p of photos) {
-      const uploadedAt = p.uploadedAt ? new Date(p.uploadedAt) : new Date();
       await executor.execute(
         `INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`) 
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, uploadedAt]
+        [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, p.uploadedAt]
       );
     }
   },
@@ -290,11 +329,24 @@ export const visitRepository = {
   async insertAssets(assets: VisitAsset[], connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
     const executor = connection || pool;
     for (const ast of assets) {
-      await executor.execute(
-        `INSERT INTO \`VisitAsset\` (\`assetId\`, \`visitId\`, \`assetType\`, \`temperature\`, \`tempInRange\`, \`actionRequired\`, \`observation\`, \`isFirstInFlow\`, \`fefoFollowed\`) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [ast.assetId, ast.visitId, ast.assetType, ast.temperature ?? null, ast.tempInRange ? 1 : 0, ast.actionRequired, ast.observation, ast.isFirstInFlow ? 1 : 0, ast.fefoFollowed ? 1 : 0]
-      );
+      const assetIdVal = ast.assetId || `ast_${Math.random().toString(36).substring(2, 9)}`;
+      try {
+        await executor.execute(
+          `INSERT INTO \`VisitAsset\` (\`assetId\`, \`visitId\`, \`assetType\`, \`temperature\`, \`tempInRange\`, \`actionRequired\`, \`observation\`, \`isFirstInFlow\`, \`fefoFollowed\`) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [assetIdVal, ast.visitId, ast.assetType, ast.temperature ?? null, ast.tempInRange ? 1 : 0, ast.actionRequired, ast.observation || '', ast.isFirstInFlow ? 1 : 0, ast.fefoFollowed ? 1 : 0]
+        );
+      } catch (err: any) {
+        if (err.message && err.message.includes('Unknown column')) {
+          await executor.execute(
+            `INSERT INTO \`VisitAsset\` (\`visitId\`, \`assetType\`, \`temperature\`, \`tempInRange\`, \`actionRequired\`, \`observation\`) 
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [ast.visitId, ast.assetType, ast.temperature ?? null, ast.tempInRange ? 1 : 0, ast.actionRequired, ast.observation || '']
+          );
+        } else {
+          throw err;
+        }
+      }
     }
   },
 

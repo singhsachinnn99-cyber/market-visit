@@ -269,9 +269,6 @@ export async function submitVisitAction(data: VisitInput) {
     if (user.role === 'Supervisor' && existing.supervisorId !== user.id) {
       throw new Error('Access denied. You cannot modify another supervisor\'s visit.');
     }
-    if (existing.status === 'Submitted') {
-      throw new Error('Cannot edit a visit that has already been submitted.');
-    }
   }
 
   // Process multiple assets (compute tempInRange on server!)

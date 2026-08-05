@@ -12,13 +12,73 @@ function mapRowToRoute(row: any): Route {
   };
 }
 
+let routeSchemaChecked = false;
+
+async function ensureRouteTableSchema(): Promise<void> {
+  if (routeSchemaChecked) return;
+  try {
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS \`Manager\` (
+        \`id\` VARCHAR(191) PRIMARY KEY,
+        \`name\` VARCHAR(191) UNIQUE NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS \`Route\` (
+        \`routeCode\` VARCHAR(191) PRIMARY KEY,
+        \`routeName\` VARCHAR(191) NOT NULL,
+        \`channel\` VARCHAR(191) NOT NULL DEFAULT 'GT',
+        \`supervisorId\` VARCHAR(191) NULL,
+        \`managerId\` VARCHAR(191) NULL,
+        \`superName\` VARCHAR(191) NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    const [columnsResult]: any = await pool.execute(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Route'"
+    );
+    const existingColumns = new Set((columnsResult as any[]).map((row: any) => row.COLUMN_NAME));
+
+    const migrations: string[] = [];
+    if (!existingColumns.has('channel')) {
+      migrations.push("ALTER TABLE `Route` ADD COLUMN `channel` VARCHAR(191) NOT NULL DEFAULT 'GT'");
+    }
+    if (!existingColumns.has('supervisorId')) {
+      migrations.push("ALTER TABLE `Route` ADD COLUMN `supervisorId` VARCHAR(191) NULL");
+    }
+    if (!existingColumns.has('managerId')) {
+      migrations.push("ALTER TABLE `Route` ADD COLUMN `managerId` VARCHAR(191) NULL");
+    }
+    if (!existingColumns.has('superName')) {
+      migrations.push("ALTER TABLE `Route` ADD COLUMN `superName` VARCHAR(191) NULL");
+    }
+
+    for (const migration of migrations) {
+      try {
+        await pool.execute(migration);
+      } catch (error: any) {
+        if (!/duplicate column|already exists|doesn't exist|Unknown column/i.test(error.message || '')) {
+          // ignore duplicate column errors
+        }
+      }
+    }
+
+    routeSchemaChecked = true;
+  } catch (err) {
+    console.error('Failed to ensure Route table schema:', err);
+  }
+}
+
 export const routeRepository = {
   async getAllRoutes(): Promise<Route[]> {
+    await ensureRouteTableSchema();
     const [rows]: any = await pool.execute('SELECT * FROM `Route`');
     return rows.map(mapRowToRoute);
   },
 
   async getRoutesBySupervisor(supervisorId: string): Promise<Route[]> {
+    await ensureRouteTableSchema();
     const [rows]: any = await pool.execute(
       'SELECT * FROM `Route` WHERE `supervisorId` = ?',
       [supervisorId]
@@ -27,6 +87,7 @@ export const routeRepository = {
   },
 
   async isRouteAssignedToSupervisor(routeCode: string, supervisorId: string): Promise<boolean> {
+    await ensureRouteTableSchema();
     const [rows]: any = await pool.execute(
       'SELECT 1 FROM `Route` WHERE `routeCode` = ? AND `supervisorId` = ? LIMIT 1',
       [routeCode, supervisorId]
@@ -35,6 +96,7 @@ export const routeRepository = {
   },
 
   async upsertRoutes(routes: Route[]): Promise<{ inserted: number; updated: number }> {
+    await ensureRouteTableSchema();
     let inserted = 0;
     let updated = 0;
 
@@ -66,6 +128,7 @@ export const routeRepository = {
   },
 
   async backfillSupervisorByName(supervisorId: string, supervisorName: string): Promise<number> {
+    await ensureRouteTableSchema();
     const normalizedName = supervisorName.trim().toLowerCase().replace(/\s+/g, '');
     const [rows]: any = await pool.execute(
       'SELECT `routeCode` FROM `Route` WHERE `supervisorId` IS NULL AND `superName` IS NOT NULL AND LOWER(REPLACE(`superName`, \' \', \'\')) = ?',
@@ -83,6 +146,7 @@ export const routeRepository = {
   },
 
   async clearObsoleteRoutes(activeCodes: string[]): Promise<number> {
+    await ensureRouteTableSchema();
     if (activeCodes.length === 0) {
       const [result]: any = await pool.execute('DELETE FROM `Route`');
       return result.affectedRows || 0;

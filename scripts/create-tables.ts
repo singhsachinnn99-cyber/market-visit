@@ -42,7 +42,13 @@ async function createTables() {
     // 2. Route
     `CREATE TABLE IF NOT EXISTS \`Route\` (
       \`routeCode\` VARCHAR(191) PRIMARY KEY,
-      \`routeName\` VARCHAR(191) NOT NULL
+      \`routeName\` VARCHAR(191) NOT NULL,
+      \`channel\` VARCHAR(191) NOT NULL DEFAULT 'GT',
+      \`supervisorId\` VARCHAR(191) NULL,
+      \`managerId\` VARCHAR(191) NULL,
+      \`superName\` VARCHAR(191) NULL,
+      INDEX \`idx_route_supervisor\` (\`supervisorId\`),
+      INDEX \`idx_route_manager\` (\`managerId\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
     // 3. Customer
@@ -83,7 +89,10 @@ async function createTables() {
     // 5. SKU
     `CREATE TABLE IF NOT EXISTS \`SKU\` (
       \`skuCode\` VARCHAR(191) PRIMARY KEY,
-      \`skuName\` VARCHAR(191) NOT NULL
+      \`skuName\` VARCHAR(191) NOT NULL,
+      \`type\` VARCHAR(50) NOT NULL DEFAULT 'SKU',
+      \`businessVertical\` VARCHAR(191) NULL,
+      INDEX \`idx_sku_type\` (\`type\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
     // 5b. PowerSKU

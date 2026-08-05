@@ -18,28 +18,86 @@ function mapRowToPowerSKU(row: any): PowerSKU {
   };
 }
 
+let skuSchemaChecked = false;
+
+async function ensureSkuTableSchema(): Promise<void> {
+  if (skuSchemaChecked) return;
+  try {
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS \`SKU\` (
+        \`skuCode\` VARCHAR(191) PRIMARY KEY,
+        \`skuName\` VARCHAR(191) NOT NULL,
+        \`type\` VARCHAR(50) NOT NULL DEFAULT 'SKU',
+        \`businessVertical\` VARCHAR(191) NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS \`PowerSKU\` (
+        \`skuCode\` VARCHAR(191) NOT NULL,
+        \`skuName\` VARCHAR(191) NOT NULL,
+        \`channel\` VARCHAR(191) NOT NULL,
+        PRIMARY KEY (\`skuCode\`, \`channel\`),
+        INDEX \`idx_powersku_channel\` (\`channel\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    const [columnsResult]: any = await pool.execute(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'SKU'"
+    );
+    const existingColumns = new Set((columnsResult as any[]).map((row: any) => row.COLUMN_NAME));
+
+    const migrations: string[] = [];
+    if (!existingColumns.has('type')) {
+      migrations.push("ALTER TABLE `SKU` ADD COLUMN `type` VARCHAR(50) NOT NULL DEFAULT 'SKU'");
+    }
+    if (!existingColumns.has('businessVertical')) {
+      migrations.push("ALTER TABLE `SKU` ADD COLUMN `businessVertical` VARCHAR(191) NULL");
+    }
+
+    for (const migration of migrations) {
+      try {
+        await pool.execute(migration);
+      } catch (error: any) {
+        if (!/duplicate column|already exists|doesn't exist|Unknown column/i.test(error.message || '')) {
+          // ignore duplicate column errors
+        }
+      }
+    }
+
+    skuSchemaChecked = true;
+  } catch (err) {
+    console.error('Failed to ensure SKU table schema:', err);
+  }
+}
+
 export const skuRepository = {
   async getAllSkus(): Promise<SKU[]> {
+    await ensureSkuTableSchema();
     const [rows]: any = await pool.execute('SELECT * FROM `SKU`');
     return rows.map(mapRowToSKU);
   },
 
   async getSkusByType(type: string): Promise<SKU[]> {
+    await ensureSkuTableSchema();
     const [rows]: any = await pool.execute('SELECT * FROM `SKU` WHERE `type` = ?', [type]);
     return rows.map(mapRowToSKU);
   },
 
   async getAllPowerSkus(): Promise<PowerSKU[]> {
+    await ensureSkuTableSchema();
     const [rows]: any = await pool.execute('SELECT * FROM `PowerSKU`');
     return rows.map(mapRowToPowerSKU);
   },
 
   async getPowerSkusByChannel(channel: string): Promise<PowerSKU[]> {
+    await ensureSkuTableSchema();
     const [rows]: any = await pool.execute('SELECT * FROM `PowerSKU` WHERE `channel` = ?', [channel]);
     return rows.map(mapRowToPowerSKU);
   },
 
   async upsertSkus(skus: SKU[]): Promise<{ inserted: number; updated: number }> {
+    await ensureSkuTableSchema();
     let inserted = 0;
     let updated = 0;
 
@@ -66,6 +124,7 @@ export const skuRepository = {
   },
 
   async upsertPowerSkus(powerSkus: PowerSKU[]): Promise<{ inserted: number; updated: number }> {
+    await ensureSkuTableSchema();
     let inserted = 0;
     let updated = 0;
 
@@ -88,6 +147,7 @@ export const skuRepository = {
   },
 
   async clearObsoleteSkus(activeCodes: string[]): Promise<number> {
+    await ensureSkuTableSchema();
     if (activeCodes.length === 0) {
       const [result]: any = await pool.execute('DELETE FROM `SKU`');
       return result.affectedRows || 0;
@@ -100,6 +160,7 @@ export const skuRepository = {
   },
 
   async clearObsoletePowerSkus(activeKeys: string[]): Promise<number> {
+    await ensureSkuTableSchema();
     if (activeKeys.length === 0) {
       const [result]: any = await pool.execute('DELETE FROM `PowerSKU`');
       return result.affectedRows || 0;

@@ -148,6 +148,13 @@ async function ensureVisitTableSchema(connection: mysql.Connection | mysql.PoolC
   }
 }
 
+function toMysqlDatetime(val: any): Date | null {
+  if (!val) return null;
+  if (val instanceof Date) return val;
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 export const visitRepository = {
   async getVisitById(visitId: string): Promise<Visit | null> {
     const connection = await pool.getConnection();
@@ -244,6 +251,10 @@ export const visitRepository = {
     const executor = connection || pool;
     const isNoVisit = visit.visit_type === 'No Visit';
 
+    const visitDatetimeVal = toMysqlDatetime(visit.visit_datetime) || toMysqlDatetime(visit.createdAt) || new Date();
+    const createdAtVal = toMysqlDatetime(visit.createdAt) || new Date();
+    const updatedAtVal = toMysqlDatetime(visit.updatedAt) || new Date();
+
     await executor.execute(
       `
       INSERT INTO \`Visit\` (
@@ -282,9 +293,9 @@ export const visitRepository = {
         visit.accuracy,
         visit.status,
         visit.createdBy,
-        visit.visit_datetime || visit.createdAt,
-        visit.createdAt,
-        visit.updatedAt,
+        visitDatetimeVal,
+        createdAtVal,
+        updatedAtVal,
         visit.sosAsPerBda === null ? null : (visit.sosAsPerBda ? 1 : 0),
       ]
     );
@@ -298,10 +309,11 @@ export const visitRepository = {
   async insertPhotos(photos: VisitPhoto[], connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
     const executor = connection || pool;
     for (const p of photos) {
+      const uploadedAtVal = toMysqlDatetime(p.uploadedAt) || new Date();
       await executor.execute(
         `INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`) 
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, p.uploadedAt]
+        [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, uploadedAtVal]
       );
     }
   },

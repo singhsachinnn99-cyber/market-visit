@@ -421,6 +421,7 @@ export default function SupervisorsPage() {
                     <option value="BDM">BDM</option>
                     <option value="Sales Manager">Sales Manager</option>
                     <option value="Admin">Admin</option>
+                    <option value="Sub-Admin">Sub-Admin</option>
                     <option value="Fleet">Fleet</option>
                     <option value="Maintenance">Maintenance</option>
                   </select>

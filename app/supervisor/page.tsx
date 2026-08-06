@@ -55,7 +55,6 @@ export default function SupervisorDashboard() {
   // Analytics Filter States
   const [fFrom, setFFrom] = useState('');
   const [fTo, setFTo] = useState('');
-  const [fTime, setFTime] = useState('');
   const [fMgr, setFMgr] = useState('');
   const [fSuper, setFSuper] = useState('');
   const [fChannel, setFChannel] = useState('');
@@ -163,57 +162,55 @@ export default function SupervisorDashboard() {
 
   const normalizeDate = (value: string) => value ? new Date(`${value}T00:00:00`) : null;
 
-  // 1. Channel Options: filtered by Time Period only
+  // 1. Channel Options
   const channelOptions = useMemo(() => {
-    const filteredByTime = rows.filter(r => {
+    const filteredByDate = rows.filter(r => {
       const rowDate = new Date(r.createdAt);
       const from = normalizeDate(fFrom);
       const to = normalizeDate(fTo);
-      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && fromOk && toOk;
+      return fromOk && toOk;
     });
-    return Array.from(new Set(filteredByTime.map((r) => r.ch))).sort();
-  }, [rows, fTime, fFrom, fTo]);
+    return Array.from(new Set(filteredByDate.map((r) => r.ch))).sort();
+  }, [rows, fFrom, fTo]);
 
-  // 2. Customer / Outlet Options: filtered by Time Period, Channel, and Classification
+  // 2. Customer / Outlet Options: filtered by Channel and Classification
   const custOptions = useMemo(() => {
-    const filteredByTimeChannelClass = rows.filter(r => {
+    const filteredByChannelClass = rows.filter(r => {
       const rowDate = new Date(r.createdAt);
       const from = normalizeDate(fFrom);
       const to = normalizeDate(fTo);
-      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && fromOk && toOk;
+      return (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && fromOk && toOk;
     });
-    return Array.from(new Set(filteredByTimeChannelClass.map((r) => r.cust))).sort();
-  }, [rows, fTime, fChannel, fClass, fFrom, fTo]);
+    return Array.from(new Set(filteredByChannelClass.map((r) => r.cust))).sort();
+  }, [rows, fChannel, fClass, fFrom, fTo]);
 
   const classOptions = useMemo(() => {
-    const filteredByTimeAndChannel = rows.filter(r => {
+    const filteredByChannel = rows.filter(r => {
       const rowDate = new Date(r.createdAt);
       const from = normalizeDate(fFrom);
       const to = normalizeDate(fTo);
-      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && (!fChannel || r.ch === fChannel) && fromOk && toOk;
+      return (!fChannel || r.ch === fChannel) && fromOk && toOk;
     });
-    return Array.from(new Set(filteredByTimeAndChannel.map((r) => r.gr))).sort();
-  }, [rows, fTime, fChannel, fFrom, fTo]);
+    return Array.from(new Set(filteredByChannel.map((r) => r.gr))).sort();
+  }, [rows, fChannel, fFrom, fTo]);
 
   const resetFilters = () => {
     setFFrom('');
     setFTo('');
-    setFTime('');
     setFChannel('');
     setFClass('');
     setFCust('');
     setFRoute('');
     setFSku('');
     setFVertical('');
+    setFMgr('');
+    setFSuper('');
   };
 
   // NPD Product report-level filter options (SKU-response granularity, not available on visit-level `rows`)
@@ -236,11 +233,9 @@ export default function SupervisorDashboard() {
       const rowDate = new Date(r.date);
       const from = normalizeDate(fFrom);
       const to = normalizeDate(fTo);
-      const week = Math.min(8, Math.max(1, Math.ceil(rowDate.getDate() / 4)));
-      const periodOk = !fTime || (fTime === 'recent' ? week >= 5 : week <= 4);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && fromOk && toOk
+      return fromOk && toOk
         && (!fMgr || r.manager === fMgr)
         && (!fSuper || r.supervisor === fSuper)
         && (!fChannel || r.channel === fChannel)
@@ -250,7 +245,7 @@ export default function SupervisorDashboard() {
         && (!fSku || r.skuName === fSku)
         && (!fVertical || r.businessVertical === fVertical);
     });
-  }, [reportRows, fTime, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fSku, fVertical, fFrom, fTo]);
+  }, [reportRows, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fSku, fVertical, fFrom, fTo]);
 
   // Filtered rows matching selection
   const filtered = useMemo(() => {
@@ -258,14 +253,13 @@ export default function SupervisorDashboard() {
       const rowDate = new Date(r.createdAt);
       const from = normalizeDate(fFrom);
       const to = normalizeDate(fTo);
-      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && (!fCust || r.cust === fCust) && fromOk && toOk;
+      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && (!fCust || r.cust === fCust) && fromOk && toOk;
     });
-  }, [rows, fTime, fMgr, fSuper, fChannel, fClass, fCust, fFrom, fTo]);
+  }, [rows, fMgr, fSuper, fChannel, fClass, fCust, fFrom, fTo]);
 
-  // Visit set for the two per-vertical Classification charts: respects Time Period, Manager,
+  // Visit set for the two per-vertical Classification charts: respects Manager,
   // Supervisor, Channel, and Outlet/Customer, but not the legacy single-value Classification
   // slicer (which no longer has one meaning now that Dairy and Ice Cream grade independently).
   const filteredForClassCharts = useMemo(() => {
@@ -273,12 +267,11 @@ export default function SupervisorDashboard() {
       const rowDate = new Date(r.createdAt);
       const from = normalizeDate(fFrom);
       const to = normalizeDate(fTo);
-      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fCust || r.cust === fCust) && fromOk && toOk;
+      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fCust || r.cust === fCust) && fromOk && toOk;
     });
-  }, [rows, fTime, fMgr, fSuper, fChannel, fCust, fFrom, fTo]);
+  }, [rows, fMgr, fSuper, fChannel, fCust, fFrom, fTo]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
@@ -385,7 +378,6 @@ export default function SupervisorDashboard() {
   const activeNote = useMemo(() => {
     const parts = [];
     if (fFrom || fTo) parts.push(`Date: <b>${fFrom || 'Start'} → ${fTo || 'Now'}</b>`);
-    if (fTime) parts.push(`Period: <b>${fTime === 'recent' ? 'Recent' : 'Earlier'}</b>`);
     if (fMgr) parts.push(`Manager: <b>${fMgr}</b>`);
     if (fSuper) parts.push(`Supervisor: <b>${fSuper}</b>`);
     if (fChannel) parts.push(`Channel: <b>${fChannel}</b>`);
@@ -395,7 +387,7 @@ export default function SupervisorDashboard() {
     if (fSku) parts.push(`SKU: <b>${fSku}</b>`);
     if (fVertical) parts.push(`Business Vertical: <b>${fVertical}</b>`);
     return parts.length ? 'Filtered by ' + parts.join(' · ') : 'Showing all visits';
-  }, [fFrom, fTo, fTime, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fSku, fVertical]);
+  }, [fFrom, fTo, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fSku, fVertical]);
 
   // Chart Rendering Hook
   useEffect(() => {

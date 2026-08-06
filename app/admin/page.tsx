@@ -192,11 +192,9 @@ export default function AdminDashboardPage() {
       const rowDate = new Date(r.date);
       const from = normalizeDate(fFrom);
       const to = normalizeDate(fTo);
-      const week = Math.min(8, Math.max(1, Math.ceil(rowDate.getDate() / 4)));
-      const periodOk = !fTime || (fTime === 'recent' ? week >= 5 : week <= 4);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && fromOk && toOk
+      return fromOk && toOk
         && (!fMgr || r.manager === fMgr)
         && (!fSuper || r.supervisor === fSuper)
         && (!fChannel || r.channel === fChannel)
@@ -206,7 +204,7 @@ export default function AdminDashboardPage() {
         && (!fSku || r.skuName === fSku)
         && (!fVertical || r.businessVertical === fVertical);
     });
-  }, [reportRows, fTime, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fSku, fVertical, fFrom, fTo]);
+  }, [reportRows, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fSku, fVertical, fFrom, fTo]);
 
   // Filtered rows matching selection
   const filtered = useMemo(() => {
@@ -214,14 +212,13 @@ export default function AdminDashboardPage() {
       const rowDate = new Date(r.createdAt);
       const from = normalizeDate(fFrom);
       const to = normalizeDate(fTo);
-      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && (!fCust || r.cust === fCust) && fromOk && toOk;
+      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && (!fCust || r.cust === fCust) && fromOk && toOk;
     });
-  }, [rows, fTime, fMgr, fSuper, fChannel, fClass, fCust, fFrom, fTo]);
+  }, [rows, fMgr, fSuper, fChannel, fClass, fCust, fFrom, fTo]);
 
-  // Visit set for the two per-vertical Classification charts: respects Time Period, Manager,
+  // Visit set for the two per-vertical Classification charts: respects Manager,
   // Supervisor, Channel, and Outlet/Customer, but not the legacy single-value Classification
   // slicer (which no longer has one meaning now that Dairy and Ice Cream grade independently).
   const filteredForClassCharts = useMemo(() => {
@@ -229,12 +226,11 @@ export default function AdminDashboardPage() {
       const rowDate = new Date(r.createdAt);
       const from = normalizeDate(fFrom);
       const to = normalizeDate(fTo);
-      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fCust || r.cust === fCust) && fromOk && toOk;
+      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fCust || r.cust === fCust) && fromOk && toOk;
     });
-  }, [rows, fTime, fMgr, fSuper, fChannel, fCust, fFrom, fTo]);
+  }, [rows, fMgr, fSuper, fChannel, fCust, fFrom, fTo]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
@@ -340,7 +336,6 @@ export default function AdminDashboardPage() {
   const activeNote = useMemo(() => {
     const parts = [];
     if (fFrom || fTo) parts.push(`Date: <b>${fFrom || 'Start'} → ${fTo || 'Now'}</b>`);
-    if (fTime) parts.push(`Period: <b>${fTime === 'recent' ? 'Recent' : 'Earlier'}</b>`);
     if (fMgr) parts.push(`Manager: <b>${fMgr}</b>`);
     if (fSuper) parts.push(`Supervisor: <b>${fSuper}</b>`);
     if (fChannel) parts.push(`Channel: <b>${fChannel}</b>`);
@@ -350,7 +345,7 @@ export default function AdminDashboardPage() {
     if (fSku) parts.push(`SKU: <b>${fSku}</b>`);
     if (fVertical) parts.push(`Business Vertical: <b>${fVertical}</b>`);
     return parts.length ? 'Filtered by ' + parts.join(' · ') : 'Showing all visits';
-  }, [fFrom, fTo, fTime, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fSku, fVertical]);
+  }, [fFrom, fTo, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fSku, fVertical]);
 
   // Chart Rendering Hook
   useEffect(() => {

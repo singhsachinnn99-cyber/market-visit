@@ -41,6 +41,8 @@ export default function SupervisorReportsPage() {
   const router = useRouter();
   const [rows, setRows] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   useEffect(() => {
     if (isFleetRole((session?.user as any)?.role)) {
@@ -49,7 +51,8 @@ export default function SupervisorReportsPage() {
   }, [session, router]);
 
   // Filter States
-  const [fTime, setFTime] = useState('');
+  const [fFrom, setFFrom] = useState('');
+  const [fTo, setFTo] = useState('');
   const [fMgr, setFMgr] = useState('');
   const [fSuper, setFSuper] = useState('');
   const [fChannel, setFChannel] = useState('');
@@ -63,75 +66,68 @@ export default function SupervisorReportsPage() {
   const canvasTempRef = useRef<HTMLCanvasElement>(null);
   const canvasNpdRef = useRef<HTMLCanvasElement>(null);
   const canvasPskuRef = useRef<HTMLCanvasElement>(null);
+  const canvasClassRef = useRef<HTMLCanvasElement>(null);
   const canvasClassDairyRef = useRef<HTMLCanvasElement>(null);
   const canvasClassIceRef = useRef<HTMLCanvasElement>(null);
 
   // Chart instances
   const chartsRef = useRef<Record<string, any>>({});
 
-  // Fetch real data on mount
+  // Fetch real data on mount & poll every 10 seconds
   useEffect(() => {
-    async function loadData() {
+    let active = true;
+    async function loadData(silent = false) {
+      if (!silent) setIsLoading(true);
+      else setIsSyncing(true);
       try {
         const res = await fetch('/api/dashboard');
         const data = await res.json();
-        if (data.success) {
+        if (data.success && active) {
           setRows(data.rows);
+          setLastUpdated(new Date());
         }
       } catch (err) {
         console.error('Failed to load dashboard data:', err);
       } finally {
-        setIsLoading(false);
+        if (active) {
+          setIsLoading(false);
+          setIsSyncing(false);
+        }
       }
     }
-    loadData();
+    loadData(false);
+
+    const timer = setInterval(() => {
+      loadData(true);
+    }, 10000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
   }, []);
 
+  const normalizeDate = (value: string) => value ? new Date(`${value}T00:00:00`) : null;
+
   // Compute dropdown values from unfiltered rows
-  const mgrOptions = useMemo(() => {
-    return Array.from(new Set(rows.map((r) => r.mgr))).sort();
+  const channelOptions = useMemo(() => {
+    return Array.from(new Set(rows.map((r) => r.ch))).sort();
   }, [rows]);
 
-  const supOptions = useMemo(() => {
-    return Array.from(new Set(rows.map((r) => r.sup))).sort();
-  }, [rows]);
-
-  // Outlets filtered dynamically based on upstream manager/supervisor/channel selections
   const custOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        rows
-          .filter(
-            (r) =>
-              (!fChannel || r.ch === fChannel) &&
-              (!fMgr || r.mgr === fMgr) &&
-              (!fSuper || r.sup === fSuper) &&
-              (!fClass || r.gr === fClass)
-          )
-          .map((r) => r.cust)
-      )
-    ).sort();
-  }, [rows, fChannel, fMgr, fSuper, fClass]);
+    const filteredByUpstream = rows.filter((r) => (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass));
+    return Array.from(new Set(filteredByUpstream.map((r) => r.cust))).sort();
+  }, [rows, fChannel, fClass]);
 
   const classOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        rows
-          .filter(
-            (r) =>
-              (!fChannel || r.ch === fChannel) &&
-              (!fMgr || r.mgr === fMgr) &&
-              (!fSuper || r.sup === fSuper) &&
-              (!fCust || r.cust === fCust)
-          )
-          .map((r) => r.gr)
-      )
-    ).sort();
-  }, [rows, fChannel, fMgr, fSuper, fCust]);
+    const filteredByUpstream = rows.filter((r) => !fChannel || r.ch === fChannel);
+    return Array.from(new Set(filteredByUpstream.map((r) => r.gr))).sort();
+  }, [rows, fChannel]);
 
   // Reset helper
   const resetFilters = () => {
-    setFTime('');
+    setFFrom('');
+    setFTo('');
     setFMgr('');
     setFSuper('');
     setFChannel('');
@@ -141,30 +137,27 @@ export default function SupervisorReportsPage() {
 
   // Filtered rows matching selection
   const filtered = useMemo(() => {
-    return rows.filter(
-      (r) =>
-        (!fMgr || r.mgr === fMgr) &&
-        (!fSuper || r.sup === fSuper) &&
-        (!fChannel || r.ch === fChannel) &&
-        (!fClass || r.gr === fClass) &&
-        (!fCust || r.cust === fCust) &&
-        (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4))
-    );
-  }, [rows, fTime, fMgr, fSuper, fChannel, fClass, fCust]);
+    return rows.filter((r) => {
+      const rowDate = new Date(r.createdAt);
+      const from = normalizeDate(fFrom);
+      const to = normalizeDate(fTo);
+      const fromOk = !from || rowDate >= from;
+      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
+      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && (!fCust || r.cust === fCust) && fromOk && toOk;
+    });
+  }, [rows, fFrom, fTo, fMgr, fSuper, fChannel, fClass, fCust]);
 
-  // Visit set for the two per-vertical Classification charts: respects Time Period, Manager,
-  // Supervisor, Channel, and Outlet/Customer, but not the legacy single-value Classification
-  // slicer (which no longer has one meaning now that Dairy and Ice Cream grade independently).
+  // Visit set for the two per-vertical Classification charts
   const filteredForClassCharts = useMemo(() => {
-    return rows.filter(
-      (r) =>
-        (!fMgr || r.mgr === fMgr) &&
-        (!fSuper || r.sup === fSuper) &&
-        (!fChannel || r.ch === fChannel) &&
-        (!fCust || r.cust === fCust) &&
-        (!fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4))
-    );
-  }, [rows, fTime, fMgr, fSuper, fChannel, fCust]);
+    return rows.filter((r) => {
+      const rowDate = new Date(r.createdAt);
+      const from = normalizeDate(fFrom);
+      const to = normalizeDate(fTo);
+      const fromOk = !from || rowDate >= from;
+      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
+      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fCust || r.cust === fCust) && fromOk && toOk;
+    });
+  }, [rows, fFrom, fTo, fMgr, fSuper, fChannel, fCust]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
@@ -222,14 +215,14 @@ export default function SupervisorReportsPage() {
   // Render active note description
   const activeNote = useMemo(() => {
     const parts = [];
-    if (fTime) parts.push(`Period: <b>${fTime === 'recent' ? 'Recent' : 'Earlier'}</b>`);
+    if (fFrom || fTo) parts.push(`Date: <b>${fFrom || 'Start'} → ${fTo || 'Now'}</b>`);
     if (fMgr) parts.push(`Manager: <b>${fMgr}</b>`);
     if (fSuper) parts.push(`Supervisor: <b>${fSuper}</b>`);
     if (fChannel) parts.push(`Channel: <b>${fChannel}</b>`);
     if (fClass) parts.push(`Classification: <b>${fClass}</b>`);
     if (fCust) parts.push(`Outlet: <b>${fCust}</b>`);
     return parts.length ? 'Filtered by ' + parts.join(' · ') : 'Showing all visits';
-  }, [fTime, fMgr, fSuper, fChannel, fClass, fCust]);
+  }, [fFrom, fTo, fMgr, fSuper, fChannel, fClass, fCust]);
 
   // Chart Rendering Hook
   useEffect(() => {
@@ -865,12 +858,13 @@ export default function SupervisorReportsPage() {
         {/* Filters Panel */}
         <div className="filters">
           <div className="fld">
-            <label>Time Period</label>
-            <select value={fTime} onChange={(e) => setFTime(e.target.value)}>
-              <option value="">All Periods</option>
-              <option value="recent">Recent (W5-W8)</option>
-              <option value="earlier">Earlier (W1-W4)</option>
-            </select>
+            <label>From</label>
+            <input type="date" value={fFrom} onChange={(e) => setFFrom(e.target.value)} />
+          </div>
+
+          <div className="fld">
+            <label>To</label>
+            <input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} />
           </div>
 
           <div className="fld">

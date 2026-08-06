@@ -54,8 +54,8 @@ export async function getSupervisorsAction(): Promise<any[]> {
 export async function createSupervisorAction(data: SupervisorInput): Promise<ActionResponse> {
   try {
     const session = await verifyAdminSession();
-    const adminUser = session.user as any;
-    if (!canModifyMasterData(adminUser?.role)) {
+    const currentUser = session.user as any;
+    if (!canModifyMasterData(currentUser?.role)) {
       return {
         success: false,
         error: '403 Forbidden: Sub-Admin role does not have write permissions to create supervisor accounts.',

@@ -561,15 +561,34 @@ export default function AdminDashboardPage() {
       });
     }
 
-    // 5. NPD Availability Bar Chart (SKU-response granularity, percentage-based)
+    // 5. NPD Availability Bar Chart (SKU-response & visit-level granularity)
     if (canvasNpdRef.current) {
       if (chartsRef.current.cNpd) chartsRef.current.cNpd.destroy();
-      const npdTotal = filteredNpdRows.length;
-      const npdCounts = { YES: 0, NO: 0, 'NOT APPLICABLE': 0 } as Record<string, number>;
-      filteredNpdRows.forEach((r: any) => {
-        npdCounts[r.availability] = (npdCounts[r.availability] || 0) + 1;
-      });
-      const npdPct = (key: string) => (npdTotal ? Math.round((npdCounts[key] / npdTotal) * 100) : 0);
+      
+      let availCount = 0;
+      let notAvailCount = 0;
+      let notReqCount = 0;
+      let npdTotal = 0;
+
+      if (filteredNpdRows && filteredNpdRows.length > 0) {
+        npdTotal = filteredNpdRows.length;
+        filteredNpdRows.forEach((r: any) => {
+          const st = (r.status || r.availability || '').toUpperCase();
+          if (st === 'AVAILABLE' || st === 'YES' || st === 'A') availCount++;
+          else if (st === 'NOT AVAILABLE' || st === 'NO' || st === 'N') notAvailCount++;
+          else notReqCount++;
+        });
+      } else if (filtered && filtered.length > 0) {
+        npdTotal = filtered.length;
+        filtered.forEach((r: any) => {
+          const st = (r.npd || '').toUpperCase();
+          if (st === 'A' || st === 'AVAILABLE' || st === 'YES') availCount++;
+          else if (st === 'N' || st === 'NOT AVAILABLE' || st === 'NO') notAvailCount++;
+          else notReqCount++;
+        });
+      }
+
+      const npdPct = (count: number) => (npdTotal ? Math.round((count / npdTotal) * 100) : 0);
 
       chartsRef.current.cNpd = new Chart(canvasNpdRef.current, {
         type: 'bar',
@@ -577,7 +596,7 @@ export default function AdminDashboardPage() {
           labels: ['Available', 'Not avail.', 'Not req.'],
           datasets: [
             {
-              data: [npdPct('YES'), npdPct('NO'), npdPct('NOT APPLICABLE')],
+              data: [npdPct(availCount), npdPct(notAvailCount), npdPct(notReqCount)],
               backgroundColor: [GREEN, RED, GREY],
               borderRadius: 6,
             },
@@ -590,15 +609,28 @@ export default function AdminDashboardPage() {
             legend: { display: false },
             tooltip: {
               callbacks: {
-                label: (ctx) => `${ctx.raw}% of ${npdTotal} responses`,
+                label: (ctx) => `${ctx.raw}% of ${npdTotal} ${filteredNpdRows.length > 0 ? 'responses' : 'visits'}`,
               },
             },
           },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const availabilityCode = label === 'Available' ? 'YES' : label === 'Not avail.' ? 'NO' : 'NOT APPLICABLE';
-              const matched = filteredNpdRows.filter((r: any) => r.availability === availabilityCode);
+              const targetCode = label === 'Available' ? 'Available' : label === 'Not avail.' ? 'Not Available' : 'Not Required';
+              const matched = filteredNpdRows.length > 0
+                ? filteredNpdRows.filter((r: any) => {
+                    const st = (r.status || r.availability || '').toUpperCase();
+                    if (targetCode === 'Available') return st === 'AVAILABLE' || st === 'YES' || st === 'A';
+                    if (targetCode === 'Not Available') return st === 'NOT AVAILABLE' || st === 'NO' || st === 'N';
+                    return st !== 'AVAILABLE' && st !== 'YES' && st !== 'A' && st !== 'NOT AVAILABLE' && st !== 'NO' && st !== 'N';
+                  })
+                : filtered.filter((r: any) => {
+                    const st = (r.npd || '').toUpperCase();
+                    if (targetCode === 'Available') return st === 'A' || st === 'AVAILABLE' || st === 'YES';
+                    if (targetCode === 'Not Available') return st === 'N' || st === 'NOT AVAILABLE' || st === 'NO';
+                    return st !== 'A' && st !== 'AVAILABLE' && st !== 'YES' && st !== 'N' && st !== 'NOT AVAILABLE' && st !== 'NO';
+                  });
+
               setReportModalType('npd');
               setReportModalSource('npd');
               setReportModalTitle(`NPD Availability · ${label}`);

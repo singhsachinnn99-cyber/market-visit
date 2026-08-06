@@ -1399,7 +1399,6 @@ export default function SupervisorDashboard() {
               <canvas ref={canvasTrendRef}></canvas>
             </div>
           </div>
-        </div>         </div>
         </div>
 
         {/* Row 2 Grid */}

@@ -375,13 +375,13 @@ export default function AdminDashboardPage() {
           if (typeof value !== 'number') return;
           const label = `${value}%`;
           ctx.save();
-          ctx.font = '600 11px Inter, sans-serif';
+          ctx.font = '700 11px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
-          ctx.fillStyle = '#ffffff';
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.24)';
+          ctx.fillStyle = theme === 'dark' ? '#f1f5f9' : '#0f172a';
+          ctx.shadowColor = theme === 'dark' ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.9)';
           ctx.shadowBlur = 4;
-          ctx.fillText(label, bar.x, bar.y - 8);
+          ctx.fillText(label, bar.x, bar.y - 4);
           ctx.restore();
         });
       },
@@ -438,10 +438,16 @@ export default function AdminDashboardPage() {
     // 2. Channel Doughnut Chart (percentage-based)
     if (canvasChannelRef.current) {
       if (chartsRef.current.cChannel) chartsRef.current.cChannel.destroy();
-      const ch = countFreq(filtered, (r) => r.ch);
+      const chCounts = countFreq(filtered, (r) => {
+        const s = (r.ch || '').toUpperCase().trim();
+        if (s.includes('MT') || s.includes('MODERN')) return 'MT';
+        if (s.includes('INST') || s.includes('HOTEL') || s.includes('HORECA') || s.includes('CATERING')) return 'INST';
+        if (s.includes('EXP') || s.includes('EXPORT')) return 'EXPORT';
+        return 'TT';
+      });
       const chL = ['TT', 'MT', 'INST', 'EXPORT'];
       const chTotal = filtered.length;
-      const chPct = (c: string) => (chTotal ? Math.round(((ch[c] || 0) / chTotal) * 100) : 0);
+      const chPct = (c: string) => (chTotal ? Math.round(((chCounts[c] || 0) / chTotal) * 100) : 0);
       chartsRef.current.cChannel = new Chart(canvasChannelRef.current, {
         type: 'doughnut',
         data: {
@@ -464,7 +470,13 @@ export default function AdminDashboardPage() {
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              handleChartClick(`Visits for ${label} Channel`, (r) => r.ch === label);
+              handleChartClick(`Visits for ${label} Channel`, (r) => {
+                const s = (r.ch || '').toUpperCase().trim();
+                if (label === 'MT') return s.includes('MT') || s.includes('MODERN');
+                if (label === 'INST') return s.includes('INST') || s.includes('HOTEL') || s.includes('HORECA') || s.includes('CATERING');
+                if (label === 'EXPORT') return s.includes('EXP') || s.includes('EXPORT');
+                return !s.includes('MT') && !s.includes('MODERN') && !s.includes('INST') && !s.includes('HOTEL') && !s.includes('HORECA') && !s.includes('CATERING') && !s.includes('EXP') && !s.includes('EXPORT');
+              });
             }
           },
           onHover: (e, el, chart) => {
@@ -524,17 +536,35 @@ export default function AdminDashboardPage() {
     // 4. Cold Chain Doughnut Chart (percentage-based)
     if (canvasTempRef.current) {
       if (chartsRef.current.cTemp) chartsRef.current.cTemp.destroy();
-      const ok = filtered.filter((r) => r.ok).length;
-      const breaches = filtered.filter((r) => !r.ok).length;
-      const tempTotal = filtered.length;
+      
+      let okCount = 0;
+      let breachCount = 0;
+      let tempTotal = 0;
+
+      const coldChainReportRows = reportRows['cold-chain'] || [];
+      if (coldChainReportRows.length > 0) {
+        tempTotal = coldChainReportRows.length;
+        coldChainReportRows.forEach((r: any) => {
+          if (r.tempInRange === true || r.tempInRange === 1) okCount++;
+          else breachCount++;
+        });
+      } else if (filtered && filtered.length > 0) {
+        tempTotal = filtered.length;
+        filtered.forEach((r: any) => {
+          if (r.ok === true || r.ok === 1) okCount++;
+          else breachCount++;
+        });
+      }
+
       const tempPct = (count: number) => (tempTotal ? Math.round((count / tempTotal) * 100) : 0);
+
       chartsRef.current.cTemp = new Chart(canvasTempRef.current, {
         type: 'doughnut',
         data: {
           labels: ['Within range', 'Breach'],
           datasets: [
             {
-              data: [tempPct(ok), tempPct(breaches)],
+              data: [tempPct(okCount), tempPct(breachCount)],
               backgroundColor: [GREEN, RED],
               borderWidth: 0,
             },
@@ -550,8 +580,21 @@ export default function AdminDashboardPage() {
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const isOk = label === 'Within range';
-              handleDrilldownChartClick('cold-chain', `Cold Chain Status · ${label}`, (r) => r.ok === isOk, label === 'Breach' ? 'Status: Breach' : 'Status: In Range');
+              const isWithinRange = label === 'Within range';
+              
+              if (coldChainReportRows.length > 0) {
+                const matched = coldChainReportRows.filter((r: any) =>
+                  isWithinRange ? (r.tempInRange === true || r.tempInRange === 1) : (r.tempInRange === false || r.tempInRange === 0)
+                );
+                setReportModalType('cold-chain');
+                setReportModalSource('cold-chain');
+                setReportModalTitle(`Cold Chain Status · ${label}`);
+                setReportModalRows(matched);
+                setReportFilterChip({ key: 'segment', value: label, label: `Status: ${label}` });
+                setReportModalOpen(true);
+              } else {
+                handleChartClick(`Cold Chain Status · ${label}`, (r) => (isWithinRange ? r.ok === true : r.ok === false));
+              }
             }
           },
           onHover: (e, el, chart) => {
@@ -593,7 +636,7 @@ export default function AdminDashboardPage() {
       chartsRef.current.cNpd = new Chart(canvasNpdRef.current, {
         type: 'bar',
         data: {
-          labels: ['Available', 'Not avail.', 'Not req.'],
+          labels: ['Available', 'Not Available', 'Not Applicable'],
           datasets: [
             {
               data: [npdPct(availCount), npdPct(notAvailCount), npdPct(notReqCount)],
@@ -616,7 +659,7 @@ export default function AdminDashboardPage() {
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const targetCode = label === 'Available' ? 'Available' : label === 'Not avail.' ? 'Not Available' : 'Not Required';
+              const targetCode = label === 'Available' ? 'Available' : label === 'Not Available' ? 'Not Available' : 'Not Applicable';
               const matched = filteredNpdRows.length > 0
                 ? filteredNpdRows.filter((r: any) => {
                     const st = (r.status || r.availability || '').toUpperCase();
@@ -660,7 +703,7 @@ export default function AdminDashboardPage() {
       chartsRef.current.cPsku = new Chart(canvasPskuRef.current, {
         type: 'bar',
         data: {
-          labels: ['Available', 'Not avail.', 'Not req.'],
+          labels: ['Available', 'Not Available', 'Not Applicable'],
           datasets: [
             {
               data: [pskuPct(psku.A || 0), pskuPct(psku.N || 0), pskuPct(psku.X || 0)],
@@ -679,8 +722,8 @@ export default function AdminDashboardPage() {
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const pskuCode = label === 'Available' ? 'A' : label === 'Not avail.' ? 'N' : 'X';
-              handleDrilldownChartClick('psku', `Power SKU Availability · ${label}`, (r) => r.psku === pskuCode, label === 'Available' || label === 'Not avail.' || label === 'Not req.' ? `Status: ${label}` : undefined);
+              const pskuCode = label === 'Available' ? 'A' : label === 'Not Available' ? 'N' : 'X';
+              handleDrilldownChartClick('psku', `Power SKU Availability · ${label}`, (r) => r.psku === pskuCode, label ? `Status: ${label}` : undefined);
             }
           },
           onHover: (e, el, chart) => {
@@ -1233,31 +1276,11 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="fld">
-            <label>Route (NPD Product)</label>
+            <label>Route</label>
             <select value={fRoute} onChange={(e) => setFRoute(e.target.value)}>
               <option value="">All Routes</option>
               {npdRouteOptions.map((r) => (
                 <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="fld">
-            <label>SKU (NPD Product)</label>
-            <select value={fSku} onChange={(e) => setFSku(e.target.value)}>
-              <option value="">All SKUs</option>
-              {npdSkuOptions.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="fld">
-            <label>Business Vertical (NPD Product)</label>
-            <select value={fVertical} onChange={(e) => setFVertical(e.target.value)}>
-              <option value="">All Verticals</option>
-              {npdVerticalOptions.map((v) => (
-                <option key={v} value={v}>{v}</option>
               ))}
             </select>
           </div>

@@ -421,13 +421,13 @@ export default function SupervisorDashboard() {
           const value = dataset.data[index];
           if (typeof value !== 'number') return;
           ctx.save();
-          ctx.font = '600 11px Inter, sans-serif';
+          ctx.font = '700 11px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
-          ctx.fillStyle = '#ffffff';
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.24)';
+          ctx.fillStyle = theme === 'dark' ? '#f1f5f9' : '#0f172a';
+          ctx.shadowColor = theme === 'dark' ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.9)';
           ctx.shadowBlur = 4;
-          ctx.fillText(`${value}%`, bar.x, bar.y - 8);
+          ctx.fillText(`${value}%`, bar.x, bar.y - 4);
           ctx.restore();
         });
       },
@@ -476,45 +476,6 @@ export default function SupervisorDashboard() {
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
             y: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: textColor, callback: (v: any) => `${v}%` } },
-          },
-        },
-      });
-    }
-
-    // 2. Channel Doughnut Chart (percentage-based)
-    if (canvasChannelRef.current) {
-      if (chartsRef.current.cChannel) chartsRef.current.cChannel.destroy();
-      const ch = countFreq(filtered, (r) => r.ch);
-      const chL = ['TT', 'MT', 'INST', 'EXPORT'];
-      const chTotal = filtered.length;
-      const chPct = (c: string) => (chTotal ? Math.round(((ch[c] || 0) / chTotal) * 100) : 0);
-      chartsRef.current.cChannel = new Chart(canvasChannelRef.current, {
-        type: 'doughnut',
-        data: {
-          labels: chL,
-          datasets: [
-            {
-              data: chL.map((c) => chPct(c)),
-              backgroundColor: [BLUE, GREEN, AMBER, BLUE_DEEP],
-              borderWidth: 0,
-            },
-          ],
-        },
-        options: {
-          maintainAspectRatio: false,
-          cutout: '62%',
-          plugins: {
-            legend: { position: 'bottom', labels: { color: textColor } },
-            tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw}%` } },
-          },
-          onClick: (e, el, chart) => {
-            if (el.length > 0) {
-              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              handleChartClick(`Visits for ${label} Channel`, (r) => r.ch === label);
-            }
-          },
-          onHover: (e, el, chart) => {
-            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
           },
         },
       });
@@ -570,17 +531,35 @@ export default function SupervisorDashboard() {
     // 4. Cold Chain Doughnut Chart (percentage-based)
     if (canvasTempRef.current) {
       if (chartsRef.current.cTemp) chartsRef.current.cTemp.destroy();
-      const ok = filtered.filter((r) => r.ok).length;
-      const breaches = filtered.filter((r) => !r.ok).length;
-      const tempTotal = filtered.length;
+      
+      let okCount = 0;
+      let breachCount = 0;
+      let tempTotal = 0;
+
+      const coldChainReportRows = reportRows['cold-chain'] || [];
+      if (coldChainReportRows.length > 0) {
+        tempTotal = coldChainReportRows.length;
+        coldChainReportRows.forEach((r: any) => {
+          if (r.tempInRange === true || r.tempInRange === 1) okCount++;
+          else breachCount++;
+        });
+      } else if (filtered && filtered.length > 0) {
+        tempTotal = filtered.length;
+        filtered.forEach((r: any) => {
+          if (r.ok === true || r.ok === 1) okCount++;
+          else breachCount++;
+        });
+      }
+
       const tempPct = (count: number) => (tempTotal ? Math.round((count / tempTotal) * 100) : 0);
+
       chartsRef.current.cTemp = new Chart(canvasTempRef.current, {
         type: 'doughnut',
         data: {
           labels: ['Within range', 'Breach'],
           datasets: [
             {
-              data: [tempPct(ok), tempPct(breaches)],
+              data: [tempPct(okCount), tempPct(breachCount)],
               backgroundColor: [GREEN, RED],
               borderWidth: 0,
             },
@@ -596,8 +575,21 @@ export default function SupervisorDashboard() {
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const isOk = label === 'Within range';
-              handleDrilldownChartClick('cold-chain', `Cold Chain Status · ${label}`, (r) => r.ok === isOk, label === 'Breach' ? 'Status: Breach' : 'Status: In Range');
+              const isWithinRange = label === 'Within range';
+              
+              if (coldChainReportRows.length > 0) {
+                const matched = coldChainReportRows.filter((r: any) =>
+                  isWithinRange ? (r.tempInRange === true || r.tempInRange === 1) : (r.tempInRange === false || r.tempInRange === 0)
+                );
+                setReportModalType('cold-chain');
+                setReportModalSource('cold-chain');
+                setReportModalTitle(`Cold Chain Status · ${label}`);
+                setReportModalRows(matched);
+                setReportFilterChip({ key: 'segment', value: label, label: `Status: ${label}` });
+                setReportModalOpen(true);
+              } else {
+                handleChartClick(`Cold Chain Status · ${label}`, (r) => (isWithinRange ? r.ok === true : r.ok === false));
+              }
             }
           },
           onHover: (e, el, chart) => {
@@ -639,7 +631,7 @@ export default function SupervisorDashboard() {
       chartsRef.current.cNpd = new Chart(canvasNpdRef.current, {
         type: 'bar',
         data: {
-          labels: ['Available', 'Not avail.', 'Not req.'],
+          labels: ['Available', 'Not Available', 'Not Applicable'],
           datasets: [
             {
               data: [npdPct(availCount), npdPct(notAvailCount), npdPct(notReqCount)],
@@ -662,7 +654,7 @@ export default function SupervisorDashboard() {
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const targetCode = label === 'Available' ? 'Available' : label === 'Not avail.' ? 'Not Available' : 'Not Required';
+              const targetCode = label === 'Available' ? 'Available' : label === 'Not Available' ? 'Not Available' : 'Not Applicable';
               const matched = filteredNpdRows.length > 0
                 ? filteredNpdRows.filter((r: any) => {
                     const st = (r.status || r.availability || '').toUpperCase();
@@ -706,7 +698,7 @@ export default function SupervisorDashboard() {
       chartsRef.current.cPsku = new Chart(canvasPskuRef.current, {
         type: 'bar',
         data: {
-          labels: ['Available', 'Not avail.', 'Not req.'],
+          labels: ['Available', 'Not Available', 'Not Applicable'],
           datasets: [
             {
               data: [pskuPct(psku.A || 0), pskuPct(psku.N || 0), pskuPct(psku.X || 0)],
@@ -725,8 +717,8 @@ export default function SupervisorDashboard() {
           onClick: (e, el, chart) => {
             if (el.length > 0) {
               const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const pskuCode = label === 'Available' ? 'A' : label === 'Not avail.' ? 'N' : 'X';
-              handleDrilldownChartClick('psku', `Power SKU Availability · ${label}`, (r) => r.psku === pskuCode, label === 'Available' || label === 'Not avail.' || label === 'Not req.' ? `Status: ${label}` : undefined);
+              const pskuCode = label === 'Available' ? 'A' : label === 'Not Available' ? 'N' : 'X';
+              handleDrilldownChartClick('psku', `Power SKU Availability · ${label}`, (r) => r.psku === pskuCode, label ? `Status: ${label}` : undefined);
             }
           },
           onHover: (e, el, chart) => {
@@ -1317,31 +1309,11 @@ export default function SupervisorDashboard() {
           </div>
 
           <div className="fld">
-            <label>Route (NPD Product)</label>
+            <label>Route</label>
             <select value={fRoute} onChange={(e) => setFRoute(e.target.value)}>
               <option value="">All Routes</option>
               {npdRouteOptions.map((r) => (
                 <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="fld">
-            <label>SKU (NPD Product)</label>
-            <select value={fSku} onChange={(e) => setFSku(e.target.value)}>
-              <option value="">All SKUs</option>
-              {npdSkuOptions.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="fld">
-            <label>Business Vertical (NPD Product)</label>
-            <select value={fVertical} onChange={(e) => setFVertical(e.target.value)}>
-              <option value="">All Verticals</option>
-              {npdVerticalOptions.map((v) => (
-                <option key={v} value={v}>{v}</option>
               ))}
             </select>
           </div>
@@ -1419,7 +1391,7 @@ export default function SupervisorDashboard() {
         )}
 
         {/* Row 1 Grid */}
-        <div className="grid">
+        <div style={{ marginBottom: '16px' }}>
           <div className="panel">
             <h3>Visits Over Time</h3>
             <div className="psub">Weekly visits (filtered)</div>
@@ -1427,13 +1399,7 @@ export default function SupervisorDashboard() {
               <canvas ref={canvasTrendRef}></canvas>
             </div>
           </div>
-          <div className="panel">
-            <h3>Visits by Channel</h3>
-            <div className="psub">Share across MT / TT / INST / Export</div>
-            <div className="chart-sm">
-              <canvas ref={canvasChannelRef}></canvas>
-            </div>
-          </div>
+        </div>         </div>
         </div>
 
         {/* Row 2 Grid */}

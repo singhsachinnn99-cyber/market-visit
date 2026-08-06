@@ -5,27 +5,9 @@ import { Chart } from 'chart.js/auto';
 import { useTheme } from '@/providers/theme-provider';
 import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
 import DrilldownReportModal from '@/components/dashboard/DrilldownReportModal';
+import { PhotoGallerySection } from '@/components/dashboard/PhotoGallerySection';
 import { useSession } from 'next-auth/react';
 import { isFleetRole, getAllowedReports } from '@/lib/roles';
-
-const SUPERVISOR_TO_MANAGER: Record<string, string> = {
-  'YASAR': 'KHALID',
-  'JAHID': 'ASHFAQ',
-  'MUSAVEER': 'KHALID',
-  'RIZVI': 'KHALID',
-  'WALI': 'ASHFAQ',
-  'DANISH': 'KHALID',
-  'SAIF': 'ASHFAQ',
-  'ZEESHAN': 'ASHFAQ',
-  'SAIFULLAH': 'ADNAN',
-  'RASHWIN': 'ADNAN',
-  'MOHSIN': 'ADNAN',
-  'JAVED': 'ADNAN',
-  'ASAD': 'ADNAN',
-  'KISHAN': 'ADNAN',
-  'WASIM': 'INST MANAGER',
-  'SAMRA': 'EXP MANAGER',
-};
 
 const GCOL: Record<string, string> = {
   A: '#0b7a4c',
@@ -40,6 +22,8 @@ export default function AdminDashboardPage() {
   const userRole = (session?.user as any)?.role;
   const [rows, setRows] = useState<any[]>([]);
   const [reportRows, setReportRows] = useState<any>({ npd: [], psku: [], 'cold-chain': [], classification: [] });
+  const [managerSupervisorMap, setManagerSupervisorMap] = useState<Record<string, string[]>>({});
+  const [photos, setPhotos] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isSyncing, setIsSyncing] = useState(false);
@@ -48,7 +32,6 @@ export default function AdminDashboardPage() {
   // Filter States
   const [fFrom, setFFrom] = useState('');
   const [fTo, setFTo] = useState('');
-  const [fTime, setFTime] = useState('');
   const [fMgr, setFMgr] = useState('');
   const [fSuper, setFSuper] = useState('');
   const [fChannel, setFChannel] = useState('');
@@ -86,8 +69,10 @@ export default function AdminDashboardPage() {
         const res = await fetch(`/api/dashboard${params.toString() ? `?${params.toString()}` : ''}`);
         const data = await res.json();
         if (data.success && active) {
-          setRows(data.rows);
+          setRows(data.rows || []);
           setReportRows(data.reportRows || { npd: [], psku: [], 'cold-chain': [], classification: [] });
+          setManagerSupervisorMap(data.managerSupervisorMap || {});
+          setPhotos(data.photos || []);
           setLastUpdated(new Date());
         }
       } catch (err) {
@@ -113,82 +98,70 @@ export default function AdminDashboardPage() {
 
   const normalizeDate = (value: string) => value ? new Date(`${value}T00:00:00`) : null;
 
-  // Compute dropdown values from unfiltered rows
-  // 1. Manager Options: filtered by Time Period only
+  // Compute dropdown values from unfiltered rows & dynamic DB manager map
+  // 1. Manager Options
   const mgrOptions = useMemo(() => {
-    const filteredByTime = rows.filter(r => {
-      const rowDate = new Date(r.createdAt);
-      const from = normalizeDate(fFrom);
-      const to = normalizeDate(fTo);
-      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
-      const fromOk = !from || rowDate >= from;
-      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && fromOk && toOk;
-    });
-    return Array.from(new Set(filteredByTime.map((r) => r.mgr))).sort();
-  }, [rows, fTime, fFrom, fTo]);
+    const mgrsFromRows = rows.map((r) => r.mgr);
+    const mgrsFromMap = Object.keys(managerSupervisorMap);
+    return Array.from(new Set([...mgrsFromRows, ...mgrsFromMap])).filter(Boolean).sort();
+  }, [rows, managerSupervisorMap]);
 
-  // 2. Supervisor Options: filtered by Time Period and Manager
+  // 2. Supervisor Options: Filtered strictly by Manager if selected, or all supervisors if "All Managers" selected
   const supOptions = useMemo(() => {
-    const filteredByTimeAndMgr = rows.filter(r => {
-      const rowDate = new Date(r.createdAt);
-      const from = normalizeDate(fFrom);
-      const to = normalizeDate(fTo);
-      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
-      const fromOk = !from || rowDate >= from;
-      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && (!fMgr || r.mgr === fMgr) && fromOk && toOk;
-    });
-    return Array.from(new Set(filteredByTimeAndMgr.map((r) => r.sup))).sort();
-  }, [rows, fTime, fMgr, fFrom, fTo]);
+    if (fMgr) {
+      if (managerSupervisorMap[fMgr] && managerSupervisorMap[fMgr].length > 0) {
+        return managerSupervisorMap[fMgr];
+      }
+      return Array.from(new Set(rows.filter((r) => r.mgr === fMgr).map((r) => r.sup))).filter(Boolean).sort();
+    }
+    const supsFromRows = rows.map((r) => r.sup);
+    const supsFromMap = Object.values(managerSupervisorMap).flat();
+    return Array.from(new Set([...supsFromRows, ...supsFromMap])).filter(Boolean).sort();
+  }, [rows, fMgr, managerSupervisorMap]);
 
-  // 3. Channel Options: filtered by Time Period, Manager, and Supervisor
+  // 3. Channel Options: filtered by Manager and Supervisor
   const channelOptions = useMemo(() => {
-    const filteredByTimeMgrSuper = rows.filter(r => {
+    const filteredByMgrSuper = rows.filter(r => {
       const rowDate = new Date(r.createdAt);
       const from = normalizeDate(fFrom);
       const to = normalizeDate(fTo);
-      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && fromOk && toOk;
+      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && fromOk && toOk;
     });
-    return Array.from(new Set(filteredByTimeMgrSuper.map((r) => r.ch))).sort();
-  }, [rows, fTime, fMgr, fSuper, fFrom, fTo]);
+    return Array.from(new Set(filteredByMgrSuper.map((r) => r.ch))).sort();
+  }, [rows, fMgr, fSuper, fFrom, fTo]);
 
-  // 4. Customer / Outlet Options: filtered by Time Period, Manager, Supervisor, Channel, and Classification
+  // 4. Customer / Outlet Options: filtered by Manager, Supervisor, Channel, and Classification
   const custOptions = useMemo(() => {
     const filteredByAllUpstream = rows.filter(r => {
       const rowDate = new Date(r.createdAt);
       const from = normalizeDate(fFrom);
       const to = normalizeDate(fTo);
-      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && fromOk && toOk;
+      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && fromOk && toOk;
     });
     return Array.from(new Set(filteredByAllUpstream.map((r) => r.cust))).sort();
-  }, [rows, fTime, fMgr, fSuper, fChannel, fClass, fFrom, fTo]);
+  }, [rows, fMgr, fSuper, fChannel, fClass, fFrom, fTo]);
 
-  // 5. Classification Options: filtered by Time Period, Manager, Supervisor, Channel, and Outlet
+  // 5. Classification Options: filtered by Manager, Supervisor, Channel, and Outlet
   const classOptions = useMemo(() => {
     const filteredByAllUpstream = rows.filter(r => {
       const rowDate = new Date(r.createdAt);
       const from = normalizeDate(fFrom);
       const to = normalizeDate(fTo);
-      const periodOk = !fTime || (fTime === 'recent' ? r.week >= 5 : r.week <= 4);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return periodOk && (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fCust || r.cust === fCust) && fromOk && toOk;
+      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fCust || r.cust === fCust) && fromOk && toOk;
     });
     return Array.from(new Set(filteredByAllUpstream.map((r) => r.gr))).sort();
-  }, [rows, fTime, fMgr, fSuper, fChannel, fCust, fFrom, fTo]);
+  }, [rows, fMgr, fSuper, fChannel, fCust, fFrom, fTo]);
 
   // Reset helper
   const resetFilters = () => {
     setFFrom('');
     setFTo('');
-    setFTime('');
     setFMgr('');
     setFSuper('');
     setFChannel('');
@@ -1162,20 +1135,7 @@ export default function AdminDashboardPage() {
             <input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} />
           </div>
 
-          <div className="fld">
-            <label>Time Period</label>
-            <select value={fTime} onChange={(e) => {
-              setFTime(e.target.value);
-              setFMgr('');
-              setFSuper('');
-              setFChannel('');
-              setFCust('');
-            }}>
-              <option value="">All Periods</option>
-              <option value="recent">Recent (W5-W8)</option>
-              <option value="earlier">Earlier (W1-W4)</option>
-            </select>
-          </div>
+
 
           <div className="fld">
             <label>Manager</label>
@@ -1465,6 +1425,17 @@ export default function AdminDashboardPage() {
             </table>
           </div>
         </div>
+
+        {/* Photo Gallery Tracking */}
+        <PhotoGallerySection
+          photos={photos}
+          fFrom={fFrom}
+          fTo={fTo}
+          fMgr={fMgr}
+          fSuper={fSuper}
+          fChannel={fChannel}
+          fCust={fCust}
+        />
 
         {/* Visit Details Table */}
         <div className="panel tbl">

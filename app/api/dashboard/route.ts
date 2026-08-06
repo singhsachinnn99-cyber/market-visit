@@ -18,7 +18,7 @@ async function ensureDashboardSchema() {
 }
 
 const cacheStore = new Map<string, { timestamp: number; data: any }>();
-const CACHE_TTL_MS = 3000; // 3 seconds cache for deduplicating simultaneous page/layout requests
+const CACHE_TTL_MS = 3000; // 3 seconds cache for deduplicating simultaneous requests
 
 export async function GET(req: NextRequest) {
   try {
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     await ensureDashboardSchema();
 
     // 1. Fetch raw datasets concurrently in parallel
-    const [visitsRaw, customers, dbUsers, skuRows, powerSkuRows, assets, pskuResults, npdResults] = await Promise.all([
+    const [visitsRaw, customers, dbUsers, skuRows, powerSkuRows, assets, pskuResults, npdResults, photosRaw, routeRows] = await Promise.all([
       visitRepository.getAllVisits(),
       customerRepository.getAllCustomers(),
       pool.execute(`
@@ -57,6 +57,12 @@ export async function GET(req: NextRequest) {
       pool.execute('SELECT * FROM `VisitAsset`').then(([rows]: any) => rows).catch(() => []),
       pool.execute('SELECT * FROM `VisitPowerSkuResult`').then(([rows]: any) => rows).catch(() => []),
       pool.execute('SELECT * FROM `NPDResponse`').then(([rows]: any) => rows).catch(() => []),
+      pool.execute('SELECT * FROM `VisitPhoto`').then(([rows]: any) => rows).catch(() => []),
+      pool.execute(`
+        SELECT r.*, m.name as managerName 
+        FROM Route r 
+        LEFT JOIN Manager m ON r.managerId = m.id
+      `).then(([rows]: any) => rows).catch(() => []),
     ]);
 
     let visits = visitsRaw;
@@ -98,10 +104,70 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Build dynamic Manager -> Supervisor map
+    const managerSupervisorMap: Record<string, string[]> = {};
+    const supToMgrMap = new Map<string, string>();
+
+    // 1. From User table
+    dbUsers.forEach((u: any) => {
+      if (u.role === 'Supervisor' && u.name) {
+        const supName = u.name.toUpperCase().trim();
+        const mgrName = (u.managerName || '').toUpperCase().trim();
+        if (mgrName) {
+          supToMgrMap.set(supName, mgrName);
+        }
+      }
+    });
+
+    // 2. From Route table (Route Master mapping)
+    routeRows.forEach((r: any) => {
+      const superName = (r.superName || '').toUpperCase().trim();
+      const mgrName = (r.managerName || '').toUpperCase().trim();
+      if (superName && superName !== 'CLOSED' && mgrName && mgrName !== 'CLOSED') {
+        if (!supToMgrMap.has(superName)) {
+          supToMgrMap.set(superName, mgrName);
+        }
+      }
+    });
+
+    // Fallback static overrides if DB mapping is partially empty for standard managers
+    const KNOWN_MAP: Record<string, string> = {
+      'ASAD': 'ADNAN', 'JAVED': 'ADNAN', 'KISHAN': 'ADNAN', 'MOHSIN': 'ADNAN', 'RASHWIN': 'ADNAN', 'SAIFULLAH': 'ADNAN',
+      'JAHID': 'ASHFAQ', 'SAIF': 'ASHFAQ', 'WALI': 'ASHFAQ', 'ZEESHAN': 'ASHFAQ',
+      'DANISH': 'KHALID', 'MUSAVEER': 'KHALID', 'RIZVI': 'KHALID', 'YASAR': 'KHALID',
+      'SAMRA': 'EXP MANAGER', 'WASIM': 'INST MANAGER'
+    };
+
+    Object.entries(KNOWN_MAP).forEach(([sup, mgr]) => {
+      if (!supToMgrMap.has(sup)) {
+        supToMgrMap.set(sup, mgr);
+      }
+    });
+
+    // Group into managerSupervisorMap
+    supToMgrMap.forEach((mgrName, supName) => {
+      if (!managerSupervisorMap[mgrName]) {
+        managerSupervisorMap[mgrName] = [];
+      }
+      if (!managerSupervisorMap[mgrName].includes(supName)) {
+        managerSupervisorMap[mgrName].push(supName);
+      }
+    });
+
+    Object.keys(managerSupervisorMap).forEach((m) => {
+      managerSupervisorMap[m].sort();
+    });
+
     const skuMap = new Map<string, any>(skuRows.map((sku: any) => [sku.skuCode, sku]));
     const powerSkuMap = new Map<string, any>(powerSkuRows.map((sku: any) => [sku.skuCode, sku]));
+    const customerMap = new Map(customers.map((c) => [c.cust_rt_id, c]));
+
     const userMap = new Map<string, { name: string; managerName: string }>(
-      dbUsers.map((u: any) => [u.id, { name: u.name.toUpperCase(), managerName: (u.managerName || 'ADNAN').toUpperCase() }])
+      dbUsers.map((u: any) => {
+        const supName = u.name.toUpperCase().trim();
+        const mgrName = supToMgrMap.get(supName) || (u.managerName || '').toUpperCase().trim() || 'UNASSIGNED';
+        return [u.id, { name: supName, managerName: mgrName }];
+      })
     );
 
     const assetMap = new Map<string, any[]>();
@@ -128,16 +194,6 @@ export async function GET(req: NextRequest) {
       npdMap.get(r.visitId)!.push(r);
     });
 
-    const customerMap = new Map(customers.map((c) => [c.cust_rt_id, c]));
-
-    const inferBusinessVertical = (skuName: string) => {
-      const label = (skuName || '').toLowerCase();
-      if (label.includes('yog') || label.includes('laban') || label.includes('milk') || label.includes('cream')) return 'Dairy';
-      if (label.includes('juice') || label.includes('nectar') || label.includes('drink') || label.includes('water')) return 'Beverage';
-      if (label.includes('ice') || label.includes('cone') || label.includes('choc')) return 'Ice Cream';
-      return 'Other';
-    };
-
     const formatTempContext = (assetType: string, temperature: number | null | undefined) => {
       if (temperature === null || temperature === undefined || Number.isNaN(Number(temperature))) {
         return '—';
@@ -147,7 +203,7 @@ export async function GET(req: NextRequest) {
       return `${value}°C (should be 0 to 8°C)`;
     };
 
-    // 5. Map into flat structured rows for frontend analytics charts
+    // 2. Map into flat structured rows for frontend analytics charts
     const reportRows = {
       npd: [] as any[],
       psku: [] as any[],
@@ -183,7 +239,7 @@ export async function GET(req: NextRequest) {
       const firstAsset = visitAssets[0] || { assetType: 'Chiller', temperature: 0, tempInRange: 1, actionRequired: 'None', observation: '' };
       
       const ok = visitAssets.length > 0 ? visitAssets.every((a: any) => a.tempInRange === 1 || a.tempInRange === true) : true;
-      const temperature = visitAssets.length > 0 ? (visitAssets[0].temperature) : 0; // use first asset temperature as primary representation
+      const temperature = visitAssets.length > 0 ? (visitAssets[0].temperature) : 0;
 
       // Checklists status resolution
       const visitNpd = npdMap.get(v.visitId) || [];
@@ -255,15 +311,16 @@ export async function GET(req: NextRequest) {
           outletCode: customerCode || '',
           outletName: custName,
           classification: gr,
-          businessVertical: sku?.businessVertical || inferBusinessVertical(skuName),
+          skuCode: response.skuCode,
           skuName,
-          availability: response.status === 'Available' ? 'YES' : response.status === 'Not Available' ? 'NO' : 'NOT APPLICABLE',
+          businessVertical: sku?.businessVertical || 'Dairy',
+          status: response.status,
         });
       });
 
-      visitPsku.forEach((result: any) => {
-        const sku = powerSkuMap.get(result.skuCode);
-        const skuName = sku?.skuName || result.skuCode;
+      visitPsku.forEach((response: any) => {
+        const pskuItem = powerSkuMap.get(response.skuCode);
+        const skuName = pskuItem?.skuName || response.skuCode;
         reportRows.psku.push({
           date: visitDate,
           visitId: v.visitId,
@@ -274,16 +331,14 @@ export async function GET(req: NextRequest) {
           outletCode: customerCode || '',
           outletName: custName,
           classification: gr,
-          businessVertical: sku?.businessVertical || inferBusinessVertical(skuName),
+          skuCode: response.skuCode,
           skuName,
-          availability: result.status === 'Available' ? 'YES' : result.status === 'Not Available' ? 'NO' : 'NOT APPLICABLE',
+          businessVertical: pskuItem?.channel === 'GT' ? 'Power SKU' : pskuItem?.channel || 'Power SKU',
+          status: response.status,
         });
       });
 
-      visitAssets.forEach((asset: any) => {
-        const assetType = asset.assetType || 'Chiller';
-        const tempValue = Number(asset.temperature);
-        const tempStatus = assetType === 'Freezer' ? (tempValue < -15 ? 'In Range' : 'Breach') : (tempValue >= 0 && tempValue <= 8 ? 'In Range' : 'Breach');
+      visitAssets.forEach((ast: any) => {
         reportRows['cold-chain'].push({
           date: visitDate,
           visitId: v.visitId,
@@ -294,21 +349,24 @@ export async function GET(req: NextRequest) {
           outletCode: customerCode || '',
           outletName: custName,
           classification: gr,
-          assetType,
-          assetTemp: formatTempContext(assetType, asset.temperature),
-          tempStatus,
-          ok: tempStatus === 'In Range',
-          actionRemarks: [asset.actionRequired && asset.actionRequired !== 'None' ? asset.actionRequired : null, asset.observation?.trim() || null].filter(Boolean).join(' · ') || 'None',
+          assetType: ast.assetType,
+          temperature: ast.temperature,
+          formattedTemperature: formatTempContext(ast.assetType, ast.temperature),
+          tempInRange: ast.tempInRange === 1 || ast.tempInRange === true,
+          actionRequired: ast.actionRequired,
+          observation: ast.observation || '—',
         });
       });
 
       return {
+        visitId: v.visitId,
+        createdAt: visitDate,
         sup: supName,
         mgr: mgrName,
         ch,
         rt: routeCode || '',
-        cust: custName,
         code: customerCode || '',
+        cust: custName,
         gr,
         dairyGr,
         iceGr,
@@ -320,11 +378,6 @@ export async function GET(req: NextRequest) {
         psku,
         fefo,
         action,
-        visitId: v.visitId,
-        visitType: v.visit_type === 'No Visit' ? 'No Visit' : 'Visit',
-        reasonCategory: v.reason_category || '',
-        reason: v.reason || '',
-        createdAt: (v.createdAt as any) instanceof Date ? (v.createdAt as any).toISOString() : v.createdAt
       };
     });
 
@@ -332,67 +385,100 @@ export async function GET(req: NextRequest) {
     reportRows.classificationDairy = classificationRowsDairy;
     reportRows.classificationIceCream = classificationRowsIceCream;
 
-    // 6. Compute aggregated statistics for the Reports & Routes pages
-    const totalVisits = rows.length;
-    const noVisitCount = rows.filter((r: any) => r.visitType === 'No Visit').length;
+    // 3. Process Visit Photos with full metadata
+    const photos = photosRaw.map((p: any) => {
+      const visit = visits.find((v: any) => v.visitId === p.visitId);
+      const userInfo = visit ? userMap.get(visit.supervisorId) : null;
+      const supName = userInfo ? userInfo.name : 'UNKNOWN';
+      const mgrName = userInfo ? userInfo.managerName : 'UNASSIGNED';
+      const customer = visit ? customerMap.get(visit.cust_rt_id || '') : null;
+      const custName = customer ? customer.customerName : 'Unknown';
+      const ch = customer ? customer.channel : 'General Trade';
+      const [_, routeCode] = visit ? (visit.cust_rt_id || '').split('|') : ['', ''];
+      const photoDate = p.uploadedAt || (visit ? visit.createdAt : null);
 
+      return {
+        photoId: p.photoId,
+        visitId: p.visitId,
+        category: p.category,
+        cloudinaryUrl: p.cloudinaryUrl,
+        uploadedAt: photoDate ? ((photoDate instanceof Date) ? photoDate.toISOString() : photoDate) : new Date().toISOString(),
+        supervisor: supName,
+        manager: mgrName,
+        outlet: custName,
+        route: routeCode || '',
+        channel: ch,
+      };
+    });
+
+    // 4. Summaries & KPIs
+    const totalVisits = filteredVisits.length;
+    const noVisitCount = visits.filter(v => v.status === 'Submitted' && (v as any).isNoVisit === true).length;
+    
     const todayStr = new Date().toISOString().split('T')[0];
     const todayVisits = filteredVisits.filter(v => {
-      const vDate = new Date(v.createdAt);
-      return vDate.toISOString().split('T')[0] === todayStr;
+      const dateStr = (v.createdAt as any) instanceof Date ? (v.createdAt as any).toISOString() : String(v.createdAt);
+      return dateStr.startsWith(todayStr);
     }).length;
 
+    const dbRoutes: any[] = routeRows;
     const totalSupervisors = dbUsers.filter((u: any) => u.role === 'Supervisor').length;
 
-    const breachesCount = rows.filter(r => !r.ok).length;
-    const tempBreachPercent = rows.length > 0 ? Math.round((breachesCount / rows.length) * 100) : 0;
+    const totalAssignedCustomers = customers.length;
+    const visitedCustRtIds = new Set(filteredVisits.map(v => v.cust_rt_id));
+    const coveragePercent = totalAssignedCustomers > 0 ? Math.round((visitedCustRtIds.size / totalAssignedCustomers) * 100) : 0;
 
-    const dayCounts: Record<string, number> = {};
+    let totalAssetsCount = 0;
+    let inRangeAssetsCount = 0;
     filteredVisits.forEach(v => {
-      const dStr = new Date(v.createdAt).toISOString().split('T')[0];
-      dayCounts[dStr] = (dayCounts[dStr] || 0) + 1;
+      const visitAssets = assetMap.get(v.visitId) || [];
+      visitAssets.forEach((a: any) => {
+        totalAssetsCount++;
+        if (a.tempInRange === 1 || a.tempInRange === true) inRangeAssetsCount++;
+      });
     });
-    const visitsPerDay = Object.entries(dayCounts)
+    const tempBreachPercent = totalAssetsCount > 0 ? Math.round(((totalAssetsCount - inRangeAssetsCount) / totalAssetsCount) * 100) : 0;
+
+    // Per day visit counts
+    const visitsPerDayMap = new Map<string, number>();
+    filteredVisits.forEach(v => {
+      const d = new Date(v.createdAt).toISOString().split('T')[0];
+      visitsPerDayMap.set(d, (visitsPerDayMap.get(d) || 0) + 1);
+    });
+    const visitsPerDay = Array.from(visitsPerDayMap.entries())
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Fetch routes and compute coverage stats
-    const [dbRoutes]: any = await pool.execute('SELECT * FROM `Route`');
-    let activeRoutes = dbRoutes;
-    if (scope === 'supervisor') {
-      activeRoutes = activeRoutes.filter((r: any) => r.supervisorId === userSession.id);
-    }
-    if (supervisorIdParam && (scope === 'full' || isFullAccessRole(role))) {
-      activeRoutes = activeRoutes.filter((r: any) => r.supervisorId === supervisorIdParam);
-    }
-    if (routeCodeParam) {
-      activeRoutes = activeRoutes.filter((r: any) => r.routeCode === routeCodeParam);
-    }
-
-    const coveragePerRoute = activeRoutes.map((r: any) => {
-      const routeCode = r.routeCode;
-      const routeName = r.routeName;
-      const assignedCustomers = customers.filter(c => c.routeCode === routeCode);
-      const total = assignedCustomers.length;
-      const visitedCustIds = new Set(
-        filteredVisits
-          .filter(v => {
-            const [_, rCode] = (v.cust_rt_id || '').split('|');
-            return rCode === routeCode;
-          })
-          .map(v => v.cust_rt_id)
-      );
-      const visited = visitedCustIds.size;
-      const coverage = total > 0 ? Math.min(100, Math.round((visited / total) * 100)) : 0;
-      return { routeCode, routeName, visited, total, coverage };
+    // Coverage per Route
+    const routeMap = new Map<string, { total: number; visited: Set<string>; routeName: string }>();
+    customers.forEach(c => {
+      if (!routeMap.has(c.routeCode)) {
+        routeMap.set(c.routeCode, { total: 0, visited: new Set(), routeName: c.routeCode });
+      }
+      routeMap.get(c.routeCode)!.total++;
     });
 
-    const totalAssignedOutlets = coveragePerRoute.reduce((sum: number, r: any) => sum + r.total, 0);
-    const totalVisitedOutlets = coveragePerRoute.reduce((sum: number, r: any) => sum + r.visited, 0);
-    const coveragePercent = totalAssignedOutlets > 0 ? Math.round((totalVisitedOutlets / totalAssignedOutlets) * 100) : 0;
+    filteredVisits.forEach(v => {
+      const [cCode, rCode] = (v.cust_rt_id || '').split('|');
+      if (rCode && routeMap.has(rCode)) {
+        routeMap.get(rCode)!.visited.add(v.cust_rt_id);
+      }
+    });
 
+    const coveragePerRoute = Array.from(routeMap.entries()).map(([routeCode, item]) => {
+      const coverage = item.total > 0 ? Math.round((item.visited.size / item.total) * 100) : 0;
+      return {
+        routeCode,
+        routeName: item.routeName,
+        assigned: item.total,
+        visited: item.visited.size,
+        coverage,
+      };
+    });
+
+    // Supervisor Performance Summary
     const supervisorPerformance = dbUsers
-      .filter((u: any) => u.role === 'Supervisor' && (!supervisorIdParam || u.id === supervisorIdParam) && (scope === 'full' || u.id === userSession.id))
+      .filter((u: any) => u.role === 'Supervisor')
       .map((u: any) => {
         const supVisits = filteredVisits.filter(v => v.supervisorId === u.id);
         const visitsCount = supVisits.length;
@@ -457,6 +543,8 @@ export async function GET(req: NextRequest) {
       success: true,
       rows,
       reportRows,
+      managerSupervisorMap,
+      photos,
       totalVisits,
       noVisitCount,
       todayVisits,

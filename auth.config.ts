@@ -1,5 +1,5 @@
 import type { NextAuthConfig } from 'next-auth';
-import { canAccessAdminRoute, canAccessSupervisorRoute, isFullAccessRole } from '@/lib/roles';
+import { canAccessAdminRoute, canAccessSupervisorRoute, isFullAccessRole, isSupervisorRole } from '@/lib/roles';
 
 export const authConfig = {
   trustHost: true,
@@ -25,7 +25,11 @@ export const authConfig = {
           if (user?.status !== 'Active') {
             return true;
           }
-          const destination = canAccessAdminRoute(userRole) ? '/admin' : '/supervisor';
+          const destination = canAccessAdminRoute(userRole)
+            ? '/admin'
+            : isSupervisorRole(userRole)
+              ? '/supervisor/visit'
+              : '/supervisor';
           return Response.redirect(new URL(destination, nextUrl));
         }
         return true;
@@ -42,7 +46,8 @@ export const authConfig = {
       }
 
       if (isAdminRoute && !canAccessAdminRoute(userRole)) {
-        return Response.redirect(new URL('/supervisor', nextUrl));
+        const destination = isSupervisorRole(userRole) ? '/supervisor/visit' : '/supervisor';
+        return Response.redirect(new URL(destination, nextUrl));
       }
 
       if (isSupervisorRoute && !canAccessSupervisorRoute(userRole)) {
@@ -54,7 +59,11 @@ export const authConfig = {
       }
 
       if (nextUrl.pathname === '/') {
-        const destination = canAccessAdminRoute(userRole) ? '/admin' : '/supervisor';
+        const destination = canAccessAdminRoute(userRole)
+          ? '/admin'
+          : isSupervisorRole(userRole)
+            ? '/supervisor/visit'
+            : '/supervisor';
         return Response.redirect(new URL(destination, nextUrl));
       }
 

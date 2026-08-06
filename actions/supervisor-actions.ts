@@ -5,7 +5,7 @@ import { userRepository } from '@/repositories/user-repository';
 import { routeRepository } from '@/repositories/route-repository';
 import { supervisorSchema, SupervisorInput } from '@/schemas/supervisor';
 import { auditService } from '@/services/audit-service';
-import { canAccessAdminRoute } from '@/lib/roles';
+import { canAccessAdminRoute, canModifyMasterData } from '@/lib/roles';
 import bcrypt from 'bcryptjs';
 
 export type ActionResponse<T = any> = {
@@ -54,6 +54,13 @@ export async function getSupervisorsAction(): Promise<any[]> {
 export async function createSupervisorAction(data: SupervisorInput): Promise<ActionResponse> {
   try {
     const session = await verifyAdminSession();
+    const adminUser = session.user as any;
+    if (!canModifyMasterData(adminUser?.role)) {
+      return {
+        success: false,
+        error: '403 Forbidden: Sub-Admin role does not have write permissions to create supervisor accounts.',
+      };
+    }
     const parsed = supervisorSchema.safeParse(data);
     if (!parsed.success) {
       const firstIssue = parsed.error.issues[0];
@@ -127,6 +134,13 @@ export async function createSupervisorAction(data: SupervisorInput): Promise<Act
 export async function updateSupervisorAction(id: string, data: SupervisorInput): Promise<ActionResponse> {
   try {
     const session = await verifyAdminSession();
+    const adminUserRole = (session.user as any)?.role;
+    if (!canModifyMasterData(adminUserRole)) {
+      return {
+        success: false,
+        error: '403 Forbidden: Sub-Admin role does not have write permissions to update supervisor accounts.',
+      };
+    }
     const parsed = supervisorSchema.safeParse(data);
     if (!parsed.success) {
       const firstIssue = parsed.error.issues[0];
@@ -201,6 +215,13 @@ export async function updateSupervisorAction(id: string, data: SupervisorInput):
 export async function disableSupervisorAction(id: string): Promise<ActionResponse> {
   try {
     const session = await verifyAdminSession();
+    const adminUserRole = (session.user as any)?.role;
+    if (!canModifyMasterData(adminUserRole)) {
+      return {
+        success: false,
+        error: '403 Forbidden: Sub-Admin role does not have write permissions to disable supervisor accounts.',
+      };
+    }
     const existingUser = await userRepository.getUserById(id);
     if (!existingUser) {
       return { success: false, error: 'Supervisor account not found.' };

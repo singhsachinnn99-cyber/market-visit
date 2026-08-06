@@ -11,6 +11,10 @@ import {
 } from 'lucide-react';
 import { Route, Customer, CustomerRouteMapping, SKU, ImportSummary } from '@/types';
 
+import { useSession } from 'next-auth/react';
+import { canModifyMasterData } from '@/lib/roles';
+import { Lock } from 'lucide-react';
+
 type ImportStep = 'UPLOAD' | 'VALIDATE' | 'IMPORTING' | 'SUMMARY';
 
 const STEPS = [
@@ -23,6 +27,9 @@ const STEPS = [
 const STEP_ORDER: ImportStep[] = ['UPLOAD', 'VALIDATE', 'IMPORTING', 'SUMMARY'];
 
 export default function MasterImportPage() {
+  const { data: session } = useSession();
+  const userRole = (session?.user as any)?.role;
+  const canEdit = canModifyMasterData(userRole);
   const { showToast } = useToast();
   const [step, setStep] = useState<ImportStep>('UPLOAD');
   const [activeImportKey, setActiveImportKey] = useState<keyof typeof files | 'ALL'>('ALL');
@@ -292,6 +299,16 @@ export default function MasterImportPage() {
         </p>
       </div>
 
+      {!canEdit && (
+        <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-950/60 text-amber-300 flex items-center gap-3">
+          <Lock className="h-5 w-5 text-amber-400 flex-shrink-0" />
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-200">Read-Only Mode (Sub-Admin)</h4>
+            <p className="text-xs opacity-90 mt-0.5">Master data imports and database sync operations are restricted to full Administrators.</p>
+          </div>
+        </div>
+      )}
+
       {/* Step Indicator */}
       <div className="card p-4">
         <div className="flex items-center gap-0">
@@ -412,9 +429,9 @@ export default function MasterImportPage() {
           <div className="flex justify-end pt-2">
             <button
               onClick={handleValidate}
-              disabled={!canValidate || loading}
+              disabled={!canValidate || loading || !canEdit}
               className="btn-primary"
-              style={{ opacity: !canValidate || loading ? 0.6 : 1 }}
+              style={{ opacity: !canValidate || loading || !canEdit ? 0.6 : 1 }}
             >
               {loading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : null}
               {loading ? 'Processing Files…' : 'Parse & Validate All'}

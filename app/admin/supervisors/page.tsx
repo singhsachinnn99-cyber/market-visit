@@ -15,15 +15,17 @@ import { ConfirmationDialog } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormErrorBanner } from '@/components/ui/form-error-banner';
 import { formatFriendlyError, FormattedError } from '@/lib/error-formatter';
+import { useSession } from 'next-auth/react';
+import { canModifyMasterData } from '@/lib/roles';
 import {
   Search, UserPlus, Edit2, UserX, X,
   ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight,
-  Users, RefreshCw, Shield, Mail, Phone,
+  Users, RefreshCw, Shield, Mail, Phone, Lock,
 } from 'lucide-react';
 
 interface SupervisorVM {
   id: string; name: string; employeeCode: string; email: string;
-  mobile: string; role: 'GM' | 'BDM' | 'Sales Manager' | 'Admin' | 'Supervisor' | 'Fleet' | 'Maintenance'; status: 'Active' | 'Inactive'; createdAt: string;
+  mobile: string; role: 'GM' | 'BDM' | 'Sales Manager' | 'Admin' | 'Sub-Admin' | 'Supervisor' | 'Fleet' | 'Maintenance'; status: 'Active' | 'Inactive'; createdAt: string;
 }
 
 function FormField({ label, error, children }: { label: React.ReactNode; error?: string; children: React.ReactNode }) {
@@ -37,6 +39,9 @@ function FormField({ label, error, children }: { label: React.ReactNode; error?:
 }
 
 export default function SupervisorsPage() {
+  const { data: session } = useSession();
+  const userRole = (session?.user as any)?.role;
+  const canEdit = canModifyMasterData(userRole);
   const { showToast } = useToast();
   const [supervisors, setSupervisors] = useState<SupervisorVM[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,10 +174,16 @@ export default function SupervisorsPage() {
             Manage field team credentials, roles, and account status.
           </p>
         </div>
-        <button className="btn-primary" onClick={openCreate}>
-          <UserPlus className="h-3.5 w-3.5" />
-          Add Supervisor
-        </button>
+        {canEdit ? (
+          <button className="btn-primary" onClick={openCreate}>
+            <UserPlus className="h-3.5 w-3.5" />
+            Add Supervisor
+          </button>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+            <Lock className="h-3.5 w-3.5" /> Read-Only Mode (Sub-Admin)
+          </span>
+        )}
       </div>
 
       {/* Stats row */}
@@ -308,20 +319,24 @@ export default function SupervisorsPage() {
                       {new Date(sup.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-5 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => openEdit(sup)} className="btn-ghost p-1.5" title="Edit Supervisor">
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
-                        {sup.status === 'Active' && (
-                          <button
-                            onClick={() => setDisableDialog({ open: true, id: sup.id, name: sup.name })}
-                            className="btn-ghost p-1.5 text-red-400 hover:text-red-500"
-                            title="Disable Account"
-                          >
-                            <UserX className="h-3.5 w-3.5" />
+                      {canEdit ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => openEdit(sup)} className="btn-ghost p-1.5" title="Edit Supervisor">
+                            <Edit2 className="h-3.5 w-3.5" />
                           </button>
-                        )}
-                      </div>
+                          {sup.status === 'Active' && (
+                            <button
+                              onClick={() => setDisableDialog({ open: true, id: sup.id, name: sup.name })}
+                              className="btn-ghost p-1.5 text-red-400 hover:text-red-500"
+                              title="Disable Account"
+                            >
+                              <UserX className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-[var(--text-muted)] italic font-medium">Read Only</span>
+                      )}
                     </td>
                   </tr>
                 ))

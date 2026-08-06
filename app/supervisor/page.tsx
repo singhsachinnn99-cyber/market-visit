@@ -1253,18 +1253,7 @@ export default function SupervisorDashboard() {
               <input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} />
             </div>
 
-            <div className="fld">
-              <label>Time Period</label>
-              <select value={fTime} onChange={(e) => {
-                setFTime(e.target.value);
-                setFChannel('');
-                setFCust('');
-              }}>
-                <option value="">All Periods</option>
-                <option value="recent">Recent (W5-W8)</option>
-                <option value="earlier">Earlier (W1-W4)</option>
-              </select>
-            </div>
+
 
           <div className="fld">
             <label>Channel</label>

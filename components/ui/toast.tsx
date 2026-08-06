@@ -29,12 +29,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const showToast = useCallback((message: string, type: ToastType = 'info', title?: string) => {
     const id = Math.random().toString(36).substring(2, 9);
-    setToasts((prev) => [...prev, { id, message, type, title }]);
+    
+    // Auto-generate title for error if not provided
+    const defaultTitle = type === 'error' ? 'Action Failed' : type === 'warning' ? 'Warning' : undefined;
+    const toastTitle = title || defaultTitle;
 
-    // Auto-dismiss toast
+    setToasts((prev) => [...prev, { id, message, type, title: toastTitle }]);
+
+    // Auto-dismiss toast: Give errors more time (6500ms) for reading
+    const duration = type === 'error' ? 6500 : 4500;
     setTimeout(() => {
       removeToast(id);
-    }, 4500);
+    }, duration);
   }, [removeToast]);
 
   return (

@@ -4,11 +4,17 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supervisorSchema, SupervisorInput } from '@/schemas/supervisor';
-import { getSupervisorsAction, createSupervisorAction, updateSupervisorAction, disableSupervisorAction, } 
-from '@/actions/supervisor-actions';
+import {
+  getSupervisorsAction,
+  createSupervisorAction,
+  updateSupervisorAction,
+  disableSupervisorAction,
+} from '@/actions/supervisor-actions';
 import { useToast } from '@/components/ui/toast';
 import { ConfirmationDialog } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FormErrorBanner } from '@/components/ui/form-error-banner';
+import { formatFriendlyError, FormattedError } from '@/lib/error-formatter';
 import {
   Search, UserPlus, Edit2, UserX, X,
   ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight,
@@ -38,6 +44,7 @@ export default function SupervisorsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [modalOpen, setModalOpen] = useState(false);
+  const [formError, setFormError] = useState<FormattedError | null>(null);
   const [editingSupervisor, setEditingSupervisor] = useState<SupervisorVM | null>(null);
   const [disableDialog, setDisableDialog] = useState<{ open: boolean; id: string; name: string }>({ open: false, id: '', name: '' });
   const [currentPage, setCurrentPage] = useState(1);
@@ -48,59 +55,91 @@ export default function SupervisorsPage() {
     try {
       setSupervisors((await getSupervisorsAction()) as SupervisorVM[]);
     } catch (err: any) {
-      showToast(err.message || 'Failed to load supervisors.', 'error');
+      const formatted = formatFriendlyError(err);
+      showToast(formatted.message, 'error', formatted.title);
     } finally { setLoading(false); }
   };
 
   useEffect(() => { fetchSupervisors(); }, []);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<SupervisorInput>({
+  const { register, handleSubmit, reset, setError, formState: { errors } } = useForm<SupervisorInput>({
     resolver: zodResolver(supervisorSchema),
     defaultValues: { name: '', employeeCode: '', email: '', password: '', mobile: '', role: 'Supervisor', status: 'Active' },
   });
 
   const openCreate = () => {
     setEditingSupervisor(null);
+    setFormError(null);
     reset({ name: '', employeeCode: '', email: '', password: '', mobile: '', role: 'Supervisor', status: 'Active' });
     setModalOpen(true);
   };
 
   const openEdit = (sup: SupervisorVM) => {
     setEditingSupervisor(sup);
+    setFormError(null);
     reset({ name: sup.name, employeeCode: sup.employeeCode, email: sup.email, password: '', mobile: sup.mobile, role: sup.role, status: sup.status });
     setModalOpen(true);
   };
 
   const onSubmit = async (data: SupervisorInput) => {
     setSubmitting(true);
+    setFormError(null);
     try {
+      let result;
       if (editingSupervisor) {
-        await updateSupervisorAction(editingSupervisor.id, data);
-        showToast('Supervisor updated.', 'success');
+        result = await updateSupervisorAction(editingSupervisor.id, data);
       } else {
-        if (!data.password?.trim()) { showToast('Password is required.', 'error'); setSubmitting(false); return; }
-        const result = await createSupervisorAction(data);
-        showToast(
-          result.backfilledRoutes > 0
-            ? `Supervisor created. Linked ${result.backfilledRoutes} previously-unmapped route(s) to this account.`
-            : 'Supervisor created.',
-          'success'
-        );
+        if (!data.password?.trim()) {
+          const err = formatFriendlyError('Password is required for a new supervisor account.');
+          setFormError(err);
+          setError('password', { type: 'manual', message: err.message });
+          showToast(err.message, 'error', err.title);
+          setSubmitting(false);
+          return;
+        }
+        result = await createSupervisorAction(data);
       }
+
+      if (!result.success) {
+        const formatted = formatFriendlyError(result.error);
+        setFormError(formatted);
+        if (result.field) {
+          setError(result.field as any, { type: 'manual', message: formatted.message });
+        }
+        showToast(formatted.message, 'error', formatted.title);
+        return;
+      }
+
+      showToast(
+        result.backfilledRoutes && result.backfilledRoutes > 0
+          ? `Supervisor created. Linked ${result.backfilledRoutes} previously-unmapped route(s) to this account.`
+          : editingSupervisor ? 'Supervisor updated.' : 'Supervisor created.',
+        'success'
+      );
       setModalOpen(false);
       fetchSupervisors();
     } catch (e: any) {
-      showToast(e.message || 'Action failed.', 'error');
+      const formatted = formatFriendlyError(e);
+      setFormError(formatted);
+      showToast(formatted.message, 'error', formatted.title);
     } finally { setSubmitting(false); }
   };
 
   const handleDisable = async () => {
     try {
-      await disableSupervisorAction(disableDialog.id);
+      const res = await disableSupervisorAction(disableDialog.id);
+      if (!res.success) {
+        const formatted = formatFriendlyError(res.error);
+        showToast(formatted.message, 'error', formatted.title);
+        return;
+      }
       showToast(`Disabled: ${disableDialog.name}`, 'success');
       setDisableDialog({ open: false, id: '', name: '' });
       fetchSupervisors();
-    } catch (e: any) { showToast(e.message || 'Failed.', 'error'); }
+    } catch (e: any) {
+      const formatted = formatFriendlyError(e);
+      showToast(formatted.message, 'error', formatted.title);
+    }
   };
 
   const filtered = supervisors.filter((sup) => {
@@ -248,44 +287,36 @@ export default function SupervisorsPage() {
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className="font-mono text-[12px] font-semibold" style={{ color: 'var(--text-secondary)' }}>{sup.employeeCode}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="text-[12px] flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
-                        <Phone className="h-3 w-3" style={{ opacity: 0.5 }} />{sup.mobile}
+                      <span className="font-mono text-[12px] px-2 py-0.5 rounded" style={{ background: 'var(--surface-2)', color: 'var(--text-secondary)' }}>
+                        {sup.employeeCode}
                       </span>
                     </td>
+                    <td className="px-5 py-3.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                      {sup.mobile || '—'}
+                    </td>
                     <td className="px-5 py-3.5">
-                      <span className={`badge ${['GM', 'BDM', 'Sales Manager', 'Admin'].includes(sup.role) ? 'badge-accent' : 'badge-success'}`}>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
                         {sup.role}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className={`badge ${sup.status === 'Active' ? 'badge-success' : 'badge-warning'}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${sup.status === 'Active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-500/10 text-slate-400'}`}>
                         {sup.status}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5">
-                      <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                        {new Date(sup.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
+                    <td className="px-5 py-3.5 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                      {new Date(sup.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button onClick={() => openEdit(sup)} className="btn-ghost" style={{ height: '30px', padding: '0 10px' }} title="Edit">
+                    <td className="px-5 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => openEdit(sup)} className="btn-ghost p-1.5" title="Edit Supervisor">
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
                         {sup.status === 'Active' && (
                           <button
                             onClick={() => setDisableDialog({ open: true, id: sup.id, name: sup.name })}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '6px',
-                              height: '30px', padding: '0 10px',
-                              background: 'var(--danger-light)', color: 'var(--danger)',
-                              border: '1px solid rgba(220,38,38,0.15)', borderRadius: '6px',
-                              fontSize: '12px', cursor: 'pointer',
-                            }}
-                            title="Disable"
+                            className="btn-ghost p-1.5 text-red-400 hover:text-red-500"
+                            title="Disable Account"
                           >
                             <UserX className="h-3.5 w-3.5" />
                           </button>
@@ -343,6 +374,8 @@ export default function SupervisorsPage() {
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
+              <FormErrorBanner error={formError} onClear={() => setFormError(null)} />
+
               <div className="grid grid-cols-2 gap-4">
                 <FormField label="Name" error={errors.name?.message}>
                   <input type="text" placeholder="John Doe" disabled={submitting} {...register('name')} className={inputCls} />

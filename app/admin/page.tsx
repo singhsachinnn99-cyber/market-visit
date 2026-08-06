@@ -387,6 +387,39 @@ export default function AdminDashboardPage() {
       },
     });
 
+    const createDoughnutPctLabelPlugin = () => ({
+      id: 'doughnutPctLabels',
+      afterDatasetsDraw(chart: any) {
+        const { ctx } = chart;
+        const dataset = chart.data.datasets[0];
+        if (!dataset || !dataset.data) return;
+        const meta = chart.getDatasetMeta(0);
+        if (!meta || !meta.data) return;
+
+        meta.data.forEach((arc: any, index: number) => {
+          const val = dataset.data[index];
+          if (typeof val !== 'number' || val <= 0) return;
+          const label = `${val}%`;
+
+          const { startAngle, endAngle, outerRadius, innerRadius, x, y } = arc;
+          const angle = startAngle + (endAngle - startAngle) / 2;
+          const radius = innerRadius + (outerRadius - innerRadius) * 0.52;
+          const labelX = x + Math.cos(angle) * radius;
+          const labelY = y + Math.sin(angle) * radius;
+
+          ctx.save();
+          ctx.font = '700 11px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+          ctx.shadowBlur = 4;
+          ctx.fillText(label, labelX, labelY);
+          ctx.restore();
+        });
+      },
+    });
+
     // 1. Trend Line Chart (percentage-based)
     if (canvasTrendRef.current) {
       if (chartsRef.current.cTrend) chartsRef.current.cTrend.destroy();
@@ -460,11 +493,36 @@ export default function AdminDashboardPage() {
             },
           ],
         },
+        plugins: [createDoughnutPctLabelPlugin()],
         options: {
           maintainAspectRatio: false,
           cutout: '62%',
           plugins: {
-            legend: { position: 'bottom', labels: { color: textColor } },
+            legend: {
+              position: 'bottom',
+              labels: {
+                color: textColor,
+                generateLabels: (chart: any) => {
+                  const data = chart.data;
+                  if (!data.labels.length || !data.datasets.length) return [];
+                  const dataset = data.datasets[0];
+                  const meta = chart.getDatasetMeta(0);
+                  return data.labels.map((label: string, i: number) => {
+                    const val = dataset.data[i] || 0;
+                    const fill = dataset.backgroundColor[i];
+                    const style = meta.data[i];
+                    return {
+                      text: `${label} (${val}%)`,
+                      fillStyle: fill,
+                      strokeStyle: fill,
+                      lineWidth: 0,
+                      hidden: isNaN(val) || (style && style.hidden),
+                      index: i,
+                    };
+                  });
+                },
+              },
+            },
             tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw}%` } },
           },
           onClick: (e, el, chart) => {
@@ -570,11 +628,36 @@ export default function AdminDashboardPage() {
             },
           ],
         },
+        plugins: [createDoughnutPctLabelPlugin()],
         options: {
           maintainAspectRatio: false,
           cutout: '62%',
           plugins: {
-            legend: { position: 'bottom', labels: { color: textColor } },
+            legend: {
+              position: 'bottom',
+              labels: {
+                color: textColor,
+                generateLabels: (chart: any) => {
+                  const data = chart.data;
+                  if (!data.labels.length || !data.datasets.length) return [];
+                  const dataset = data.datasets[0];
+                  const meta = chart.getDatasetMeta(0);
+                  return data.labels.map((label: string, i: number) => {
+                    const val = dataset.data[i] || 0;
+                    const fill = dataset.backgroundColor[i];
+                    const style = meta.data[i];
+                    return {
+                      text: `${label} (${val}%)`,
+                      fillStyle: fill,
+                      strokeStyle: fill,
+                      lineWidth: 0,
+                      hidden: isNaN(val) || (style && style.hidden),
+                      index: i,
+                    };
+                  });
+                },
+              },
+            },
             tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw}%` } },
           },
           onClick: (e, el, chart) => {

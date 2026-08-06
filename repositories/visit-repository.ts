@@ -146,6 +146,43 @@ async function ensureVisitTableSchema(connection: mysql.Connection | mysql.PoolC
   } catch (e) {
     // Non-blocking VisitAsset migration
   }
+
+  await ensureVisitPhotoTableSchema(connection);
+}
+
+async function ensureVisitPhotoTableSchema(connection: mysql.Connection | mysql.PoolConnection): Promise<void> {
+  try {
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS \`VisitPhoto\` (
+        \`photoId\` VARCHAR(191) PRIMARY KEY,
+        \`visitId\` VARCHAR(191) NOT NULL,
+        \`category\` VARCHAR(50) NOT NULL,
+        \`cloudinaryUrl\` TEXT NOT NULL,
+        \`publicId\` VARCHAR(191) NOT NULL,
+        \`uploadedAt\` DATETIME NOT NULL,
+        INDEX \`idx_photo_visit\` (\`visitId\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    const [vpColumnsResult]: any = await connection.execute(
+      "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'VisitPhoto'"
+    );
+    const existingVpColumns = new Set((vpColumnsResult as any[]).map((row: any) => row.COLUMN_NAME));
+
+    if (!existingVpColumns.has('cloudinaryUrl')) {
+      if (existingVpColumns.has('url')) {
+        await connection.execute("ALTER TABLE `VisitPhoto` CHANGE COLUMN `url` `cloudinaryUrl` TEXT NOT NULL");
+      } else if (existingVpColumns.has('photoUrl')) {
+        await connection.execute("ALTER TABLE `VisitPhoto` CHANGE COLUMN `photoUrl` `cloudinaryUrl` TEXT NOT NULL");
+      } else if (existingVpColumns.has('image_url')) {
+        await connection.execute("ALTER TABLE `VisitPhoto` CHANGE COLUMN `image_url` `cloudinaryUrl` TEXT NOT NULL");
+      } else {
+        await connection.execute("ALTER TABLE `VisitPhoto` ADD COLUMN `cloudinaryUrl` TEXT NOT NULL");
+      }
+    }
+  } catch (e) {
+    // Non-blocking VisitPhoto migration
+  }
 }
 
 function toMysqlDatetime(val: any): Date | null {
@@ -197,11 +234,17 @@ export const visitRepository = {
   },
 
   async getVisitPhotos(visitId: string): Promise<VisitPhoto[]> {
-    const [rows]: any = await pool.execute(
-      'SELECT * FROM `VisitPhoto` WHERE `visitId` = ?',
-      [visitId]
-    );
-    return rows.map(mapRowToPhoto);
+    const connection = await pool.getConnection();
+    try {
+      await ensureVisitPhotoTableSchema(connection);
+      const [rows]: any = await connection.execute(
+        'SELECT * FROM `VisitPhoto` WHERE `visitId` = ?',
+        [visitId]
+      );
+      return rows.map(mapRowToPhoto);
+    } finally {
+      connection.release();
+    }
   },
 
   async getNpdResponses(visitId: string): Promise<NPDResponse[]> {
@@ -308,13 +351,27 @@ export const visitRepository = {
 
   async insertPhotos(photos: VisitPhoto[], connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
     const executor = connection || pool;
+    await ensureVisitPhotoTableSchema(executor);
     for (const p of photos) {
       const uploadedAtVal = toMysqlDatetime(p.uploadedAt) || new Date();
-      await executor.execute(
-        `INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, uploadedAtVal]
-      );
+      try {
+        await executor.execute(
+          `INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`) 
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, uploadedAtVal]
+        );
+      } catch (err: any) {
+        if (err.message && err.message.includes('Unknown column')) {
+          await ensureVisitPhotoTableSchema(executor);
+          await executor.execute(
+            `INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`) 
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, uploadedAtVal]
+          );
+        } else {
+          throw err;
+        }
+      }
     }
   },
 

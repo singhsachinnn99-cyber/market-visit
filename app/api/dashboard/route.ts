@@ -301,6 +301,8 @@ export async function GET(req: NextRequest) {
       visitNpd.forEach((response: any) => {
         const sku = skuMap.get(response.skuCode);
         const skuName = sku?.skuName || response.skuCode;
+        const st = (response.status || '').toUpperCase();
+        const availStr = (st === 'AVAILABLE' || st === 'YES' || st === 'A') ? 'YES' : ((st === 'NOT AVAILABLE' || st === 'NO' || st === 'N') ? 'NO' : 'N/A');
         reportRows.npd.push({
           date: visitDate,
           visitId: v.visitId,
@@ -315,12 +317,15 @@ export async function GET(req: NextRequest) {
           skuName,
           businessVertical: sku?.businessVertical || 'Dairy',
           status: response.status,
+          availability: availStr,
         });
       });
 
       visitPsku.forEach((response: any) => {
         const pskuItem = powerSkuMap.get(response.skuCode);
         const skuName = pskuItem?.skuName || response.skuCode;
+        const st = (response.status || '').toUpperCase();
+        const availStr = (st === 'AVAILABLE' || st === 'YES' || st === 'A') ? 'YES' : ((st === 'NOT AVAILABLE' || st === 'NO' || st === 'N') ? 'NO' : 'N/A');
         reportRows.psku.push({
           date: visitDate,
           visitId: v.visitId,
@@ -335,10 +340,18 @@ export async function GET(req: NextRequest) {
           skuName,
           businessVertical: pskuItem?.channel === 'GT' ? 'Power SKU' : pskuItem?.channel || 'Power SKU',
           status: response.status,
+          availability: availStr,
         });
       });
 
       visitAssets.forEach((ast: any) => {
+        const isOk = ast.tempInRange === 1 || ast.tempInRange === true;
+        const formattedTemp = formatTempContext(ast.assetType, ast.temperature);
+        const tempStatusStr = isOk ? 'In Range' : 'Breach';
+        const remarksStr = ast.actionRequired && ast.actionRequired !== 'None' 
+          ? (ast.observation && ast.observation !== '—' ? `${ast.actionRequired} - ${ast.observation}` : ast.actionRequired)
+          : (ast.observation || '—');
+
         reportRows['cold-chain'].push({
           date: visitDate,
           visitId: v.visitId,
@@ -351,10 +364,13 @@ export async function GET(req: NextRequest) {
           classification: gr,
           assetType: ast.assetType,
           temperature: ast.temperature,
-          formattedTemperature: formatTempContext(ast.assetType, ast.temperature),
-          tempInRange: ast.tempInRange === 1 || ast.tempInRange === true,
+          formattedTemperature: formattedTemp,
+          assetTemp: formattedTemp !== '—' ? formattedTemp : (ast.temperature !== undefined && ast.temperature !== null ? `${ast.temperature}°C` : '—'),
+          tempInRange: isOk,
+          tempStatus: tempStatusStr,
           actionRequired: ast.actionRequired,
           observation: ast.observation || '—',
+          actionRemarks: remarksStr,
         });
       });
 

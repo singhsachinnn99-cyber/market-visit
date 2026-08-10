@@ -474,10 +474,10 @@ export default function AdminDashboardPage() {
         const s = (r.ch || '').toUpperCase().trim();
         if (s.includes('MT') || s.includes('MODERN')) return 'MT';
         if (s.includes('INST') || s.includes('HOTEL') || s.includes('HORECA') || s.includes('CATERING')) return 'INST';
-        if (s.includes('EXP') || s.includes('EXPORT')) return 'EXPORT';
+        // if (s.includes('EXP') || s.includes('EXPORT')) return 'EXPORT';
         return 'TT';
       });
-      const chL = ['TT', 'MT', 'INST', 'EXPORT'];
+      const chL = ['TT', 'MT', 'INST'];
       const chTotal = filtered.length;
       const chPct = (c: string) => (chTotal ? Math.round(((chCounts[c] || 0) / chTotal) * 100) : 0);
       chartsRef.current.cChannel = new Chart(canvasChannelRef.current, {
@@ -487,7 +487,7 @@ export default function AdminDashboardPage() {
           datasets: [
             {
               data: chL.map((c) => chPct(c)),
-              backgroundColor: [BLUE, GREEN, AMBER, BLUE_DEEP],
+              backgroundColor: [BLUE, GREEN, AMBER],
               borderWidth: 0,
             },
           ],
@@ -1457,7 +1457,7 @@ export default function AdminDashboardPage() {
           </div>
           <div className="panel">
             <h3>Visits by Channel</h3>
-            <div className="psub">Share across MT / TT / INST / Export</div>
+            <div className="psub">Share across MT / TT / INST</div>
             <div className="chart-sm">
               <canvas ref={canvasChannelRef}></canvas>
             </div>

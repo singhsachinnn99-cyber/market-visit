@@ -101,18 +101,44 @@ function getCellValue(row: Record<string, unknown>, key: string) {
     const classVal = (row.class as string) || '—';
     return classVal === '-' ? 'Not classified' : classVal;
   }
-  if (key === 'availability') return (row.availability as string) || '—';
-  if (key === 'tempStatus') return (row.tempStatus as string) || '—';
-  if (key === 'assetTemp') return (row.assetTemp as string) || '—';
-  if (key === 'actionRemarks') return (row.actionRemarks as string) || '—';
+  if (key === 'availability') {
+    if (row.availability) return row.availability as string;
+    if (row.status) {
+      const st = String(row.status).toUpperCase();
+      if (st === 'AVAILABLE' || st === 'YES' || st === 'A') return 'YES';
+      if (st === 'NOT AVAILABLE' || st === 'NO' || st === 'N') return 'NO';
+      return String(row.status);
+    }
+    return '—';
+  }
+  if (key === 'tempStatus') {
+    if (row.tempStatus) return row.tempStatus as string;
+    if (row.tempInRange !== undefined && row.tempInRange !== null) {
+      return (row.tempInRange === 1 || row.tempInRange === true) ? 'In Range' : 'Breach';
+    }
+    return '—';
+  }
+  if (key === 'assetTemp') {
+    if (row.assetTemp) return row.assetTemp as string;
+    if (row.formattedTemperature) return row.formattedTemperature as string;
+    if (row.temperature !== undefined && row.temperature !== null) return `${row.temperature}°C`;
+    return '—';
+  }
+  if (key === 'actionRemarks') {
+    if (row.actionRemarks) return row.actionRemarks as string;
+    const act = (row.actionRequired as string) || '';
+    const obs = (row.observation as string) || '';
+    if (act && act !== 'None') return obs && obs !== '—' ? `${act} - ${obs}` : act;
+    return obs || '—';
+  }
   const value = row[key] as string | undefined;
   return value ?? '—';
 }
 
 function buildSummaryText(reportType: string, rows: Record<string, unknown>[]) {
   if (reportType === 'cold-chain') {
-    const inRange = rows.filter((r) => r.tempStatus === 'In Range').length;
-    const breach = rows.filter((r) => r.tempStatus === 'Breach').length;
+    const inRange = rows.filter((r) => r.tempStatus === 'In Range' || getCellValue(r, 'tempStatus') === 'In Range').length;
+    const breach = rows.filter((r) => r.tempStatus === 'Breach' || getCellValue(r, 'tempStatus') === 'Breach').length;
     return `Showing ${rows.length} assets · ${inRange} In Range · ${breach} Breach`;
   }
 
@@ -128,9 +154,9 @@ function buildSummaryText(reportType: string, rows: Record<string, unknown>[]) {
     return `Showing ${rows.length} visits · ${parts.join(' · ')}`;
   }
 
-  const yes = rows.filter((r) => r.availability === 'YES').length;
-  const no = rows.filter((r) => r.availability === 'NO').length;
-  const na = rows.filter((r) => r.availability === 'NOT APPLICABLE').length;
+  const yes = rows.filter((r) => r.availability === 'YES' || getCellValue(r, 'availability') === 'YES' || getCellValue(r, 'availability') === 'Available').length;
+  const no = rows.filter((r) => r.availability === 'NO' || getCellValue(r, 'availability') === 'NO' || getCellValue(r, 'availability') === 'Not Available').length;
+  const na = rows.filter((r) => r.availability === 'NOT APPLICABLE' || getCellValue(r, 'availability') === 'N/A' || getCellValue(r, 'availability') === 'Not Applicable').length;
   return `Showing ${rows.length} records · ${yes} YES · ${no} NO · ${na} N/A`;
 }
 
@@ -209,7 +235,7 @@ export default function DrilldownReportModal({
       const businessVertical = row.businessVertical as string | undefined;
       const skuName = row.skuName as string | undefined;
       const assetType = row.assetType as string | undefined;
-      const tempStatus = row.tempStatus as string | undefined;
+      const tempStatus = (row.tempStatus as string | undefined) || (row.tempInRange !== undefined ? (getCellValue(row, 'tempStatus') as string) : undefined);
 
       if (channel) channels.add(channel);
       if (manager) managers.add(manager);
@@ -270,7 +296,7 @@ export default function DrilldownReportModal({
       if (fVertical && row.businessVertical !== fVertical) return false;
       if (fSku && row.skuName !== fSku) return false;
       if (fAssetType && row.assetType !== fAssetType) return false;
-      if (fTempStatus && row.tempStatus !== fTempStatus) return false;
+      if (fTempStatus && getCellValue(row, 'tempStatus') !== fTempStatus) return false;
       return true;
     });
 
@@ -538,12 +564,14 @@ export default function DrilldownReportModal({
                               {row.class as string}
                             </span>
                           )
-                        ) : column.key === 'availability' && row.availability === 'NO' ? (
+                        ) : column.key === 'availability' && (getCellValue(row, column.key) === 'NO' || getCellValue(row, column.key) === 'Not Available') ? (
                           <span className="inline-flex items-center rounded-full bg-red-500/12 px-2.5 py-1 text-[10px] font-semibold text-red-600">{getCellValue(row, column.key)}</span>
-                        ) : column.key === 'availability' && row.availability === 'YES' ? (
+                        ) : column.key === 'availability' && (getCellValue(row, column.key) === 'YES' || getCellValue(row, column.key) === 'Available') ? (
                           <span className="inline-flex items-center rounded-full bg-emerald-500/12 px-2.5 py-1 text-[10px] font-semibold text-emerald-600">{getCellValue(row, column.key)}</span>
-                        ) : column.key === 'tempStatus' && row.tempStatus === 'Breach' ? (
+                        ) : column.key === 'tempStatus' && getCellValue(row, column.key) === 'Breach' ? (
                           <span className="inline-flex items-center rounded-full bg-red-500/12 px-2.5 py-1 text-[10px] font-semibold text-red-600">{getCellValue(row, column.key)}</span>
+                        ) : column.key === 'tempStatus' && getCellValue(row, column.key) === 'In Range' ? (
+                          <span className="inline-flex items-center rounded-full bg-emerald-500/12 px-2.5 py-1 text-[10px] font-semibold text-emerald-600">{getCellValue(row, column.key)}</span>
                         ) : (
                           getCellValue(row, column.key)
                         )}

@@ -289,7 +289,7 @@ export default function SupervisorReportsPage() {
     if (canvasChannelRef.current) {
       if (chartsRef.current.cChannel) chartsRef.current.cChannel.destroy();
       const ch = countFreq(filtered, (r) => r.ch);
-      const chL = ['TT', 'MT', 'INST', 'EXPORT'];
+      const chL = ['TT', 'MT', 'INST'];
       chartsRef.current.cChannel = new Chart(canvasChannelRef.current, {
         type: 'doughnut',
         data: {
@@ -297,7 +297,7 @@ export default function SupervisorReportsPage() {
           datasets: [
             {
               data: chL.map((c) => ch[c] || 0),
-              backgroundColor: [BLUE, GREEN, AMBER, BLUE_DEEP],
+              backgroundColor: [BLUE, GREEN, AMBER],
               borderWidth: 0,
             },
           ],
@@ -878,7 +878,7 @@ export default function SupervisorReportsPage() {
               <option value="TT">TT</option>
               <option value="MT">MT</option>
               <option value="INST">INST</option>
-              <option value="EXPORT">EXPORT</option>
+              {/* <option value="EXPORT">EXPORT</option> */}
             </select>
           </div>
 
@@ -956,7 +956,7 @@ export default function SupervisorReportsPage() {
           </div>
           <div className="panel">
             <h3>Visits by Channel</h3>
-            <div className="psub">Share across MT / TT / INST / Export</div>
+            <div className="psub">Share across MT / TT / INST</div>
             <div className="chart-sm">
               <canvas ref={canvasChannelRef}></canvas>
             </div>

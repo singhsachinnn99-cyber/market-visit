@@ -287,6 +287,26 @@ export default function MasterImportPage() {
     },
   ];
 
+  if (!canEdit) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 text-center space-y-4 my-12">
+        <div className="h-16 w-16 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center border border-red-500/20">
+          <Lock className="h-8 w-8" />
+        </div>
+        <h2 className="text-xl font-bold text-[var(--text-primary)]">Access Restricted</h2>
+        <p className="text-xs text-[var(--text-muted)] max-w-md">
+          Master Data Import operations are restricted to full Administrators. Your account role ({userRole || 'Sub-Admin'}) does not have permission to view or execute master imports.
+        </p>
+        <a
+          href="/admin"
+          className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] text-white px-4 py-2 text-xs font-semibold hover:opacity-90 transition-opacity mt-2"
+        >
+          Return to Dashboard
+        </a>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
       {/* Header */}
@@ -298,16 +318,6 @@ export default function MasterImportPage() {
           Upload separate Route, Customer Mappings, SKU lists, and Classification files to synchronize the database.
         </p>
       </div>
-
-      {!canEdit && (
-        <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-950/60 text-amber-300 flex items-center gap-3">
-          <Lock className="h-5 w-5 text-amber-400 flex-shrink-0" />
-          <div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-200">Read-Only Mode (Sub-Admin)</h4>
-            <p className="text-xs opacity-90 mt-0.5">Master data imports and database sync operations are restricted to full Administrators.</p>
-          </div>
-        </div>
-      )}
 
       {/* Step Indicator */}
       <div className="card p-4">

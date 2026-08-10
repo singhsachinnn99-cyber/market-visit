@@ -28,14 +28,15 @@ function mapRowToVisit(row: any): Visit {
 }
 
 function mapRowToPhoto(row: any): VisitPhoto {
+  const uploadDate = row.uploadedAt || row.createdAt || row.uploaded_at || row.created_at;
   return {
-    photoId: row.photoId,
-    visitId: row.visitId,
+    photoId: row.photoId || row.id,
+    visitId: row.visitId || row.visit_id,
     category: row.category as any,
-    cloudinaryUrl: row.cloudinaryUrl,
-    publicId: row.publicId,
-    uploadedAt: row.uploadedAt instanceof Date ? row.uploadedAt.toISOString() : row.uploadedAt,
-    appName: row.appName || 'Chrome',
+    cloudinaryUrl: row.cloudinaryUrl || row.url || row.photoUrl || row.image_url || '',
+    publicId: row.publicId || row.public_id || row.photoId || '',
+    uploadedAt: uploadDate instanceof Date ? uploadDate.toISOString() : (uploadDate ? String(uploadDate) : new Date().toISOString()),
+    appName: row.appName || row.app_name || row.application || 'Chrome',
   };
 }
 
@@ -171,6 +172,14 @@ async function ensureVisitPhotoTableSchema(connection: mysql.Connection | mysql.
     );
     const existingVpColumns = new Set((vpColumnsResult as any[]).map((row: any) => row.COLUMN_NAME));
 
+    if (!existingVpColumns.has('photoId') && existingVpColumns.has('id')) {
+      await connection.execute("ALTER TABLE `VisitPhoto` CHANGE COLUMN `id` `photoId` VARCHAR(191) NOT NULL");
+    }
+
+    if (!existingVpColumns.has('visitId') && existingVpColumns.has('visit_id')) {
+      await connection.execute("ALTER TABLE `VisitPhoto` CHANGE COLUMN `visit_id` `visitId` VARCHAR(191) NOT NULL");
+    }
+
     if (!existingVpColumns.has('cloudinaryUrl')) {
       if (existingVpColumns.has('url')) {
         await connection.execute("ALTER TABLE `VisitPhoto` CHANGE COLUMN `url` `cloudinaryUrl` TEXT NOT NULL");
@@ -184,11 +193,33 @@ async function ensureVisitPhotoTableSchema(connection: mysql.Connection | mysql.
     }
 
     if (!existingVpColumns.has('publicId')) {
-      await connection.execute("ALTER TABLE `VisitPhoto` ADD COLUMN `publicId` VARCHAR(191) NULL DEFAULT ''");
+      if (existingVpColumns.has('public_id')) {
+        await connection.execute("ALTER TABLE `VisitPhoto` CHANGE COLUMN `public_id` `publicId` VARCHAR(191) NULL DEFAULT ''");
+      } else {
+        await connection.execute("ALTER TABLE `VisitPhoto` ADD COLUMN `publicId` VARCHAR(191) NULL DEFAULT ''");
+      }
+    }
+
+    if (!existingVpColumns.has('uploadedAt')) {
+      if (existingVpColumns.has('createdAt')) {
+        await connection.execute("ALTER TABLE `VisitPhoto` CHANGE COLUMN `createdAt` `uploadedAt` DATETIME NOT NULL");
+      } else if (existingVpColumns.has('created_at')) {
+        await connection.execute("ALTER TABLE `VisitPhoto` CHANGE COLUMN `created_at` `uploadedAt` DATETIME NOT NULL");
+      } else if (existingVpColumns.has('uploaded_at')) {
+        await connection.execute("ALTER TABLE `VisitPhoto` CHANGE COLUMN `uploaded_at` `uploadedAt` DATETIME NOT NULL");
+      } else {
+        await connection.execute("ALTER TABLE `VisitPhoto` ADD COLUMN `uploadedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP");
+      }
     }
 
     if (!existingVpColumns.has('appName')) {
-      await connection.execute("ALTER TABLE `VisitPhoto` ADD COLUMN `appName` VARCHAR(191) NULL DEFAULT 'Chrome'");
+      if (existingVpColumns.has('app_name')) {
+        await connection.execute("ALTER TABLE `VisitPhoto` CHANGE COLUMN `app_name` `appName` VARCHAR(191) NULL DEFAULT 'Chrome'");
+      } else if (existingVpColumns.has('application')) {
+        await connection.execute("ALTER TABLE `VisitPhoto` CHANGE COLUMN `application` `appName` VARCHAR(191) NULL DEFAULT 'Chrome'");
+      } else {
+        await connection.execute("ALTER TABLE `VisitPhoto` ADD COLUMN `appName` VARCHAR(191) NULL DEFAULT 'Chrome'");
+      }
     }
   } catch (e) {
     // Non-blocking VisitPhoto migration

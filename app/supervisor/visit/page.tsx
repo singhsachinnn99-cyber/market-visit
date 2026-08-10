@@ -943,19 +943,52 @@ function VisitWizardContent() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Temp (°C)</label>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="e.g. -18"
-                        value={ast.temperature === undefined || ast.temperature === null ? '' : ast.temperature}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === '' || val === '-' || !isNaN(Number(val))) {
-                            updateAssetField(ast.assetId, 'temperature', val);
-                          }
-                        }}
-                        className="form-input font-mono h-9 text-[12px]"
-                      />
+                      <div className="flex gap-1.5 items-center">
+                        <input
+                          type="text"
+                          inputMode="text"
+                          placeholder="e.g. -18"
+                          value={ast.temperature === undefined || ast.temperature === null ? '' : ast.temperature}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '' || val === '-' || !isNaN(Number(val))) {
+                              updateAssetField(ast.assetId, 'temperature', val);
+                            }
+                          }}
+                          className="form-input font-mono h-9 text-[12px] flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentStr = String(ast.temperature ?? '');
+                            if (currentStr.startsWith('-')) {
+                              updateAssetField(ast.assetId, 'temperature', currentStr.slice(1));
+                            } else if (currentStr === '') {
+                              updateAssetField(ast.assetId, 'temperature', '-');
+                            } else {
+                              updateAssetField(ast.assetId, 'temperature', `-${currentStr}`);
+                            }
+                          }}
+                          className="h-9 px-2.5 text-[11px] font-extrabold rounded-lg bg-[var(--surface-2)] text-[var(--accent)] hover:bg-[var(--accent-light)] transition-colors flex-shrink-0 cursor-pointer border border-[var(--accent)]"
+                          title="Toggle Minus (- / +)"
+                        >
+                          + / -
+                        </button>
+                      </div>
+
+                      {/* Quick Temperature Presets */}
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {(ast.assetType === 'Freezer' ? [-22, -18, -15, 0] : [2, 4, 6, 8]).map((tempVal) => (
+                          <button
+                            key={tempVal}
+                            type="button"
+                            onClick={() => updateAssetField(ast.assetId, 'temperature', String(tempVal))}
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] hover:bg-[var(--accent-light)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-all cursor-pointer"
+                          >
+                            {tempVal > 0 ? `+${tempVal}` : tempVal}°C
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     <div>
                       <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Asset Status / Reason</label>

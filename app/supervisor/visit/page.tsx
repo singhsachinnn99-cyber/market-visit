@@ -407,12 +407,13 @@ function VisitWizardContent() {
     }
     setSubmittingVisit(true);
     try {
-      if (visitType !== 'No Visit' && assets.some(a => a.temperature === undefined || a.temperature === null || (a.temperature as any) === '' || (a.temperature as any) === '-')) {
-        showToast('Please record a valid temperature for all assets.', 'error');
-        setSubmittingVisit(false);
-        return;
-      }
-
+      const validAssets = visitType === 'No Visit' ? [] : assets
+        .filter(a => a.temperature !== undefined && a.temperature !== null && (a.temperature as any) !== '' && (a.temperature as any) !== '-')
+        .map(a => ({
+          ...a,
+          temperature: Number(a.temperature) || 0,
+          tempInRange: getTempInRange(a.assetType, Number(a.temperature))
+        }));
 
       const finalPayload = {
         visitId,
@@ -422,11 +423,7 @@ function VisitWizardContent() {
         cust_rt_id: effectiveCustomerId,
         routeCode: selectedRoute,
         customerCode: activeCustomer?.customerCode || '',
-        assets: visitType === 'No Visit' ? [] : assets.map(a => ({
-          ...a,
-          temperature: Number(a.temperature) || 0,
-          tempInRange: getTempInRange(a.assetType, Number(a.temperature))
-        })),
+        assets: validAssets,
         photos,
         powerSkuResults,
         npdResponses,
@@ -895,7 +892,7 @@ function VisitWizardContent() {
       {currentStep === 3 && (
         <div className="card p-5 space-y-4 animate-slide-up">
           <div className="flex items-center justify-between">
-            <span className="badge badge-accent">Asset Monitoring</span>
+            <span className="badge badge-accent">Asset Monitoring (Optional)</span>
             <button
               type="button"
               onClick={addAsset}

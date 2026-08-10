@@ -245,14 +245,29 @@ export async function submitVisitAction(data: VisitInput) {
 
   if (input.visit_type !== 'No Visit') {
     const npdSkus = await skuRepository.getSkusByType('NPD');
-    if (npdSkus.length > 0 && Object.keys(input.npdResponses).length < npdSkus.length) {
-      throw new Error('Every item in the NPD Checklist must be answered before submitting.');
+    for (const sku of npdSkus) {
+      if (!input.npdResponses[sku.skuCode]) {
+        input.npdResponses[sku.skuCode] = 'Not Available';
+      }
     }
 
-    if (matchedCust) {
-      const powerSkus = await skuRepository.getPowerSkusByChannel(matchedCust.channel);
-      if (powerSkus.length > 0 && Object.keys(input.powerSkuResults).length < powerSkus.length) {
-        throw new Error('Every item in the Power SKU Checklist must be answered before submitting.');
+    let channel = matchedCust?.channel || '';
+    if (routeCode) {
+      try {
+        const routes = await routeRepository.getAllRoutes();
+        const matchedRoute = routes.find(r => r.routeCode === routeCode);
+        if (matchedRoute?.channel) {
+          channel = matchedRoute.channel;
+        }
+      } catch (e) {}
+    }
+
+    if (channel) {
+      const powerSkus = await skuRepository.getPowerSkusByChannel(channel);
+      for (const psku of powerSkus) {
+        if (!input.powerSkuResults[psku.skuCode]) {
+          input.powerSkuResults[psku.skuCode] = 'Not Available';
+        }
       }
     }
   }

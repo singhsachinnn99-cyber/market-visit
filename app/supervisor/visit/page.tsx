@@ -397,14 +397,21 @@ function VisitWizardContent() {
       showToast('Please select a reason category for no-visit reports.', 'warning');
       return;
     }
-    if (visitType !== 'No Visit' && powerSkus.length > 0 && !powerSkus.every((s) => powerSkuResults[s.skuCode])) {
-      showToast('Please respond to every item in the Power SKU Checklist before submitting.', 'error');
-      return;
-    }
-    if (visitType !== 'No Visit' && npdSkus.length > 0 && !npdSkus.every((s) => npdResponses[s.skuCode])) {
-      showToast('Please respond to every item in the NPD Checklist before submitting.', 'error');
-      return;
-    }
+    // Auto-default any unselected Power SKU or NPD checklist items to 'Not Available'
+    const finalPowerSkuResults = { ...powerSkuResults };
+    powerSkus.forEach((s) => {
+      if (!finalPowerSkuResults[s.skuCode]) {
+        finalPowerSkuResults[s.skuCode] = 'Not Available';
+      }
+    });
+
+    const finalNpdResponses = { ...npdResponses };
+    npdSkus.forEach((s) => {
+      if (!finalNpdResponses[s.skuCode]) {
+        finalNpdResponses[s.skuCode] = 'Not Available';
+      }
+    });
+
     setSubmittingVisit(true);
     try {
       const validAssets = visitType === 'No Visit' ? [] : assets
@@ -425,8 +432,8 @@ function VisitWizardContent() {
         customerCode: activeCustomer?.customerCode || '',
         assets: validAssets,
         photos,
-        powerSkuResults,
-        npdResponses,
+        powerSkuResults: finalPowerSkuResults,
+        npdResponses: finalNpdResponses,
         sosAsPerBda,
         latitude: latitude || 0,
         longitude: longitude || 0,

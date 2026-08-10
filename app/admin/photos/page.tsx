@@ -108,6 +108,29 @@ export default function AuditPhotoGalleryPage() {
     setCurrentPage(1);
   };
 
+  const handleExportPhotos = () => {
+    exportToExcel({
+      filename: `photo_audits_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Photo Audits',
+      title: 'Audit Photo Gallery Metadata Log',
+      filterSummary: `Date: ${selectedDate || 'All'} | Application: ${selectedApp} | Search: "${searchQuery}"`,
+      columns: [
+        { header: 'Upload Date', key: 'uploadedAt', formatter: (val: any) => val ? new Date(val).toLocaleString() : '—' },
+        { header: 'Photo ID', key: 'photoId' },
+        { header: 'Visit ID', key: 'visitId' },
+        { header: 'Category / Asset', key: 'category' },
+        { header: 'Manager', key: 'manager' },
+        { header: 'Supervisor', key: 'supervisor' },
+        { header: 'Outlet', key: 'outlet' },
+        { header: 'Route', key: 'route' },
+        { header: 'Channel', key: 'channel' },
+        { header: 'Application', key: 'appName' },
+        { header: 'Cloudinary Image URL', key: 'cloudinaryUrl' },
+      ],
+      data: photos,
+    });
+  };
+
   const getCategoryStyle = (category: string) => {
     const cat = (category || '').toLowerCase();
     if (cat.includes('dairy'))
@@ -152,7 +175,7 @@ export default function AuditPhotoGalleryPage() {
         </div>
 
         <div className="flex items-center gap-3 self-start md:self-auto">
-          <ExportButton onClick={handleExportPhotos} label="Export Log" variant="secondary" />
+          <ExportButton onClick={handleExportPhotos} label="Export Log" variant="outline" />
           <button
             onClick={() => fetchPhotos(true)}
             disabled={isRefreshing}

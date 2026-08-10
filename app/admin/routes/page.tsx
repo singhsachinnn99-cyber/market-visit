@@ -49,11 +49,11 @@ export default function RoutesPage() {
       sheetName: 'Routes Master',
       title: 'Routes & Coverage Performance Master Log',
       columns: [
-        { header: 'Route Code', key: 'code' },
-        { header: 'Route Name', key: 'name' },
-        { header: 'Assigned Supervisor', key: 'assignedSupervisor' },
-        { header: 'Total Outlets', key: 'outletCount' },
-        { header: 'Active Outlets', key: 'activeOutlets' },
+        { header: 'Route Code', key: 'routeCode', formatter: (val: any, row: any) => val || row.code || '—' },
+        { header: 'Route Name', key: 'routeName', formatter: (val: any, row: any) => val || row.name || '—' },
+        { header: 'Channel', key: 'channel' },
+        { header: 'Assigned Supervisor', key: 'superName', formatter: (val: any, row: any) => val || row.supervisorId || row.assignedSupervisor || '—' },
+        { header: 'Manager ID', key: 'managerId', formatter: (val: any, row: any) => val || row.managerName || '—' },
       ],
       data: routes,
     });

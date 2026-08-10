@@ -524,9 +524,9 @@ export default function SupervisorDashboard() {
         { header: 'Outlet Name', key: 'outletName' },
         { header: 'Classification', key: 'classification' },
         { header: 'Asset Type', key: 'assetType' },
-        { header: 'Asset Temp', key: 'assetTemp', formatter: (val, row) => val || (row.temperature !== undefined ? `${row.temperature}°C` : '—') },
-        { header: 'Temp Status', key: 'tempStatus', formatter: (val, row) => val || (row.tempInRange ? 'In Range' : 'Breach') },
-        { header: 'Action Required / Remarks', key: 'actionRemarks', formatter: (val, row) => val || row.actionRequired || '—' },
+        { header: 'Asset Temp', key: 'assetTemp', formatter: (val: any, row: any) => val || (row.temperature !== undefined ? `${row.temperature}°C` : '—') },
+        { header: 'Temp Status', key: 'tempStatus', formatter: (val: any, row: any) => val || (row.tempInRange ? 'In Range' : 'Breach') },
+        { header: 'Action Required / Remarks', key: 'actionRemarks', formatter: (val: any, row: any) => val || row.actionRequired || '—' },
       ],
       data: coldChainData,
     });
@@ -562,7 +562,7 @@ export default function SupervisorDashboard() {
         { header: 'Outlet Name', key: 'outletName' },
         { header: 'Classification', key: 'classification' },
         { header: 'SKU Name', key: 'skuName' },
-        { header: 'NPD Availability', key: 'availability', formatter: (val, row) => val || row.status || '—' },
+        { header: 'NPD Availability', key: 'availability', formatter: (val: any, row: any) => val || row.status || '—' },
       ],
       data: dataToExport,
     });
@@ -587,7 +587,7 @@ export default function SupervisorDashboard() {
         { header: 'Outlet Name', key: 'outletName' },
         { header: 'Classification', key: 'classification' },
         { header: 'SKU Name', key: 'skuName' },
-        { header: 'Power SKU Availability', key: 'availability', formatter: (val, row) => val || row.status || '—' },
+        { header: 'Power SKU Availability', key: 'availability', formatter: (val: any, row: any) => val || row.status || '—' },
       ],
       data: dataToExport,
     });
@@ -612,7 +612,7 @@ export default function SupervisorDashboard() {
         { header: 'Channel', key: 'channel' },
         { header: 'Outlet Code', key: 'outletCode' },
         { header: 'Outlet Name', key: 'outletName' },
-        { header: 'Classification Grade', key: 'class', formatter: (val, row) => val || row.gr || 'Not classified' },
+        { header: 'Classification Grade', key: 'class', formatter: (val: any, row: any) => val || row.gr || 'Not classified' },
       ],
       data: dataToExport,
     });
@@ -637,7 +637,7 @@ export default function SupervisorDashboard() {
         { header: 'Channel', key: 'channel' },
         { header: 'Outlet Code', key: 'outletCode' },
         { header: 'Outlet Name', key: 'outletName' },
-        { header: 'Classification Grade', key: 'class', formatter: (val, row) => val || row.gr || 'Not classified' },
+        { header: 'Classification Grade', key: 'class', formatter: (val: any, row: any) => val || row.gr || 'Not classified' },
       ],
       data: dataToExport,
     });

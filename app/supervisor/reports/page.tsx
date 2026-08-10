@@ -1,46 +1,47 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Chart } from 'chart.js/auto';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { useTheme } from '@/providers/theme-provider';
-import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
-import { isFleetRole } from '@/lib/roles';
-import { exportToExcel } from '@/utils/excelExport';
-import { ExportButton } from '@/components/ui/ExportButton';
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { Chart } from "chart.js/auto";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useTheme } from "@/providers/theme-provider";
+import InteractiveChartTableModal from "@/components/dashboard/InteractiveChartTableModal";
+import { isFleetRole } from "@/lib/roles";
+import { exportToExcel } from "@/utils/excelExport";
+import { ExportButton } from "@/components/ui/ExportButton";
 
 const SUPERVISOR_TO_MANAGER: Record<string, string> = {
-  'YASAR': 'KHALID',
-  'JAHID': 'ASHFAQ',
-  'MUSAVEER': 'KHALID',
-  'RIZVI': 'KHALID',
-  'WALI': 'ASHFAQ',
-  'DANISH': 'KHALID',
-  'SAIF': 'ASHFAQ',
-  'ZEESHAN': 'ASHFAQ',
-  'SAIFULLAH': 'ADNAN',
-  'RASHWIN': 'ADNAN',
-  'MOHSIN': 'ADNAN',
-  'JAVED': 'ADNAN',
-  'ASAD': 'ADNAN',
-  'KISHAN': 'ADNAN',
-  'WASIM': 'INST MANAGER',
-  'SAMRA': 'EXP MANAGER',
+  YASAR: "KHALID",
+  JAHID: "ASHFAQ",
+  MUSAVEER: "KHALID",
+  RIZVI: "KHALID",
+  WALI: "ASHFAQ",
+  DANISH: "KHALID",
+  SAIF: "ASHFAQ",
+  ZEESHAN: "ASHFAQ",
+  SAIFULLAH: "ADNAN",
+  RASHWIN: "ADNAN",
+  MOHSIN: "ADNAN",
+  JAVED: "ADNAN",
+  ASAD: "ADNAN",
+  KISHAN: "ADNAN",
+  WASIM: "INST MANAGER",
+  SAMRA: "EXP MANAGER",
 };
 
 const GCOL: Record<string, string> = {
-  A: '#0b7a4c',
-  B: '#2b9c62',
-  C: '#c8801a',
-  D: '#d9663a',
-  E: '#c0392b',
+  A: "#0b7a4c",
+  B: "#2b9c62",
+  C: "#c8801a",
+  D: "#d9663a",
+  E: "#c0392b",
 };
 
 export default function SupervisorReportsPage() {
   const { theme } = useTheme();
   const { data: session } = useSession();
   const router = useRouter();
+  const userRole = (session?.user as any)?.role || "Supervisor";
   const [rows, setRows] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -48,18 +49,18 @@ export default function SupervisorReportsPage() {
 
   useEffect(() => {
     if (isFleetRole((session?.user as any)?.role)) {
-      router.replace('/supervisor');
+      router.replace("/supervisor");
     }
   }, [session, router]);
 
   // Filter States
-  const [fFrom, setFFrom] = useState('');
-  const [fTo, setFTo] = useState('');
-  const [fMgr, setFMgr] = useState('');
-  const [fSuper, setFSuper] = useState('');
-  const [fChannel, setFChannel] = useState('');
-  const [fClass, setFClass] = useState('');
-  const [fCust, setFCust] = useState('');
+  const [fFrom, setFFrom] = useState("");
+  const [fTo, setFTo] = useState("");
+  const [fMgr, setFMgr] = useState("");
+  const [fSuper, setFSuper] = useState("");
+  const [fChannel, setFChannel] = useState("");
+  const [fClass, setFClass] = useState("");
+  const [fCust, setFCust] = useState("");
 
   // Canvas Refs
   const canvasTrendRef = useRef<HTMLCanvasElement>(null);
@@ -82,14 +83,14 @@ export default function SupervisorReportsPage() {
       if (!silent) setIsLoading(true);
       else setIsSyncing(true);
       try {
-        const res = await fetch('/api/dashboard');
+        const res = await fetch("/api/dashboard");
         const data = await res.json();
         if (data.success && active) {
           setRows(data.rows);
           setLastUpdated(new Date());
         }
       } catch (err) {
-        console.error('Failed to load dashboard data:', err);
+        console.error("Failed to load dashboard data:", err);
       } finally {
         if (active) {
           setIsLoading(false);
@@ -109,7 +110,8 @@ export default function SupervisorReportsPage() {
     };
   }, []);
 
-  const normalizeDate = (value: string) => value ? new Date(`${value}T00:00:00`) : null;
+  const normalizeDate = (value: string) =>
+    value ? new Date(`${value}T00:00:00`) : null;
 
   // Compute dropdown values from unfiltered rows
   const channelOptions = useMemo(() => {
@@ -117,24 +119,28 @@ export default function SupervisorReportsPage() {
   }, [rows]);
 
   const custOptions = useMemo(() => {
-    const filteredByUpstream = rows.filter((r) => (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass));
+    const filteredByUpstream = rows.filter(
+      (r) => (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass),
+    );
     return Array.from(new Set(filteredByUpstream.map((r) => r.cust))).sort();
   }, [rows, fChannel, fClass]);
 
   const classOptions = useMemo(() => {
-    const filteredByUpstream = rows.filter((r) => !fChannel || r.ch === fChannel);
+    const filteredByUpstream = rows.filter(
+      (r) => !fChannel || r.ch === fChannel,
+    );
     return Array.from(new Set(filteredByUpstream.map((r) => r.gr))).sort();
   }, [rows, fChannel]);
 
   // Reset helper
   const resetFilters = () => {
-    setFFrom('');
-    setFTo('');
-    setFMgr('');
-    setFSuper('');
-    setFChannel('');
-    setFClass('');
-    setFCust('');
+    setFFrom("");
+    setFTo("");
+    setFMgr("");
+    setFSuper("");
+    setFChannel("");
+    setFClass("");
+    setFCust("");
   };
 
   // Filtered rows matching selection
@@ -145,7 +151,15 @@ export default function SupervisorReportsPage() {
       const to = normalizeDate(fTo);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && (!fCust || r.cust === fCust) && fromOk && toOk;
+      return (
+        (!fMgr || r.mgr === fMgr) &&
+        (!fSuper || r.sup === fSuper) &&
+        (!fChannel || r.ch === fChannel) &&
+        (!fClass || r.gr === fClass) &&
+        (!fCust || r.cust === fCust) &&
+        fromOk &&
+        toOk
+      );
     });
   }, [rows, fFrom, fTo, fMgr, fSuper, fChannel, fClass, fCust]);
 
@@ -157,15 +171,25 @@ export default function SupervisorReportsPage() {
       const to = normalizeDate(fTo);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fCust || r.cust === fCust) && fromOk && toOk;
+      return (
+        (!fMgr || r.mgr === fMgr) &&
+        (!fSuper || r.sup === fSuper) &&
+        (!fChannel || r.ch === fChannel) &&
+        (!fCust || r.cust === fCust) &&
+        fromOk &&
+        toOk
+      );
     });
   }, [rows, fFrom, fTo, fMgr, fSuper, fChannel, fCust]);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalTitle, setModalTitle] = useState('');
+  const [modalTitle, setModalTitle] = useState("");
   const [modalData, setModalData] = useState<any[]>([]);
 
-  const handleChartClick = (chartTitle: string, filterFn: (row: any) => boolean) => {
+  const handleChartClick = (
+    chartTitle: string,
+    filterFn: (row: any) => boolean,
+  ) => {
     const matched = filtered.filter(filterFn);
     setModalTitle(chartTitle);
     setModalData(matched);
@@ -175,7 +199,11 @@ export default function SupervisorReportsPage() {
   // Same as handleChartClick, but filters the per-vertical Classification visit set and
   // remaps each row's display grade (`gr`) to the vertical-specific grade being drilled into,
   // since InteractiveChartTableModal always renders its Class column from `gr`.
-  const handleClassChartClick = (chartTitle: string, gradeField: 'dairyGr' | 'iceGr', label: string) => {
+  const handleClassChartClick = (
+    chartTitle: string,
+    gradeField: "dairyGr" | "iceGr",
+    label: string,
+  ) => {
     const matched = filteredForClassCharts
       .filter((r) => r[gradeField] === label)
       .map((r) => ({ ...r, gr: r[gradeField] }));
@@ -185,22 +213,43 @@ export default function SupervisorReportsPage() {
   };
 
   // Compute KPI values
-  const outletsCount = useMemo(() => new Set(filtered.map((r) => r.cust)).size, [filtered]);
-  const breachesCount = useMemo(() => filtered.filter((r) => !r.ok).length, [filtered]);
-  const fefoCount = useMemo(() => filtered.filter((r) => r.fefo).length, [filtered]);
-  const noVisitCount = useMemo(() => filtered.filter((r) => r.visitType === 'No Visit').length, [filtered]);
+  const outletsCount = useMemo(
+    () => new Set(filtered.map((r) => r.cust)).size,
+    [filtered],
+  );
+  const breachesCount = useMemo(
+    () => filtered.filter((r) => !r.ok).length,
+    [filtered],
+  );
+  const fefoCount = useMemo(
+    () => filtered.filter((r) => r.fefo).length,
+    [filtered],
+  );
+  const noVisitCount = useMemo(
+    () => filtered.filter((r) => r.visitType === "No Visit").length,
+    [filtered],
+  );
   const breachPct = useMemo(
-    () => (filtered.length ? ((breachesCount / filtered.length) * 100).toFixed(1) + '% of assets' : '–'),
-    [filtered, breachesCount]
+    () =>
+      filtered.length
+        ? ((breachesCount / filtered.length) * 100).toFixed(1) + "% of assets"
+        : "–",
+    [filtered, breachesCount],
   );
   const fefoPct = useMemo(
-    () => (filtered.length ? Math.round((fefoCount / filtered.length) * 100) + '%' : '–'),
-    [filtered, fefoCount]
+    () =>
+      filtered.length
+        ? Math.round((fefoCount / filtered.length) * 100) + "%"
+        : "–",
+    [filtered, fefoCount],
   );
 
   // Compute Manager scorecard metrics
   const mgrTableData = useMemo(() => {
-    const mgrs: Record<string, { v: number; o: Set<string>; b: number; f: number }> = {};
+    const mgrs: Record<
+      string,
+      { v: number; o: Set<string>; b: number; f: number }
+    > = {};
     filtered.forEach((r) => {
       if (!mgrs[r.mgr]) {
         mgrs[r.mgr] = { v: 0, o: new Set(), b: 0, f: 0 };
@@ -217,37 +266,57 @@ export default function SupervisorReportsPage() {
   // Render active note description
   const activeNote = useMemo(() => {
     const parts = [];
-    if (fFrom || fTo) parts.push(`Date: <b>${fFrom || 'Start'} → ${fTo || 'Now'}</b>`);
+    if (fFrom || fTo)
+      parts.push(`Date: <b>${fFrom || "Start"} → ${fTo || "Now"}</b>`);
     if (fMgr) parts.push(`Manager: <b>${fMgr}</b>`);
     if (fSuper) parts.push(`Supervisor: <b>${fSuper}</b>`);
     if (fChannel) parts.push(`Channel: <b>${fChannel}</b>`);
     if (fClass) parts.push(`Classification: <b>${fClass}</b>`);
     if (fCust) parts.push(`Outlet: <b>${fCust}</b>`);
-    return parts.length ? 'Filtered by ' + parts.join(' · ') : 'Showing all visits';
+    return parts.length
+      ? "Filtered by " + parts.join(" · ")
+      : "Showing all visits";
   }, [fFrom, fTo, fMgr, fSuper, fChannel, fClass, fCust]);
 
   // Excel Export Handlers
   const handleExportAllFilteredVisits = () => {
     exportToExcel({
       filename: `reports_visit_records_${new Date().toISOString().slice(0, 10)}`,
-      sheetName: 'Filtered Visits',
-      title: 'Supervisor Reports Master Data Log',
+      sheetName: "Filtered Visits",
+      title: "Supervisor Reports Master Data Log",
       filterSummary: activeNote,
-      userRole: userRole || 'Supervisor',
+      userRole: userRole || "Supervisor",
       columns: [
-        { header: 'Visit Date', key: 'createdAt', formatter: (val) => val ? new Date(val).toLocaleString() : '—' },
-        { header: 'Visit ID', key: 'visitId' },
-        { header: 'Manager', key: 'mgr' },
-        { header: 'Supervisor', key: 'sup' },
-        { header: 'Channel', key: 'ch' },
-        { header: 'Outlet Name', key: 'cust' },
-        { header: 'Classification', key: 'gr' },
-        { header: 'Asset Type', key: 'atype' },
-        { header: 'Asset Temp (°C)', key: 'temp', formatter: (val) => val !== undefined && val !== null ? `${val}°C` : '—' },
-        { header: 'Temp Status', key: 'ok', formatter: (val) => val ? 'OK / In Range' : 'Temp Breach' },
-        { header: 'FEFO Compliance', key: 'fefo', formatter: (val) => val ? 'Compliant' : 'Non-Compliant' },
-        { header: 'Visit Type', key: 'visitType' },
-        { header: 'Action Required', key: 'action' },
+        {
+          header: "Visit Date",
+          key: "createdAt",
+          formatter: (val) => (val ? new Date(val).toLocaleString() : "—"),
+        },
+        { header: "Visit ID", key: "visitId" },
+        { header: "Manager", key: "mgr" },
+        { header: "Supervisor", key: "sup" },
+        { header: "Channel", key: "ch" },
+        { header: "Outlet Name", key: "cust" },
+        { header: "Classification", key: "gr" },
+        { header: "Asset Type", key: "atype" },
+        {
+          header: "Asset Temp (°C)",
+          key: "temp",
+          formatter: (val) =>
+            val !== undefined && val !== null ? `${val}°C` : "—",
+        },
+        {
+          header: "Temp Status",
+          key: "ok",
+          formatter: (val) => (val ? "OK / In Range" : "Temp Breach"),
+        },
+        {
+          header: "FEFO Compliance",
+          key: "fefo",
+          formatter: (val) => (val ? "Compliant" : "Non-Compliant"),
+        },
+        { header: "Visit Type", key: "visitType" },
+        { header: "Action Required", key: "action" },
       ],
       data: filtered,
     });
@@ -256,22 +325,46 @@ export default function SupervisorReportsPage() {
   const handleExportKpis = () => {
     exportToExcel({
       filename: `reports_kpi_summary_${new Date().toISOString().slice(0, 10)}`,
-      sheetName: 'KPI Summary',
-      title: 'Reports Executive KPI Performance Summary',
+      sheetName: "KPI Summary",
+      title: "Reports Executive KPI Performance Summary",
       filterSummary: activeNote,
-      userRole: userRole || 'Supervisor',
+      userRole: userRole || "Supervisor",
       columns: [
-        { header: 'KPI Metric', key: 'metric' },
-        { header: 'Metric Value', key: 'value' },
-        { header: 'Details / Context', key: 'details' },
+        { header: "KPI Metric", key: "metric" },
+        { header: "Metric Value", key: "value" },
+        { header: "Details / Context", key: "details" },
       ],
       data: [
-        { metric: 'Total Visits Logged', value: filtered.length, details: 'Visits logged under current filters' },
-        { metric: 'Outlets Covered', value: outletsCount, details: 'Unique retail outlets visited' },
-        { metric: 'Skipped Visits (No Visit)', value: noVisitCount, details: 'Visits logged as skipped outlet' },
-        { metric: 'Assets Checked', value: filtered.length, details: 'Chiller and freezer units inspected' },
-        { metric: 'Temperature Breaches', value: breachesCount, details: `${breachPct} temperature breach rate` },
-        { metric: 'FEFO Compliance Rate', value: fefoPct, details: 'Assets following FEFO principles' },
+        {
+          metric: "Total Visits Logged",
+          value: filtered.length,
+          details: "Visits logged under current filters",
+        },
+        {
+          metric: "Outlets Covered",
+          value: outletsCount,
+          details: "Unique retail outlets visited",
+        },
+        {
+          metric: "Skipped Visits (No Visit)",
+          value: noVisitCount,
+          details: "Visits logged as skipped outlet",
+        },
+        {
+          metric: "Assets Checked",
+          value: filtered.length,
+          details: "Chiller and freezer units inspected",
+        },
+        {
+          metric: "Temperature Breaches",
+          value: breachesCount,
+          details: `${breachPct} temperature breach rate`,
+        },
+        {
+          metric: "FEFO Compliance Rate",
+          value: fefoPct,
+          details: "Assets following FEFO principles",
+        },
       ],
     });
   };
@@ -286,28 +379,52 @@ export default function SupervisorReportsPage() {
   };
 
   const detailedVisitColumns = [
-    { header: 'Date', key: 'createdAt', formatter: (val: any) => val ? new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
-    { header: 'Visit ID', key: 'visitId' },
-    { header: 'Manager', key: 'mgr' },
-    { header: 'Supervisor', key: 'sup' },
-    { header: 'Outlet Name', key: 'cust' },
-    { header: 'Shop Code', key: 'code' },
-    { header: 'Route', key: 'rt' },
-    { header: 'Channel', key: 'ch' },
-    { header: 'Class', key: 'gr' },
-    { header: 'Asset', key: 'atype' },
-    { header: 'Temp (°C)', key: 'temp', formatter: (val: any) => val !== undefined && val !== null ? `${val}°C` : '—' },
-    { header: 'Status', key: 'ok', formatter: (val: any) => val ? 'OK' : 'Breach' },
-    { header: 'Action Required', key: 'action', formatter: (val: any) => val || 'None' },
+    {
+      header: "Date",
+      key: "createdAt",
+      formatter: (val: any) =>
+        val
+          ? new Date(val).toLocaleDateString("en-IN", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })
+          : "—",
+    },
+    { header: "Visit ID", key: "visitId" },
+    { header: "Manager", key: "mgr" },
+    { header: "Supervisor", key: "sup" },
+    { header: "Outlet Name", key: "cust" },
+    { header: "Shop Code", key: "code" },
+    { header: "Route", key: "rt" },
+    { header: "Channel", key: "ch" },
+    { header: "Class", key: "gr" },
+    { header: "Asset", key: "atype" },
+    {
+      header: "Temp (°C)",
+      key: "temp",
+      formatter: (val: any) =>
+        val !== undefined && val !== null ? `${val}°C` : "—",
+    },
+    {
+      header: "Status",
+      key: "ok",
+      formatter: (val: any) => (val ? "OK" : "Breach"),
+    },
+    {
+      header: "Action Required",
+      key: "action",
+      formatter: (val: any) => val || "None",
+    },
   ];
 
   const handleExportTrendChart = () => {
     exportToExcel({
       filename: `reports_visits_trend_detailed_${new Date().toISOString().slice(0, 10)}`,
-      sheetName: 'Visits Over Time',
-      title: 'Weekly Visits Trend - Full Visit Drill-Down Records',
+      sheetName: "Visits Over Time",
+      title: "Weekly Visits Trend - Full Visit Drill-Down Records",
       filterSummary: activeNote,
-      userRole: userRole || 'Supervisor',
+      userRole: userRole || "Supervisor",
       columns: detailedVisitColumns,
       data: filtered,
     });
@@ -316,10 +433,10 @@ export default function SupervisorReportsPage() {
   const handleExportChannelChart = () => {
     exportToExcel({
       filename: `reports_visits_by_channel_detailed_${new Date().toISOString().slice(0, 10)}`,
-      sheetName: 'Channel Breakdown',
-      title: 'Visits by Channel - Full Visit Drill-Down Records',
+      sheetName: "Channel Breakdown",
+      title: "Visits by Channel - Full Visit Drill-Down Records",
       filterSummary: activeNote,
-      userRole: userRole || 'Supervisor',
+      userRole: userRole || "Supervisor",
       columns: detailedVisitColumns,
       data: filtered,
     });
@@ -328,10 +445,10 @@ export default function SupervisorReportsPage() {
   const handleExportSupervisorChart = () => {
     exportToExcel({
       filename: `reports_supervisor_scorecard_detailed_${new Date().toISOString().slice(0, 10)}`,
-      sheetName: 'Supervisor Scorecard',
-      title: 'Supervisor Scorecard - Full Visit Drill-Down Records',
+      sheetName: "Supervisor Scorecard",
+      title: "Supervisor Scorecard - Full Visit Drill-Down Records",
       filterSummary: activeNote,
-      userRole: userRole || 'Supervisor',
+      userRole: userRole || "Supervisor",
       columns: detailedVisitColumns,
       data: filtered,
     });
@@ -348,16 +465,16 @@ export default function SupervisorReportsPage() {
 
     exportToExcel({
       filename: `reports_manager_summary_${new Date().toISOString().slice(0, 10)}`,
-      sheetName: 'Manager Summary',
-      title: 'Manager Performance Summary Scorecard',
+      sheetName: "Manager Summary",
+      title: "Manager Performance Summary Scorecard",
       filterSummary: activeNote,
-      userRole: userRole || 'Supervisor',
+      userRole: userRole || "Supervisor",
       columns: [
-        { header: 'Manager Name', key: 'manager' },
-        { header: 'Total Visits', key: 'visits' },
-        { header: 'Unique Outlets Covered', key: 'outlets' },
-        { header: 'Temp Breaches', key: 'tempBreaches' },
-        { header: 'FEFO Compliance (%)', key: 'fefoPct' },
+        { header: "Manager Name", key: "manager" },
+        { header: "Total Visits", key: "visits" },
+        { header: "Unique Outlets Covered", key: "outlets" },
+        { header: "Temp Breaches", key: "tempBreaches" },
+        { header: "FEFO Compliance (%)", key: "fefoPct" },
       ],
       data: managerData,
     });
@@ -367,10 +484,15 @@ export default function SupervisorReportsPage() {
   useEffect(() => {
     if (isLoading || !filtered) return;
 
-    const BLUE = '#4F46E5', BLUE_DEEP = '#4338CA', GREEN = '#059669', AMBER = '#D97706', RED = '#DC2626', GREY = '#9BA3B2';
-    const isDark = theme === 'dark';
-    const gridColor = isDark ? '#2A3A55' : '#E4E9F0';
-    const textColor = isDark ? '#94A3B8' : '#5A6478';
+    const BLUE = "#4F46E5",
+      BLUE_DEEP = "#4338CA",
+      GREEN = "#059669",
+      AMBER = "#D97706",
+      RED = "#DC2626",
+      GREY = "#9BA3B2";
+    const isDark = theme === "dark";
+    const gridColor = isDark ? "#2A3A55" : "#E4E9F0";
+    const textColor = isDark ? "#94A3B8" : "#5A6478";
 
     const countFreq = (arr: any[], fn: (r: any) => string | number) => {
       const m: Record<string, number> = {};
@@ -387,15 +509,15 @@ export default function SupervisorReportsPage() {
       const wk = countFreq(filtered, (r) => r.week);
       const weeks = [1, 2, 3, 4, 5, 6, 7, 8];
       chartsRef.current.cTrend = new Chart(canvasTrendRef.current, {
-        type: 'line',
+        type: "line",
         data: {
-          labels: weeks.map((w) => 'W' + w),
+          labels: weeks.map((w) => "W" + w),
           datasets: [
             {
-              label: 'Visits',
+              label: "Visits",
               data: weeks.map((w) => wk[w] || 0),
               borderColor: BLUE,
-              backgroundColor: 'rgba(79,70,229,.12)',
+              backgroundColor: "rgba(79,70,229,.12)",
               fill: true,
               tension: 0.35,
               pointRadius: 3,
@@ -408,17 +530,24 @@ export default function SupervisorReportsPage() {
           plugins: { legend: { display: false } },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
-              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const weekNum = parseInt(label.replace('W', ''), 10);
-              handleChartClick(`Visits for Week ${weekNum}`, (r) => r.week === weekNum);
+              const label = (chart.data.labels?.[el[0].index] ?? "") as string;
+              const weekNum = parseInt(label.replace("W", ""), 10);
+              handleChartClick(
+                `Visits for Week ${weekNum}`,
+                (r) => r.week === weekNum,
+              );
             }
           },
           onHover: (e, el, chart) => {
-            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+            chart.canvas.style.cursor = el.length ? "pointer" : "default";
           },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
-            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+            y: {
+              beginAtZero: true,
+              grid: { color: gridColor },
+              ticks: { color: textColor },
+            },
           },
         },
       });
@@ -428,9 +557,9 @@ export default function SupervisorReportsPage() {
     if (canvasChannelRef.current) {
       if (chartsRef.current.cChannel) chartsRef.current.cChannel.destroy();
       const ch = countFreq(filtered, (r) => r.ch);
-      const chL = ['TT', 'MT', 'INST'];
+      const chL = ["TT", "MT", "INST"];
       chartsRef.current.cChannel = new Chart(canvasChannelRef.current, {
-        type: 'doughnut',
+        type: "doughnut",
         data: {
           labels: chL,
           datasets: [
@@ -443,16 +572,21 @@ export default function SupervisorReportsPage() {
         },
         options: {
           maintainAspectRatio: false,
-          cutout: '62%',
-          plugins: { legend: { position: 'bottom', labels: { color: textColor } } },
+          cutout: "62%",
+          plugins: {
+            legend: { position: "bottom", labels: { color: textColor } },
+          },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
-              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              handleChartClick(`Visits for ${label} Channel`, (r) => r.ch === label);
+              const label = (chart.data.labels?.[el[0].index] ?? "") as string;
+              handleChartClick(
+                `Visits for ${label} Channel`,
+                (r) => r.ch === label,
+              );
             }
           },
           onHover: (e, el, chart) => {
-            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+            chart.canvas.style.cursor = el.length ? "pointer" : "default";
           },
         },
       });
@@ -466,12 +600,12 @@ export default function SupervisorReportsPage() {
         .sort((a, b) => b[1] - a[1])
         .slice(0, 8);
       chartsRef.current.cSuper = new Chart(canvasSuperRef.current, {
-        type: 'bar',
+        type: "bar",
         data: {
           labels: topSup.map((x) => x[0]),
           datasets: [
             {
-              label: 'Visits',
+              label: "Visits",
               data: topSup.map((x) => x[1]),
               backgroundColor: BLUE,
               borderRadius: 6,
@@ -483,16 +617,23 @@ export default function SupervisorReportsPage() {
           plugins: { legend: { display: false } },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
-              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              handleChartClick(`Visits for Supervisor ${label}`, (r) => r.sup === label);
+              const label = (chart.data.labels?.[el[0].index] ?? "") as string;
+              handleChartClick(
+                `Visits for Supervisor ${label}`,
+                (r) => r.sup === label,
+              );
             }
           },
           onHover: (e, el, chart) => {
-            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+            chart.canvas.style.cursor = el.length ? "pointer" : "default";
           },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
-            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+            y: {
+              beginAtZero: true,
+              grid: { color: gridColor },
+              ticks: { color: textColor },
+            },
           },
         },
       });
@@ -504,9 +645,9 @@ export default function SupervisorReportsPage() {
       const ok = filtered.filter((r) => r.ok).length;
       const breaches = filtered.filter((r) => !r.ok).length;
       chartsRef.current.cTemp = new Chart(canvasTempRef.current, {
-        type: 'doughnut',
+        type: "doughnut",
         data: {
-          labels: ['Within range', 'Breach'],
+          labels: ["Within range", "Breach"],
           datasets: [
             {
               data: [ok, breaches],
@@ -517,17 +658,22 @@ export default function SupervisorReportsPage() {
         },
         options: {
           maintainAspectRatio: false,
-          cutout: '62%',
-          plugins: { legend: { position: 'bottom', labels: { color: textColor } } },
+          cutout: "62%",
+          plugins: {
+            legend: { position: "bottom", labels: { color: textColor } },
+          },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
-              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const isOk = label === 'Within range';
-              handleChartClick(`Visits with Temperature Status: ${label}`, (r) => r.ok === isOk);
+              const label = (chart.data.labels?.[el[0].index] ?? "") as string;
+              const isOk = label === "Within range";
+              handleChartClick(
+                `Visits with Temperature Status: ${label}`,
+                (r) => r.ok === isOk,
+              );
             }
           },
           onHover: (e, el, chart) => {
-            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+            chart.canvas.style.cursor = el.length ? "pointer" : "default";
           },
         },
       });
@@ -538,9 +684,9 @@ export default function SupervisorReportsPage() {
       if (chartsRef.current.cNpd) chartsRef.current.cNpd.destroy();
       const npd = countFreq(filtered, (r) => r.npd);
       chartsRef.current.cNpd = new Chart(canvasNpdRef.current, {
-        type: 'bar',
+        type: "bar",
         data: {
-          labels: ['Available', 'Not avail.', 'Not req.'],
+          labels: ["Available", "Not avail.", "Not req."],
           datasets: [
             {
               data: [npd.A || 0, npd.N || 0, npd.X || 0],
@@ -554,17 +700,29 @@ export default function SupervisorReportsPage() {
           plugins: { legend: { display: false } },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
-              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const npdCode = label === 'Available' ? 'A' : label === 'Not avail.' ? 'N' : 'X';
-              handleChartClick(`Visits with NPD Status: ${label}`, (r) => r.npd === npdCode);
+              const label = (chart.data.labels?.[el[0].index] ?? "") as string;
+              const npdCode =
+                label === "Available"
+                  ? "A"
+                  : label === "Not avail."
+                    ? "N"
+                    : "X";
+              handleChartClick(
+                `Visits with NPD Status: ${label}`,
+                (r) => r.npd === npdCode,
+              );
             }
           },
           onHover: (e, el, chart) => {
-            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+            chart.canvas.style.cursor = el.length ? "pointer" : "default";
           },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
-            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+            y: {
+              beginAtZero: true,
+              grid: { color: gridColor },
+              ticks: { color: textColor },
+            },
           },
         },
       });
@@ -575,9 +733,9 @@ export default function SupervisorReportsPage() {
       if (chartsRef.current.cPsku) chartsRef.current.cPsku.destroy();
       const psku = countFreq(filtered, (r) => r.psku);
       chartsRef.current.cPsku = new Chart(canvasPskuRef.current, {
-        type: 'bar',
+        type: "bar",
         data: {
-          labels: ['Available', 'Not avail.', 'Not req.'],
+          labels: ["Available", "Not avail.", "Not req."],
           datasets: [
             {
               data: [psku.A || 0, psku.N || 0, psku.X || 0],
@@ -591,17 +749,29 @@ export default function SupervisorReportsPage() {
           plugins: { legend: { display: false } },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
-              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const pskuCode = label === 'Available' ? 'A' : label === 'Not avail.' ? 'N' : 'X';
-              handleChartClick(`Visits with Power SKU Status: ${label}`, (r) => r.psku === pskuCode);
+              const label = (chart.data.labels?.[el[0].index] ?? "") as string;
+              const pskuCode =
+                label === "Available"
+                  ? "A"
+                  : label === "Not avail."
+                    ? "N"
+                    : "X";
+              handleChartClick(
+                `Visits with Power SKU Status: ${label}`,
+                (r) => r.psku === pskuCode,
+              );
             }
           },
           onHover: (e, el, chart) => {
-            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+            chart.canvas.style.cursor = el.length ? "pointer" : "default";
           },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
-            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+            y: {
+              beginAtZero: true,
+              grid: { color: gridColor },
+              ticks: { color: textColor },
+            },
           },
         },
       });
@@ -609,20 +779,23 @@ export default function SupervisorReportsPage() {
 
     // 7. Classification Bar Charts (Dairy & Ice Cream)
     if (canvasClassDairyRef.current) {
-      if (chartsRef.current.cClassDairy) chartsRef.current.cClassDairy.destroy();
+      if (chartsRef.current.cClassDairy)
+        chartsRef.current.cClassDairy.destroy();
       const dairyRows = filteredForClassCharts.filter((r) => r.dairyGr);
       const cld = countFreq(dairyRows, (r) => r.dairyGr);
-      const allGrades = ['A', 'B', 'C', 'D', 'E', '-'];
-      const gradeLabels = ['A', 'B', 'C', 'D', 'E', 'Not Classified'];
+      const allGrades = ["A", "B", "C", "D", "E", "-"];
+      const gradeLabels = ["A", "B", "C", "D", "E", "Not Classified"];
       chartsRef.current.cClassDairy = new Chart(canvasClassDairyRef.current, {
-        type: 'bar',
+        type: "bar",
         data: {
           labels: gradeLabels,
           datasets: [
             {
-              label: 'Visits',
+              label: "Visits",
               data: allGrades.map((g) => cld[g] || 0),
-              backgroundColor: allGrades.map((g) => g === '-' ? '#9aa9b4' : GCOL[g]),
+              backgroundColor: allGrades.map((g) =>
+                g === "-" ? "#9aa9b4" : GCOL[g],
+              ),
               borderRadius: 6,
             },
           ],
@@ -632,17 +805,25 @@ export default function SupervisorReportsPage() {
           plugins: { legend: { display: false } },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
-              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const gradeValue = label === 'Not Classified' ? '-' : label;
-              handleClassChartClick(`Visits for Classification Grade ${label} · Dairy`, 'dairyGr', gradeValue);
+              const label = (chart.data.labels?.[el[0].index] ?? "") as string;
+              const gradeValue = label === "Not Classified" ? "-" : label;
+              handleClassChartClick(
+                `Visits for Classification Grade ${label} · Dairy`,
+                "dairyGr",
+                gradeValue,
+              );
             }
           },
           onHover: (e, el, chart) => {
-            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+            chart.canvas.style.cursor = el.length ? "pointer" : "default";
           },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
-            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+            y: {
+              beginAtZero: true,
+              grid: { color: gridColor },
+              ticks: { color: textColor },
+            },
           },
         },
       });
@@ -652,17 +833,19 @@ export default function SupervisorReportsPage() {
       if (chartsRef.current.cClassIce) chartsRef.current.cClassIce.destroy();
       const iceRows = filteredForClassCharts.filter((r) => r.iceGr);
       const cli = countFreq(iceRows, (r) => r.iceGr);
-      const allGrades = ['A', 'B', 'C', 'D', 'E', '-'];
-      const gradeLabels = ['A', 'B', 'C', 'D', 'E', 'Not Classified'];
+      const allGrades = ["A", "B", "C", "D", "E", "-"];
+      const gradeLabels = ["A", "B", "C", "D", "E", "Not Classified"];
       chartsRef.current.cClassIce = new Chart(canvasClassIceRef.current, {
-        type: 'bar',
+        type: "bar",
         data: {
           labels: gradeLabels,
           datasets: [
             {
-              label: 'Visits',
+              label: "Visits",
               data: allGrades.map((g) => cli[g] || 0),
-              backgroundColor: allGrades.map((g) => g === '-' ? '#9aa9b4' : GCOL[g]),
+              backgroundColor: allGrades.map((g) =>
+                g === "-" ? "#9aa9b4" : GCOL[g],
+              ),
               borderRadius: 6,
             },
           ],
@@ -672,17 +855,25 @@ export default function SupervisorReportsPage() {
           plugins: { legend: { display: false } },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
-              const label = (chart.data.labels?.[el[0].index] ?? '') as string;
-              const gradeValue = label === 'Not Classified' ? '-' : label;
-              handleClassChartClick(`Visits for Classification Grade ${label} · Ice Cream`, 'iceGr', gradeValue);
+              const label = (chart.data.labels?.[el[0].index] ?? "") as string;
+              const gradeValue = label === "Not Classified" ? "-" : label;
+              handleClassChartClick(
+                `Visits for Classification Grade ${label} · Ice Cream`,
+                "iceGr",
+                gradeValue,
+              );
             }
           },
           onHover: (e, el, chart) => {
-            chart.canvas.style.cursor = el.length ? 'pointer' : 'default';
+            chart.canvas.style.cursor = el.length ? "pointer" : "default";
           },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
-            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+            y: {
+              beginAtZero: true,
+              grid: { color: gridColor },
+              ticks: { color: textColor },
+            },
           },
         },
       });
@@ -692,14 +883,18 @@ export default function SupervisorReportsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[var(--bg)]">
-        <p className="text-sm font-bold text-[var(--text-secondary)]">Loading Reports Dashboard...</p>
+        <p className="text-sm font-bold text-[var(--text-secondary)]">
+          Loading Reports Dashboard...
+        </p>
       </div>
     );
   }
 
   return (
     <div className="dandy-dashboard-body">
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .dandy-dashboard-body {
           --ink: var(--text-primary);
           --soft: var(--text-secondary);
@@ -981,14 +1176,18 @@ export default function SupervisorReportsPage() {
             text-align: center;
           }
         }
-      ` }} />
+      `,
+        }}
+      />
 
       {/* Header Banner */}
       <div className="top">
         <div className="logo">D</div>
         <div>
           <h1>Dandy Market Visit — Supervisor Reports Dashboard</h1>
-          <div className="sub">Field-force visit compliance & execution · Dandy Company Ltd</div>
+          <div className="sub">
+            Field-force visit compliance & execution · Dandy Company Ltd
+          </div>
         </div>
         <div className="demo-tag">MY VISITS DATA</div>
       </div>
@@ -998,21 +1197,32 @@ export default function SupervisorReportsPage() {
         <div className="filters">
           <div className="fld">
             <label>From</label>
-            <input type="date" value={fFrom} onChange={(e) => setFFrom(e.target.value)} />
+            <input
+              type="date"
+              value={fFrom}
+              onChange={(e) => setFFrom(e.target.value)}
+            />
           </div>
 
           <div className="fld">
             <label>To</label>
-            <input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} />
+            <input
+              type="date"
+              value={fTo}
+              onChange={(e) => setFTo(e.target.value)}
+            />
           </div>
 
           <div className="fld">
             <label>Channel</label>
-            <select value={fChannel} onChange={(e) => {
-              setFChannel(e.target.value);
-              setFClass('');
-              setFCust('');
-            }}>
+            <select
+              value={fChannel}
+              onChange={(e) => {
+                setFChannel(e.target.value);
+                setFClass("");
+                setFCust("");
+              }}
+            >
               <option value="">All Channels</option>
               <option value="TT">TT</option>
               <option value="MT">MT</option>
@@ -1023,13 +1233,18 @@ export default function SupervisorReportsPage() {
 
           <div className="fld">
             <label>Classification</label>
-            <select value={fClass} onChange={(e) => {
-              setFClass(e.target.value);
-              setFCust('');
-            }}>
+            <select
+              value={fClass}
+              onChange={(e) => {
+                setFClass(e.target.value);
+                setFCust("");
+              }}
+            >
               <option value="">All Classifications</option>
               {classOptions.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
           </div>
@@ -1039,19 +1254,34 @@ export default function SupervisorReportsPage() {
             <select value={fCust} onChange={(e) => setFCust(e.target.value)}>
               <option value="">All Outlets</option>
               {custOptions.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
           </div>
 
-          <button className="reset" onClick={resetFilters}>Reset</button>
-          <ExportButton onClick={handleExportAllFilteredVisits} label="Export Filtered Data" variant="default" />
+          <button className="reset" onClick={resetFilters}>
+            Reset
+          </button>
+          <ExportButton
+            onClick={handleExportAllFilteredVisits}
+            label="Export Filtered Data"
+            variant="default"
+          />
         </div>
 
         {/* Active Filter description */}
         <div className="flex items-center justify-between gap-3 mb-3">
-          <div className="active-note flex-grow" dangerouslySetInnerHTML={{ __html: activeNote }} />
-          <ExportButton onClick={handleExportKpis} label="Export KPI Summary" variant="compact" />
+          <div
+            className="active-note flex-grow"
+            dangerouslySetInnerHTML={{ __html: activeNote }}
+          />
+          <ExportButton
+            onClick={handleExportKpis}
+            label="Export KPI Summary"
+            variant="compact"
+          />
         </div>
 
         {/* KPI Row */}
@@ -1096,7 +1326,11 @@ export default function SupervisorReportsPage() {
                 <h3>Visits Over Time</h3>
                 <div className="psub">Weekly visits (filtered)</div>
               </div>
-              <ExportButton onClick={handleExportTrendChart} label="Export" variant="compact" />
+              <ExportButton
+                onClick={handleExportTrendChart}
+                label="Export"
+                variant="compact"
+              />
             </div>
             <div className="chart-box">
               <canvas ref={canvasTrendRef}></canvas>
@@ -1108,7 +1342,11 @@ export default function SupervisorReportsPage() {
                 <h3>Visits by Channel</h3>
                 <div className="psub">Share across MT / TT / INST</div>
               </div>
-              <ExportButton onClick={handleExportChannelChart} label="Export" variant="compact" />
+              <ExportButton
+                onClick={handleExportChannelChart}
+                label="Export"
+                variant="compact"
+              />
             </div>
             <div className="chart-sm">
               <canvas ref={canvasChannelRef}></canvas>
@@ -1124,7 +1362,11 @@ export default function SupervisorReportsPage() {
                 <h3>Supervisor Scorecard</h3>
                 <div className="psub">Visits per supervisor (filtered)</div>
               </div>
-              <ExportButton onClick={handleExportSupervisorChart} label="Export" variant="compact" />
+              <ExportButton
+                onClick={handleExportSupervisorChart}
+                label="Export"
+                variant="compact"
+              />
             </div>
             <div className="chart-box">
               <canvas ref={canvasSuperRef}></canvas>
@@ -1172,13 +1414,19 @@ export default function SupervisorReportsPage() {
         </div>
 
         {/* Manager Table */}
-        <div className="panel tbl" style={{ marginBottom: '16px' }}>
+        <div className="panel tbl" style={{ marginBottom: "16px" }}>
           <div className="flex items-start justify-between gap-2">
             <div>
               <h3>Manager Performance Summary</h3>
-              <div className="psub">Visits, coverage & compliance per manager (filtered)</div>
+              <div className="psub">
+                Visits, coverage & compliance per manager (filtered)
+              </div>
             </div>
-            <ExportButton onClick={handleExportManagerTable} label="Export Table" variant="compact" />
+            <ExportButton
+              onClick={handleExportManagerTable}
+              label="Export Table"
+              variant="compact"
+            />
           </div>
           <div className="tbl-wrap">
             <table>
@@ -1210,7 +1458,14 @@ export default function SupervisorReportsPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', color: '#5a7085', padding: '20px' }}>
+                    <td
+                      colSpan={5}
+                      style={{
+                        textAlign: "center",
+                        color: "#5a7085",
+                        padding: "20px",
+                      }}
+                    >
                       No data for this filter
                     </td>
                   </tr>
@@ -1223,7 +1478,9 @@ export default function SupervisorReportsPage() {
         {/* Visit Details Table */}
         <div className="panel tbl">
           <h3>Visit Details</h3>
-          <div className="psub">Outlet-level records (filtered) — GM drill-down view</div>
+          <div className="psub">
+            Outlet-level records (filtered) — GM drill-down view
+          </div>
           <div className="tbl-wrap">
             <table>
               <thead>
@@ -1250,7 +1507,7 @@ export default function SupervisorReportsPage() {
                       <td>
                         <span
                           className="grade"
-                          style={{ background: GCOL[r.gr] || '#9aa9b4' }}
+                          style={{ background: GCOL[r.gr] || "#9aa9b4" }}
                         >
                           {r.gr}
                         </span>
@@ -1264,12 +1521,19 @@ export default function SupervisorReportsPage() {
                           <span className="pill r">Breach</span>
                         )}
                       </td>
-                      <td>{r.action || '—'}</td>
+                      <td>{r.action || "—"}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', color: '#5a7085', padding: '20px' }}>
+                    <td
+                      colSpan={9}
+                      style={{
+                        textAlign: "center",
+                        color: "#5a7085",
+                        padding: "20px",
+                      }}
+                    >
                       No data for this filter
                     </td>
                   </tr>
@@ -1281,7 +1545,9 @@ export default function SupervisorReportsPage() {
 
         {/* Footer */}
         <div className="foot">
-          <b>Real database visits live sync.</b> All five filters above are active — selections recalculate compliance & scorecard data dynamically.
+          <b>Real database visits live sync.</b> All five filters above are
+          active — selections recalculate compliance & scorecard data
+          dynamically.
         </div>
       </div>
       <InteractiveChartTableModal

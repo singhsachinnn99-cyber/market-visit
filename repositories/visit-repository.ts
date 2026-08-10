@@ -183,6 +183,10 @@ async function ensureVisitPhotoTableSchema(connection: mysql.Connection | mysql.
       }
     }
 
+    if (!existingVpColumns.has('publicId')) {
+      await connection.execute("ALTER TABLE `VisitPhoto` ADD COLUMN `publicId` VARCHAR(191) NULL DEFAULT ''");
+    }
+
     if (!existingVpColumns.has('appName')) {
       await connection.execute("ALTER TABLE `VisitPhoto` ADD COLUMN `appName` VARCHAR(191) NULL DEFAULT 'Chrome'");
     }
@@ -361,11 +365,12 @@ export const visitRepository = {
     for (const p of photos) {
       const uploadedAtVal = toMysqlDatetime(p.uploadedAt) || new Date();
       const appNameVal = p.appName || 'Chrome';
+      const publicIdVal = p.publicId || p.photoId || '';
       try {
         await executor.execute(
           `INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`, \`appName\`) 
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, uploadedAtVal, appNameVal]
+          [p.photoId, p.visitId, p.category, p.cloudinaryUrl, publicIdVal, uploadedAtVal, appNameVal]
         );
       } catch (err: any) {
         if (err.message && err.message.includes('Unknown column')) {
@@ -373,7 +378,7 @@ export const visitRepository = {
           await executor.execute(
             `INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`, \`appName\`) 
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, uploadedAtVal, appNameVal]
+            [p.photoId, p.visitId, p.category, p.cloudinaryUrl, publicIdVal, uploadedAtVal, appNameVal]
           );
         } else {
           throw err;

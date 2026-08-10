@@ -20,8 +20,6 @@ export type ActionRequiredType =
   | "None";
 export type NPDStatus = "Available" | "Not Available" | "Not Required";
 
-//  chnages
-
 export interface User {
   id: string;
   name: string;

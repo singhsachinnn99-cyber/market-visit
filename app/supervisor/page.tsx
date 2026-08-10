@@ -101,6 +101,7 @@ export default function SupervisorDashboard() {
       if (fFrom) params.set('startDate', fFrom);
       if (fTo) params.set('endDate', fTo);
       const res = await fetch(`/api/dashboard${params.toString() ? `?${params.toString()}` : ''}`);
+      if (!res.ok) return;
       const data = await res.json();
       if (data.success) {
         setRows(data.rows);

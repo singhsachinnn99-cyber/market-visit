@@ -50,8 +50,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full">
-      <body className={`${inter.variable} ${calistoga.variable} ${jetbrainsMono.variable} antialiased h-full`}>
+    <html lang="en" className="h-full" suppressHydrationWarning>
+      <body className={`${inter.variable} ${calistoga.variable} ${jetbrainsMono.variable} antialiased h-full`} suppressHydrationWarning>
         <PWARegister />
         <SessionProvider>
           <QueryProvider>

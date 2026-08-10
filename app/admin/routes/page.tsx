@@ -8,6 +8,8 @@ import { Route } from '@/types';
 import nextDynamic from 'next/dynamic';
 import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
 import { useState } from 'react';
+import { exportToExcel } from '@/utils/excelExport';
+import { ExportButton } from '@/components/ui/ExportButton';
 
 const BarChart = nextDynamic(() => import('recharts').then(m => m.BarChart), { ssr: false });
 const Bar = nextDynamic(() => import('recharts').then(m => m.Bar), { ssr: false });
@@ -41,16 +43,35 @@ export default function RoutesPage() {
 
   const coverageData = stats?.coveragePerRoute ?? [];
 
+  const handleExportRoutes = () => {
+    exportToExcel({
+      filename: `routes_master_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Routes Master',
+      title: 'Routes & Coverage Performance Master Log',
+      columns: [
+        { header: 'Route Code', key: 'code' },
+        { header: 'Route Name', key: 'name' },
+        { header: 'Assigned Supervisor', key: 'assignedSupervisor' },
+        { header: 'Total Outlets', key: 'outletCount' },
+        { header: 'Active Outlets', key: 'activeOutlets' },
+      ],
+      data: routes,
+    });
+  };
+
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-          Routes
-        </h1>
-        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-          View all field routes, coverage performance, and assignment status.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+            Routes
+          </h1>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+            View all field routes, coverage performance, and assignment status.
+          </p>
+        </div>
+        <ExportButton onClick={handleExportRoutes} label="Export Routes Excel" variant="default" />
       </div>
 
       {/* KPIs */}

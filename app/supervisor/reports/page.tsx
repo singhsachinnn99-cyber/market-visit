@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { useTheme } from '@/providers/theme-provider';
 import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
 import { isFleetRole } from '@/lib/roles';
+import { exportToExcel } from '@/utils/excelExport';
+import { ExportButton } from '@/components/ui/ExportButton';
 
 const SUPERVISOR_TO_MANAGER: Record<string, string> = {
   'YASAR': 'KHALID',
@@ -223,6 +225,143 @@ export default function SupervisorReportsPage() {
     if (fCust) parts.push(`Outlet: <b>${fCust}</b>`);
     return parts.length ? 'Filtered by ' + parts.join(' · ') : 'Showing all visits';
   }, [fFrom, fTo, fMgr, fSuper, fChannel, fClass, fCust]);
+
+  // Excel Export Handlers
+  const handleExportAllFilteredVisits = () => {
+    exportToExcel({
+      filename: `reports_visit_records_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Filtered Visits',
+      title: 'Supervisor Reports Master Data Log',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: [
+        { header: 'Visit Date', key: 'createdAt', formatter: (val) => val ? new Date(val).toLocaleString() : '—' },
+        { header: 'Visit ID', key: 'visitId' },
+        { header: 'Manager', key: 'mgr' },
+        { header: 'Supervisor', key: 'sup' },
+        { header: 'Channel', key: 'ch' },
+        { header: 'Outlet Name', key: 'cust' },
+        { header: 'Classification', key: 'gr' },
+        { header: 'Asset Type', key: 'atype' },
+        { header: 'Asset Temp (°C)', key: 'temp', formatter: (val) => val !== undefined && val !== null ? `${val}°C` : '—' },
+        { header: 'Temp Status', key: 'ok', formatter: (val) => val ? 'OK / In Range' : 'Temp Breach' },
+        { header: 'FEFO Compliance', key: 'fefo', formatter: (val) => val ? 'Compliant' : 'Non-Compliant' },
+        { header: 'Visit Type', key: 'visitType' },
+        { header: 'Action Required', key: 'action' },
+      ],
+      data: filtered,
+    });
+  };
+
+  const handleExportKpis = () => {
+    exportToExcel({
+      filename: `reports_kpi_summary_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'KPI Summary',
+      title: 'Reports Executive KPI Performance Summary',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: [
+        { header: 'KPI Metric', key: 'metric' },
+        { header: 'Metric Value', key: 'value' },
+        { header: 'Details / Context', key: 'details' },
+      ],
+      data: [
+        { metric: 'Total Visits Logged', value: filtered.length, details: 'Visits logged under current filters' },
+        { metric: 'Outlets Covered', value: outletsCount, details: 'Unique retail outlets visited' },
+        { metric: 'Skipped Visits (No Visit)', value: noVisitCount, details: 'Visits logged as skipped outlet' },
+        { metric: 'Assets Checked', value: filtered.length, details: 'Chiller and freezer units inspected' },
+        { metric: 'Temperature Breaches', value: breachesCount, details: `${breachPct} temperature breach rate` },
+        { metric: 'FEFO Compliance Rate', value: fefoPct, details: 'Assets following FEFO principles' },
+      ],
+    });
+  };
+
+  const countFreqHelper = (arr: any[], fn: (r: any) => string | number) => {
+    const m: Record<string, number> = {};
+    arr.forEach((r) => {
+      const k = fn(r);
+      m[k] = (m[k] || 0) + 1;
+    });
+    return m;
+  };
+
+  const detailedVisitColumns = [
+    { header: 'Date', key: 'createdAt', formatter: (val: any) => val ? new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
+    { header: 'Visit ID', key: 'visitId' },
+    { header: 'Manager', key: 'mgr' },
+    { header: 'Supervisor', key: 'sup' },
+    { header: 'Outlet Name', key: 'cust' },
+    { header: 'Shop Code', key: 'code' },
+    { header: 'Route', key: 'rt' },
+    { header: 'Channel', key: 'ch' },
+    { header: 'Class', key: 'gr' },
+    { header: 'Asset', key: 'atype' },
+    { header: 'Temp (°C)', key: 'temp', formatter: (val: any) => val !== undefined && val !== null ? `${val}°C` : '—' },
+    { header: 'Status', key: 'ok', formatter: (val: any) => val ? 'OK' : 'Breach' },
+    { header: 'Action Required', key: 'action', formatter: (val: any) => val || 'None' },
+  ];
+
+  const handleExportTrendChart = () => {
+    exportToExcel({
+      filename: `reports_visits_trend_detailed_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Visits Over Time',
+      title: 'Weekly Visits Trend - Full Visit Drill-Down Records',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: detailedVisitColumns,
+      data: filtered,
+    });
+  };
+
+  const handleExportChannelChart = () => {
+    exportToExcel({
+      filename: `reports_visits_by_channel_detailed_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Channel Breakdown',
+      title: 'Visits by Channel - Full Visit Drill-Down Records',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: detailedVisitColumns,
+      data: filtered,
+    });
+  };
+
+  const handleExportSupervisorChart = () => {
+    exportToExcel({
+      filename: `reports_supervisor_scorecard_detailed_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Supervisor Scorecard',
+      title: 'Supervisor Scorecard - Full Visit Drill-Down Records',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: detailedVisitColumns,
+      data: filtered,
+    });
+  };
+
+  const handleExportManagerTable = () => {
+    const managerData = mgrTableData.map(([m, x]: any) => ({
+      manager: m,
+      visits: x.v,
+      outlets: x.o.size,
+      tempBreaches: x.b,
+      fefoPct: `${x.v ? Math.round((x.f / x.v) * 100) : 0}%`,
+    }));
+
+    exportToExcel({
+      filename: `reports_manager_summary_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Manager Summary',
+      title: 'Manager Performance Summary Scorecard',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: [
+        { header: 'Manager Name', key: 'manager' },
+        { header: 'Total Visits', key: 'visits' },
+        { header: 'Unique Outlets Covered', key: 'outlets' },
+        { header: 'Temp Breaches', key: 'tempBreaches' },
+        { header: 'FEFO Compliance (%)', key: 'fefoPct' },
+      ],
+      data: managerData,
+    });
+  };
 
   // Chart Rendering Hook
   useEffect(() => {
@@ -906,10 +1045,14 @@ export default function SupervisorReportsPage() {
           </div>
 
           <button className="reset" onClick={resetFilters}>Reset</button>
+          <ExportButton onClick={handleExportAllFilteredVisits} label="Export Filtered Data" variant="default" />
         </div>
 
         {/* Active Filter description */}
-        <div className="active-note" dangerouslySetInnerHTML={{ __html: activeNote }} />
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="active-note flex-grow" dangerouslySetInnerHTML={{ __html: activeNote }} />
+          <ExportButton onClick={handleExportKpis} label="Export KPI Summary" variant="compact" />
+        </div>
 
         {/* KPI Row */}
         <div className="kpis">
@@ -948,15 +1091,25 @@ export default function SupervisorReportsPage() {
         {/* Chart Row 1 */}
         <div className="grid">
           <div className="panel">
-            <h3>Visits Over Time</h3>
-            <div className="psub">Weekly visits (filtered)</div>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3>Visits Over Time</h3>
+                <div className="psub">Weekly visits (filtered)</div>
+              </div>
+              <ExportButton onClick={handleExportTrendChart} label="Export" variant="compact" />
+            </div>
             <div className="chart-box">
               <canvas ref={canvasTrendRef}></canvas>
             </div>
           </div>
           <div className="panel">
-            <h3>Visits by Channel</h3>
-            <div className="psub">Share across MT / TT / INST</div>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3>Visits by Channel</h3>
+                <div className="psub">Share across MT / TT / INST</div>
+              </div>
+              <ExportButton onClick={handleExportChannelChart} label="Export" variant="compact" />
+            </div>
             <div className="chart-sm">
               <canvas ref={canvasChannelRef}></canvas>
             </div>
@@ -966,8 +1119,13 @@ export default function SupervisorReportsPage() {
         {/* Chart Row 2 */}
         <div className="grid">
           <div className="panel">
-            <h3>Supervisor Scorecard</h3>
-            <div className="psub">Visits per supervisor (filtered)</div>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3>Supervisor Scorecard</h3>
+                <div className="psub">Visits per supervisor (filtered)</div>
+              </div>
+              <ExportButton onClick={handleExportSupervisorChart} label="Export" variant="compact" />
+            </div>
             <div className="chart-box">
               <canvas ref={canvasSuperRef}></canvas>
             </div>
@@ -1015,8 +1173,13 @@ export default function SupervisorReportsPage() {
 
         {/* Manager Table */}
         <div className="panel tbl" style={{ marginBottom: '16px' }}>
-          <h3>Manager Performance Summary</h3>
-          <div className="psub">Visits, coverage & compliance per manager (filtered)</div>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3>Manager Performance Summary</h3>
+              <div className="psub">Visits, coverage & compliance per manager (filtered)</div>
+            </div>
+            <ExportButton onClick={handleExportManagerTable} label="Export Table" variant="compact" />
+          </div>
           <div className="tbl-wrap">
             <table>
               <thead>

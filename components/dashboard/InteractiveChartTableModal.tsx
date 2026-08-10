@@ -2,6 +2,8 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { X, Search, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { exportToExcel } from '@/utils/excelExport';
+import { ExportButton } from '@/components/ui/ExportButton';
 
 interface VisitData {
   visitId: string;
@@ -135,6 +137,31 @@ export default function InteractiveChartTableModal({
     });
   };
 
+  const handleExportModalData = () => {
+    exportToExcel({
+      filename: `${title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_records`,
+      sheetName: 'Visit Drilldown',
+      title: title,
+      filterSummary: search ? `Search query: "${search}"` : undefined,
+      columns: [
+        { header: 'Date', key: 'createdAt', formatter: (val) => val ? new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
+        { header: 'Visit ID', key: 'visitId' },
+        { header: 'Manager', key: 'mgr' },
+        { header: 'Supervisor', key: 'sup' },
+        { header: 'Outlet', key: 'cust' },
+        { header: 'Shop Code', key: 'code' },
+        { header: 'Route', key: 'rt' },
+        { header: 'Channel', key: 'ch' },
+        { header: 'Class', key: 'gr' },
+        { header: 'Asset', key: 'atype' },
+        { header: 'Temp (°C)', key: 'temp', formatter: (val) => val !== undefined && val !== null ? `${val}°C` : '—' },
+        { header: 'Status', key: 'ok', formatter: (val) => val ? 'OK' : 'Breach' },
+        { header: 'Action Required', key: 'action', formatter: (val) => val || 'None' },
+      ],
+      data: sortedData,
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
       {/* Backdrop */}
@@ -162,12 +189,15 @@ export default function InteractiveChartTableModal({
               Drill-down visit records ({sortedData.length} matches)
             </p>
           </div>
-          <button 
-            onClick={onClose} 
-            className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-[var(--surface-2)] transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
-          >
-            <X className="h-4.5 w-4.5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <ExportButton onClick={handleExportModalData} label="Export to Excel" variant="compact" />
+            <button 
+              onClick={onClose} 
+              className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-[var(--surface-2)] transition-colors text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+            >
+              <X className="h-4.5 w-4.5" />
+            </button>
+          </div>
         </div>
 
         {/* Toolbar (Search & Page size selection) */}

@@ -22,6 +22,8 @@ import {
   ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight,
   Users, RefreshCw, Shield, Mail, Phone, Lock,
 } from 'lucide-react';
+import { exportToExcel } from '@/utils/excelExport';
+import { ExportButton } from '@/components/ui/ExportButton';
 
 interface SupervisorVM {
   id: string; name: string; employeeCode: string; email: string;
@@ -162,6 +164,25 @@ export default function SupervisorsPage() {
 
   const inputCls = 'form-input';
 
+  const handleExportSupervisors = () => {
+    exportToExcel({
+      filename: `supervisors_master_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Supervisors',
+      title: 'Field Supervisors Master Directory',
+      filterSummary: search ? `Search: "${search}" | Status: ${statusFilter}` : `Status: ${statusFilter}`,
+      columns: [
+        { header: 'Employee Code', key: 'employeeCode' },
+        { header: 'Full Name', key: 'name' },
+        { header: 'Role', key: 'role' },
+        { header: 'Email Address', key: 'email' },
+        { header: 'Mobile Number', key: 'mobile' },
+        { header: 'Account Status', key: 'status' },
+        { header: 'Creation Date', key: 'createdAt', formatter: (val) => val ? new Date(val).toLocaleDateString('en-IN') : '—' },
+      ],
+      data: filtered,
+    });
+  };
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -174,16 +195,19 @@ export default function SupervisorsPage() {
             Manage field team credentials, roles, and account status.
           </p>
         </div>
-        {canEdit ? (
-          <button className="btn-primary" onClick={openCreate}>
-            <UserPlus className="h-3.5 w-3.5" />
-            Add Supervisor
-          </button>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-            <Lock className="h-3.5 w-3.5" /> Read-Only Mode (Sub-Admin)
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          <ExportButton onClick={handleExportSupervisors} label="Export Excel" variant="outline" />
+          {canEdit ? (
+            <button className="btn-primary" onClick={openCreate}>
+              <UserPlus className="h-3.5 w-3.5" />
+              Add Supervisor
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              <Lock className="h-3.5 w-3.5" /> Read-Only Mode (Sub-Admin)
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Stats row */}

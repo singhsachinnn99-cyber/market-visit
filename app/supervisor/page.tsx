@@ -17,6 +17,8 @@ import { Visit, VisitPhoto, VisitWizardState, NPDResponse, VisitAsset, VisitPowe
 import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
 import DrilldownReportModal from '@/components/dashboard/DrilldownReportModal';
 import { getAllowedReports, isFleetRole } from '@/lib/roles';
+import { exportToExcel } from '@/utils/excelExport';
+import { ExportButton } from '@/components/ui/ExportButton';
 
 const GCOL: Record<string, string> = {
   A: '#0b7a4c',
@@ -389,6 +391,277 @@ export default function SupervisorDashboard() {
     if (fVertical) parts.push(`Business Vertical: <b>${fVertical}</b>`);
     return parts.length ? 'Filtered by ' + parts.join(' · ') : 'Showing all visits';
   }, [fFrom, fTo, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fSku, fVertical]);
+
+  // Excel Export Handlers
+  const handleExportAllFilteredVisits = () => {
+    exportToExcel({
+      filename: `supervisor_visit_records_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Filtered Visits',
+      title: 'Supervisor Field Visit Master Data Report',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: [
+        { header: 'Visit Date', key: 'createdAt', formatter: (val) => val ? new Date(val).toLocaleString() : '—' },
+        { header: 'Visit ID', key: 'visitId' },
+        { header: 'Manager', key: 'mgr' },
+        { header: 'Supervisor', key: 'sup' },
+        { header: 'Channel', key: 'ch' },
+        { header: 'Outlet Name', key: 'cust' },
+        { header: 'Classification', key: 'gr' },
+        { header: 'Asset Type', key: 'atype' },
+        { header: 'Asset Temp (°C)', key: 'temp', formatter: (val) => val !== undefined && val !== null ? `${val}°C` : '—' },
+        { header: 'Temp Status', key: 'ok', formatter: (val) => val ? 'OK / In Range' : 'Temp Breach' },
+        { header: 'FEFO Compliance', key: 'fefo', formatter: (val) => val ? 'Compliant' : 'Non-Compliant' },
+        { header: 'Visit Type', key: 'visitType' },
+        { header: 'Action Required', key: 'action' },
+      ],
+      data: filtered,
+    });
+  };
+
+  const handleExportKpis = () => {
+    exportToExcel({
+      filename: `supervisor_kpi_summary_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'KPI Summary',
+      title: 'Supervisor Executive KPI Performance Summary',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: [
+        { header: 'KPI Metric', key: 'metric' },
+        { header: 'Metric Value', key: 'value' },
+        { header: 'Details / Context', key: 'details' },
+      ],
+      data: [
+        { metric: 'Total Visits Logged', value: filtered.length, details: 'Visits logged under current filters' },
+        { metric: 'Outlets Covered', value: outletsCount, details: 'Unique retail outlets visited' },
+        { metric: 'Skipped Visits (No Visit)', value: noVisitCount, details: 'Visits logged as skipped outlet' },
+        { metric: 'Assets Checked', value: filtered.length, details: 'Chiller and freezer units inspected' },
+        { metric: 'Temperature Breaches', value: breachesCount, details: `${breachPct} temperature breach rate` },
+        { metric: 'FEFO Compliance Rate', value: fefoPct, details: 'Assets following FEFO principles' },
+      ],
+    });
+  };
+
+  const countFreqHelper = (arr: any[], fn: (r: any) => string | number) => {
+    const m: Record<string, number> = {};
+    arr.forEach((r) => {
+      const k = fn(r);
+      m[k] = (m[k] || 0) + 1;
+    });
+    return m;
+  };
+
+  const detailedVisitColumns = [
+    { header: 'Date', key: 'createdAt', formatter: (val: any) => val ? new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
+    { header: 'Visit ID', key: 'visitId' },
+    { header: 'Manager', key: 'mgr' },
+    { header: 'Supervisor', key: 'sup' },
+    { header: 'Outlet Name', key: 'cust' },
+    { header: 'Shop Code', key: 'code' },
+    { header: 'Route', key: 'rt' },
+    { header: 'Channel', key: 'ch' },
+    { header: 'Class', key: 'gr' },
+    { header: 'Asset', key: 'atype' },
+    { header: 'Temp (°C)', key: 'temp', formatter: (val: any) => val !== undefined && val !== null ? `${val}°C` : '—' },
+    { header: 'Status', key: 'ok', formatter: (val: any) => val ? 'OK' : 'Breach' },
+    { header: 'Action Required', key: 'action', formatter: (val: any) => val || 'None' },
+  ];
+
+  const handleExportTrendChart = () => {
+    exportToExcel({
+      filename: `supervisor_visits_trend_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Visits Over Time',
+      title: 'Weekly Visits Trend - Full Visit Drill-Down Records',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: detailedVisitColumns,
+      data: filtered,
+    });
+  };
+
+  const handleExportSupervisorChart = () => {
+    exportToExcel({
+      filename: `supervisor_scorecard_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Supervisor Scorecard',
+      title: 'Supervisor Scorecard - Full Visit Drill-Down Records',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: detailedVisitColumns,
+      data: filtered,
+    });
+  };
+
+  const handleExportColdChainChart = () => {
+    const coldChainReportRows = reportRows['cold-chain'] || [];
+    const coldChainData = coldChainReportRows.length > 0
+      ? coldChainReportRows
+      : filtered.map((r) => ({
+          date: r.createdAt,
+          visitId: r.visitId,
+          channel: r.ch,
+          manager: r.mgr,
+          supervisor: r.sup,
+          outletName: r.cust,
+          classification: r.gr,
+          assetType: r.atype,
+          temperature: r.temp,
+          tempStatus: r.ok ? 'In Range' : 'Breach',
+          actionRemarks: r.action || '—',
+        }));
+
+    exportToExcel({
+      filename: `supervisor_cold_chain_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Cold Chain Status',
+      title: 'Asset Temperature & Cold Chain Inspection Status',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: [
+        { header: 'Inspection Date', key: 'date', formatter: (val) => val ? new Date(val).toLocaleString() : '—' },
+        { header: 'Visit ID', key: 'visitId' },
+        { header: 'Manager', key: 'manager' },
+        { header: 'Supervisor', key: 'supervisor' },
+        { header: 'Channel', key: 'channel' },
+        { header: 'Outlet Name', key: 'outletName' },
+        { header: 'Classification', key: 'classification' },
+        { header: 'Asset Type', key: 'assetType' },
+        { header: 'Asset Temp', key: 'assetTemp', formatter: (val, row) => val || (row.temperature !== undefined ? `${row.temperature}°C` : '—') },
+        { header: 'Temp Status', key: 'tempStatus', formatter: (val, row) => val || (row.tempInRange ? 'In Range' : 'Breach') },
+        { header: 'Action Required / Remarks', key: 'actionRemarks', formatter: (val, row) => val || row.actionRequired || '—' },
+      ],
+      data: coldChainData,
+    });
+  };
+
+  const handleExportNpdChart = () => {
+    const dataToExport = filteredNpdRows.length > 0
+      ? filteredNpdRows
+      : filtered.map((r) => ({
+          date: r.createdAt,
+          visitId: r.visitId,
+          manager: r.mgr,
+          supervisor: r.sup,
+          channel: r.ch,
+          outletName: r.cust,
+          classification: r.gr,
+          skuName: 'All NPD SKUs',
+          availability: r.npd === 'A' || r.npd === 'YES' ? 'YES' : 'NO',
+        }));
+
+    exportToExcel({
+      filename: `supervisor_npd_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'NPD Availability',
+      title: 'New Product Development (NPD) Availability Report',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: [
+        { header: 'Date', key: 'date', formatter: (val) => val ? new Date(val).toLocaleString() : '—' },
+        { header: 'Visit ID', key: 'visitId' },
+        { header: 'Manager', key: 'manager' },
+        { header: 'Supervisor', key: 'supervisor' },
+        { header: 'Channel', key: 'channel' },
+        { header: 'Outlet Name', key: 'outletName' },
+        { header: 'Classification', key: 'classification' },
+        { header: 'SKU Name', key: 'skuName' },
+        { header: 'NPD Availability', key: 'availability', formatter: (val, row) => val || row.status || '—' },
+      ],
+      data: dataToExport,
+    });
+  };
+
+  const handleExportPowerSkuChart = () => {
+    const pskuReportRows = reportRows.psku || [];
+    const dataToExport = pskuReportRows.length > 0 ? pskuReportRows : filtered;
+
+    exportToExcel({
+      filename: `supervisor_powersku_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Power SKU Availability',
+      title: 'Power SKU Focus Product Presence Report',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: [
+        { header: 'Date', key: 'date', formatter: (val) => val ? new Date(val).toLocaleString() : '—' },
+        { header: 'Visit ID', key: 'visitId' },
+        { header: 'Manager', key: 'manager' },
+        { header: 'Supervisor', key: 'supervisor' },
+        { header: 'Channel', key: 'channel' },
+        { header: 'Outlet Name', key: 'outletName' },
+        { header: 'Classification', key: 'classification' },
+        { header: 'SKU Name', key: 'skuName' },
+        { header: 'Power SKU Availability', key: 'availability', formatter: (val, row) => val || row.status || '—' },
+      ],
+      data: dataToExport,
+    });
+  };
+
+  const handleExportClassificationDairyChart = () => {
+    const visitLookup = new Map(filteredForClassCharts.map((row) => [row.visitId, row]));
+    const dairyRows = (reportRows.classificationDairy || []).filter((r: any) => visitLookup.has(r.visitId));
+    const dataToExport = dairyRows.length > 0 ? dairyRows : filtered;
+
+    exportToExcel({
+      filename: `supervisor_classification_dairy_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Dairy Classification',
+      title: 'Outlet Classification Distribution - Dairy Vertical',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: [
+        { header: 'Date', key: 'date', formatter: (val) => val ? new Date(val).toLocaleString() : '—' },
+        { header: 'Visit ID', key: 'visitId' },
+        { header: 'Manager', key: 'manager' },
+        { header: 'Supervisor', key: 'supervisor' },
+        { header: 'Channel', key: 'channel' },
+        { header: 'Outlet Code', key: 'outletCode' },
+        { header: 'Outlet Name', key: 'outletName' },
+        { header: 'Classification Grade', key: 'class', formatter: (val, row) => val || row.gr || 'Not classified' },
+      ],
+      data: dataToExport,
+    });
+  };
+
+  const handleExportClassificationIceCreamChart = () => {
+    const visitLookup = new Map(filteredForClassCharts.map((row) => [row.visitId, row]));
+    const iceRows = (reportRows.classificationIceCream || []).filter((r: any) => visitLookup.has(r.visitId));
+    const dataToExport = iceRows.length > 0 ? iceRows : filtered;
+
+    exportToExcel({
+      filename: `supervisor_classification_ice_cream_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Ice Cream Classification',
+      title: 'Outlet Classification Distribution - Ice Cream Vertical',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: [
+        { header: 'Date', key: 'date', formatter: (val) => val ? new Date(val).toLocaleString() : '—' },
+        { header: 'Visit ID', key: 'visitId' },
+        { header: 'Manager', key: 'manager' },
+        { header: 'Supervisor', key: 'supervisor' },
+        { header: 'Channel', key: 'channel' },
+        { header: 'Outlet Code', key: 'outletCode' },
+        { header: 'Outlet Name', key: 'outletName' },
+        { header: 'Classification Grade', key: 'class', formatter: (val, row) => val || row.gr || 'Not classified' },
+      ],
+      data: dataToExport,
+    });
+  };
+
+  const handleExportNoVisits = () => {
+    exportToExcel({
+      filename: `supervisor_skipped_visits_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'No Visits',
+      title: 'Skipped Outlet / No Visit Record Log',
+      filterSummary: activeNote,
+      userRole: userRole || 'Supervisor',
+      columns: [
+        { header: 'Visit Date', key: 'createdAt', formatter: (val) => val ? new Date(val).toLocaleString() : '—' },
+        { header: 'Visit ID', key: 'visitId' },
+        { header: 'Manager', key: 'mgr' },
+        { header: 'Supervisor', key: 'sup' },
+        { header: 'Channel', key: 'ch' },
+        { header: 'Outlet Name', key: 'cust' },
+        { header: 'Reason / Remarks', key: 'action' },
+      ],
+      data: noVisitRows,
+    });
+  };
 
   // Chart Rendering Hook
   useEffect(() => {
@@ -1378,10 +1651,14 @@ export default function SupervisorDashboard() {
           </div>
 
           <button className="reset" onClick={resetFilters}>Reset</button>
+          <ExportButton onClick={handleExportAllFilteredVisits} label="Export Filtered Data" variant="default" />
         </div>
 
         {/* Active description */}
-        <div className="active-note" dangerouslySetInnerHTML={{ __html: activeNote }} />
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="active-note flex-grow" dangerouslySetInnerHTML={{ __html: activeNote }} />
+          <ExportButton onClick={handleExportKpis} label="Export KPI Summary" variant="compact" />
+        </div>
 
         {/* KPI Cards */}
         <div className="kpis">
@@ -1420,8 +1697,13 @@ export default function SupervisorDashboard() {
         {/* No Visit Details */}
         {noVisitRows.length > 0 && (
           <div className="panel" style={{ marginBottom: '12px' }}>
-            <h3>No Visit Details</h3>
-            <div className="psub">Skipped outlet visits with recorded reasons</div>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3>No Visit Details</h3>
+                <div className="psub">Skipped outlet visits with recorded reasons</div>
+              </div>
+              <ExportButton onClick={handleExportNoVisits} label="Export Excel" variant="compact" />
+            </div>
             <div className="overflow-x-auto" style={{ marginTop: '10px' }}>
               <table className="w-full text-[12px]">
                 <thead>
@@ -1452,8 +1734,13 @@ export default function SupervisorDashboard() {
         {/* Row 1 Grid */}
         <div style={{ marginBottom: '16px' }}>
           <div className="panel">
-            <h3>Visits Over Time</h3>
-            <div className="psub">Weekly visits (filtered)</div>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3>Visits Over Time</h3>
+                <div className="psub">Weekly visits (filtered)</div>
+              </div>
+              <ExportButton onClick={handleExportTrendChart} label="Export" variant="compact" />
+            </div>
             <div className="chart-box">
               <canvas ref={canvasTrendRef}></canvas>
             </div>
@@ -1463,15 +1750,25 @@ export default function SupervisorDashboard() {
         {/* Row 2 Grid */}
         <div className="grid">
           <div className="panel">
-            <h3>Supervisor Scorecard</h3>
-            <div className="psub">Visits per supervisor (filtered)</div>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3>Supervisor Scorecard</h3>
+                <div className="psub">Visits per supervisor (filtered)</div>
+              </div>
+              <ExportButton onClick={handleExportSupervisorChart} label="Export" variant="compact" />
+            </div>
             <div className="chart-box">
               <canvas ref={canvasSuperRef}></canvas>
             </div>
           </div>
           <div className="panel">
-            <h3>Cold Chain Status</h3>
-            <div className="psub">Asset temperature readings</div>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3>Cold Chain Status</h3>
+                <div className="psub">Asset temperature readings</div>
+              </div>
+              <ExportButton onClick={handleExportColdChainChart} label="Export" variant="compact" />
+            </div>
             <div className="chart-sm">
               <canvas ref={canvasTempRef}></canvas>
             </div>
@@ -1481,29 +1778,49 @@ export default function SupervisorDashboard() {
         {/* Row 3 Grid */}
         <div className="grid3">
           <div className="panel">
-            <h3>NPD Availability</h3>
-            <div className="psub">New-product presence</div>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3>NPD Availability</h3>
+                <div className="psub">New-product presence</div>
+              </div>
+              <ExportButton onClick={handleExportNpdChart} label="Export" variant="compact" />
+            </div>
             <div className="chart-sm">
               <canvas ref={canvasNpdRef}></canvas>
             </div>
           </div>
           <div className="panel">
-            <h3>Power SKU Availability</h3>
-            <div className="psub">Focus SKU presence</div>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3>Power SKU Availability</h3>
+                <div className="psub">Focus SKU presence</div>
+              </div>
+              <ExportButton onClick={handleExportPowerSkuChart} label="Export" variant="compact" />
+            </div>
             <div className="chart-sm">
               <canvas ref={canvasPskuRef}></canvas>
             </div>
           </div>
           <div className="panel">
-            <h3>Outlets by Classification · Dairy</h3>
-            <div className="psub">Visit distribution A–E (Dairy)</div>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3>Outlets by Classification · Dairy</h3>
+                <div className="psub">Visit distribution A–E (Dairy)</div>
+              </div>
+              <ExportButton onClick={handleExportClassificationDairyChart} label="Export" variant="compact" />
+            </div>
             <div className="chart-sm">
               <canvas ref={canvasClassDairyRef}></canvas>
             </div>
           </div>
           <div className="panel">
-            <h3>Outlets by Classification · Ice Cream</h3>
-            <div className="psub">Visit distribution A–E (Ice Cream)</div>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3>Outlets by Classification · Ice Cream</h3>
+                <div className="psub">Visit distribution A–E (Ice Cream)</div>
+              </div>
+              <ExportButton onClick={handleExportClassificationIceCreamChart} label="Export" variant="compact" />
+            </div>
             <div className="chart-sm">
               <canvas ref={canvasClassIceRef}></canvas>
             </div>

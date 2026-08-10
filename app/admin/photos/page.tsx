@@ -19,6 +19,8 @@ import {
   CheckCircle2,
   SlidersHorizontal,
 } from 'lucide-react';
+import { exportToExcel } from '@/utils/excelExport';
+import { ExportButton } from '@/components/ui/ExportButton';
 
 export interface AuditPhoto {
   photoId: string;
@@ -150,6 +152,7 @@ export default function AuditPhotoGalleryPage() {
         </div>
 
         <div className="flex items-center gap-3 self-start md:self-auto">
+          <ExportButton onClick={handleExportPhotos} label="Export Log" variant="secondary" />
           <button
             onClick={() => fetchPhotos(true)}
             disabled={isRefreshing}

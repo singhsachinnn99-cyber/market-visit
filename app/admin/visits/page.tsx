@@ -12,6 +12,8 @@ import {
   CheckCircle2, Clock, Filter,
 } from 'lucide-react';
 import { Visit, VisitPhoto, NPDResponse, VisitAsset, VisitPowerSkuResult } from '@/types';
+import { exportToExcel } from '@/utils/excelExport';
+import { ExportButton } from '@/components/ui/ExportButton';
 
 // ─── Shared table helpers ────────────────────────────────────
 function TH({ children, right }: { children: React.ReactNode; right?: boolean }) {
@@ -182,11 +184,34 @@ export default function VisitLogsPage() {
   const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   useEffect(() => { setCurrentPage(1); }, [search, statusFilter]);
 
+  const handleExportVisits = () => {
+    exportToExcel({
+      filename: `visit_logs_${new Date().toISOString().slice(0, 10)}`,
+      sheetName: 'Visit Logs',
+      title: 'Field Visit Audit Logs Report',
+      filterSummary: search ? `Search: "${search}" | Status: ${statusFilter}` : `Status: ${statusFilter}`,
+      columns: [
+        { header: 'Visit Date', key: 'visit_datetime', formatter: (val, row) => val ? new Date(val).toLocaleString() : (row.createdAt ? new Date(row.createdAt).toLocaleString() : '—') },
+        { header: 'Visit ID', key: 'visitId' },
+        { header: 'Supervisor ID', key: 'supervisorId' },
+        { header: 'Customer / Shop Code', key: 'customerCode' },
+        { header: 'Route Code', key: 'routeCode' },
+        { header: 'Visit Type', key: 'visit_type', formatter: (val) => val || 'Standard Visit' },
+        { header: 'Reason / Category', key: 'reason_category', formatter: (val, row) => val || row.reason || '—' },
+        { header: 'Latitude', key: 'latitude' },
+        { header: 'Longitude', key: 'longitude' },
+        { header: 'Status', key: 'status' },
+      ],
+      data: filtered,
+    });
+  };
+
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <PageHeader title="Visit Logs" sub="Browse and inspect supervisor field visit audit entries." count={filtered.length} />
+        <ExportButton onClick={handleExportVisits} label="Export Visit Logs" variant="default" />
       </div>
 
       {/* Toolbar */}

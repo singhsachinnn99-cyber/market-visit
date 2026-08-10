@@ -1,11 +1,26 @@
 // Shared TypeScript Type Definitions for Supervisor Field Visit Management System
 
-export type UserRole = 'GM' | 'BDM' | 'Sales Manager' | 'Admin' | 'Sub-Admin' | 'Supervisor' | 'Fleet' | 'Maintenance';
-export type UserStatus = 'Active' | 'Inactive';
-export type VisitStatus = 'Draft' | 'Submitted';
-export type AssetType = 'Chiller' | 'Freezer';
-export type ActionRequiredType = 'Working' | 'Not working' | 'Working But Service Required' | 'Others' | 'None';
-export type NPDStatus = 'Available' | 'Not Available' | 'Not Required';
+export type UserRole =
+  | "GM"
+  | "BDM"
+  | "Sales Manager"
+  | "Admin"
+  | "Sub-Admin"
+  | "Supervisor"
+  | "Fleet"
+  | "Maintenance";
+export type UserStatus = "Active" | "Inactive";
+export type VisitStatus = "Draft" | "Submitted";
+export type AssetType = "Chiller" | "Freezer";
+export type ActionRequiredType =
+  | "Working"
+  | "Not working"
+  | "Working But Service Required"
+  | "Others"
+  | "None";
+export type NPDStatus = "Available" | "Not Available" | "Not Required";
+
+//  chnages
 
 export interface User {
   id: string;
@@ -64,7 +79,7 @@ export interface Visit {
   visitId: string;
   supervisorId: string; // User.id
   cust_rt_id: string;
-  visit_type?: 'Visit' | 'No Visit';
+  visit_type?: "Visit" | "No Visit";
   reason_category?: string;
   reason?: string;
   latitude: number;
@@ -100,7 +115,7 @@ export interface VisitAsset {
 export interface VisitPhoto {
   photoId: string;
   visitId: string;
-  category: 'Dairy' | 'Beverages' | 'Ice Cream' | 'Vegetables';
+  category: "Dairy" | "Beverages" | "Ice Cream" | "Vegetables";
   cloudinaryUrl: string;
   publicId: string;
   uploadedAt: string; // ISO string
@@ -119,7 +134,6 @@ export interface VisitPowerSkuResult {
   skuCode: string;
   status: NPDStatus;
 }
-
 
 export interface AuditLog {
   logId: string;
@@ -155,7 +169,13 @@ export interface DashboardStats {
   coveragePercent: number;
   tempBreachPercent: number;
   visitsPerDay: { date: string; count: number }[];
-  coveragePerRoute: { routeCode: string; routeName: string; visited: number; total: number; coverage: number }[];
+  coveragePerRoute: {
+    routeCode: string;
+    routeName: string;
+    visited: number;
+    total: number;
+    coverage: number;
+  }[];
   supervisorPerformance: {
     supervisorId: string;
     supervisorName: string;
@@ -191,7 +211,7 @@ export interface VisitWizardState {
   observation?: string;
   photos: {
     photoId: string;
-    category: 'Dairy' | 'Beverages' | 'Ice Cream' | 'Vegetables';
+    category: "Dairy" | "Beverages" | "Ice Cream" | "Vegetables";
     cloudinaryUrl: string;
     publicId: string;
     uploadedAt: string;
@@ -205,7 +225,7 @@ export interface VisitWizardState {
   accuracy?: number;
   currentStep: number;
   status: VisitStatus;
-  visit_type?: 'Visit' | 'No Visit';
+  visit_type?: "Visit" | "No Visit";
   reason_category?: string;
   reason?: string;
 }

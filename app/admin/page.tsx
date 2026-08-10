@@ -5,7 +5,6 @@ import { Chart } from 'chart.js/auto';
 import { useTheme } from '@/providers/theme-provider';
 import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
 import DrilldownReportModal from '@/components/dashboard/DrilldownReportModal';
-import { PhotoGallerySection } from '@/components/dashboard/PhotoGallerySection';
 import { useSession } from 'next-auth/react';
 import { isFleetRole, getAllowedReports } from '@/lib/roles';
 
@@ -1559,16 +1558,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Photo Gallery Tracking */}
-        <PhotoGallerySection
-          photos={photos}
-          fFrom={fFrom}
-          fTo={fTo}
-          fMgr={fMgr}
-          fSuper={fSuper}
-          fChannel={fChannel}
-          fCust={fCust}
-        />
+
 
         {/* Visit Details Table */}
         <div className="panel tbl">

@@ -104,6 +104,7 @@ export interface VisitPhoto {
   cloudinaryUrl: string;
   publicId: string;
   uploadedAt: string; // ISO string
+  appName?: string;
 }
 
 export interface NPDResponse {

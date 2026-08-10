@@ -24,6 +24,7 @@ import {
   RefreshCw,
   Activity,
   ArrowLeft,
+  Camera,
 } from 'lucide-react';
 
 const navGroups = [
@@ -38,6 +39,7 @@ const navGroups = [
   {
     label: 'Analytics',
     items: [
+      { name: 'Audit Photo Gallery', path: '/admin/photos', icon: Camera },
       { name: 'Reports', path: '/admin/reports', icon: FileBarChart2 },
       { name: 'Routes', path: '/admin/routes', icon: Map },
     ],
@@ -67,6 +69,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const adminNavActions = [
     { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+    { name: 'Audit Photo Gallery', path: '/admin/photos', icon: Camera },
     { name: 'Visits Log', path: '/admin/visits', icon: CalendarCheck },
     { name: 'Supervisors List', path: '/admin/supervisors', icon: Users },
     { name: 'Reports & Stats', path: '/admin/reports', icon: FileBarChart2 },

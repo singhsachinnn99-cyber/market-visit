@@ -35,6 +35,7 @@ function mapRowToPhoto(row: any): VisitPhoto {
     cloudinaryUrl: row.cloudinaryUrl,
     publicId: row.publicId,
     uploadedAt: row.uploadedAt instanceof Date ? row.uploadedAt.toISOString() : row.uploadedAt,
+    appName: row.appName || 'Chrome',
   };
 }
 
@@ -160,6 +161,7 @@ async function ensureVisitPhotoTableSchema(connection: mysql.Connection | mysql.
         \`cloudinaryUrl\` TEXT NOT NULL,
         \`publicId\` VARCHAR(191) NOT NULL,
         \`uploadedAt\` DATETIME NOT NULL,
+        \`appName\` VARCHAR(191) NULL DEFAULT 'Chrome',
         INDEX \`idx_photo_visit\` (\`visitId\`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
@@ -179,6 +181,10 @@ async function ensureVisitPhotoTableSchema(connection: mysql.Connection | mysql.
       } else {
         await connection.execute("ALTER TABLE `VisitPhoto` ADD COLUMN `cloudinaryUrl` TEXT NOT NULL");
       }
+    }
+
+    if (!existingVpColumns.has('appName')) {
+      await connection.execute("ALTER TABLE `VisitPhoto` ADD COLUMN `appName` VARCHAR(191) NULL DEFAULT 'Chrome'");
     }
   } catch (e) {
     // Non-blocking VisitPhoto migration
@@ -354,19 +360,20 @@ export const visitRepository = {
     await ensureVisitPhotoTableSchema(executor);
     for (const p of photos) {
       const uploadedAtVal = toMysqlDatetime(p.uploadedAt) || new Date();
+      const appNameVal = p.appName || 'Chrome';
       try {
         await executor.execute(
-          `INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`) 
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, uploadedAtVal]
+          `INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`, \`appName\`) 
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, uploadedAtVal, appNameVal]
         );
       } catch (err: any) {
         if (err.message && err.message.includes('Unknown column')) {
           await ensureVisitPhotoTableSchema(executor);
           await executor.execute(
-            `INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`) 
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, uploadedAtVal]
+            `INSERT INTO \`VisitPhoto\` (\`photoId\`, \`visitId\`, \`category\`, \`cloudinaryUrl\`, \`publicId\`, \`uploadedAt\`, \`appName\`) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [p.photoId, p.visitId, p.category, p.cloudinaryUrl, p.publicId, uploadedAtVal, appNameVal]
           );
         } else {
           throw err;

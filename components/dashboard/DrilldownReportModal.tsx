@@ -235,7 +235,9 @@ export default function DrilldownReportModal({
 
       if (channel) channels.add(channel);
       if (manager) managers.add(manager);
-      if (supervisor) supervisors.add(supervisor);
+      if (supervisor && supervisor.toUpperCase() !== 'INTERNAL' && supervisor.toUpperCase() !== 'SAMRA') {
+        supervisors.add(supervisor);
+      }
       if (routeCode) routes.add(routeCode);
       if (outletName) outlets.add(outletName);
       if (classification) classifications.add(classification);

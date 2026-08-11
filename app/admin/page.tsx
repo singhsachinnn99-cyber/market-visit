@@ -110,15 +110,24 @@ export default function AdminDashboardPage() {
 
   // 2. Supervisor Options: Filtered strictly by Manager if selected, or all supervisors if "All Managers" selected
   const supOptions = useMemo(() => {
+    const isExcluded = (s: string) => {
+      const upper = (s || '').toUpperCase().trim();
+      return upper === 'INTERNAL' || upper === 'SAMRA';
+    };
     if (fMgr) {
+      let list: string[] = [];
       if (managerSupervisorMap[fMgr] && managerSupervisorMap[fMgr].length > 0) {
-        return managerSupervisorMap[fMgr];
+        list = managerSupervisorMap[fMgr];
+      } else {
+        list = Array.from(new Set(rows.filter((r) => r.mgr === fMgr).map((r) => r.sup))).filter(Boolean);
       }
-      return Array.from(new Set(rows.filter((r) => r.mgr === fMgr).map((r) => r.sup))).filter(Boolean).sort();
+      return list.filter((s) => !isExcluded(s)).sort();
     }
     const supsFromRows = rows.map((r) => r.sup);
     const supsFromMap = Object.values(managerSupervisorMap).flat();
-    return Array.from(new Set([...supsFromRows, ...supsFromMap])).filter(Boolean).sort();
+    return Array.from(new Set([...supsFromRows, ...supsFromMap]))
+      .filter((s) => Boolean(s) && !isExcluded(s))
+      .sort();
   }, [rows, fMgr, managerSupervisorMap]);
 
   // 3. Channel Options: filtered by Manager and Supervisor

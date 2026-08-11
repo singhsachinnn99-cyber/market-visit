@@ -24,6 +24,8 @@ export async function GET(req: NextRequest) {
     const dateParam = searchParams.get('date'); // 'YYYY-MM-DD' or 'all'
     const appNameParam = searchParams.get('appName'); // application name or 'all'
     const supervisorIdParam = searchParams.get('supervisorId');
+    const supervisorParam = searchParams.get('supervisor'); // supervisor name or 'all'
+    const outletParam = searchParams.get('outlet'); // outlet name or 'all'
     const searchParam = searchParams.get('search'); // search outlet or supervisor or route
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '12', 10)));
@@ -113,6 +115,17 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    // Dynamic extraction of distinct Supervisors & Outlets from database
+    const EXCLUDED_SUPS = new Set(['INTERNAL', 'SAMRA', 'ADMIN']);
+    const dbSupSet = new Set<string>();
+    const dbOutletSet = new Set<string>();
+    allEnrichedPhotos.forEach((p: any) => {
+      if (p.supervisor && !EXCLUDED_SUPS.has(p.supervisor.toUpperCase())) dbSupSet.add(p.supervisor);
+      if (p.outlet) dbOutletSet.add(p.outlet);
+    });
+    const supervisors = Array.from(dbSupSet).sort();
+    const outlets = Array.from(dbOutletSet).sort();
+
     // Filter by Date
     let filtered = allEnrichedPhotos;
 
@@ -128,6 +141,18 @@ export async function GET(req: NextRequest) {
     if (appNameParam && appNameParam !== 'all') {
       const targetApp = appNameParam.trim().toLowerCase();
       filtered = filtered.filter((p: any) => p.appName.toLowerCase() === targetApp);
+    }
+
+    // Filter by Supervisor
+    if (supervisorParam && supervisorParam !== 'all') {
+      const targetSup = supervisorParam.trim().toLowerCase();
+      filtered = filtered.filter((p: any) => p.supervisor.toLowerCase() === targetSup);
+    }
+
+    // Filter by Outlet
+    if (outletParam && outletParam !== 'all') {
+      const targetOutlet = outletParam.trim().toLowerCase();
+      filtered = filtered.filter((p: any) => p.outlet.toLowerCase() === targetOutlet);
     }
 
     // Search filter
@@ -156,6 +181,8 @@ export async function GET(req: NextRequest) {
       success: true,
       photos: paginatedPhotos,
       applications,
+      supervisors,
+      outlets,
       pagination: {
         totalCount,
         totalPages,

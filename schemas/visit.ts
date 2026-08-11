@@ -13,7 +13,7 @@ export const visitAssetSchema = z.object({
   assetType: z.enum(['Chiller', 'Freezer'] as const),
   temperature: z.number({ message: 'Temperature must be a number' }),
   tempInRange: z.boolean(),
-  actionRequired: z.enum(['Working', 'Not working', 'Working But Service Required', 'Others', 'None'] as const),
+  actionRequired: z.enum(['Select Status', 'Working', 'Not working', 'Working But Service Required', 'Others', 'None'] as const),
   observation: z.string().optional().default(''),
   isFirstInFlow: z.boolean().optional().default(false),
   fefoFollowed: z.boolean().optional().default(false),
@@ -35,6 +35,7 @@ export const visitSchema = z.object({
   visit_datetime: z.string().optional(),
   reason_category: z.string().optional(),
   reason: z.string().optional(),
+  observation: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.visit_type === 'Visit' && (!data.cust_rt_id || data.cust_rt_id.trim() === '')) {
     ctx.addIssue({
@@ -80,6 +81,7 @@ export const visitDraftSchema = z.object({
   visit_datetime: z.string().optional(),
   reason_category: z.string().optional(),
   reason: z.string().optional(),
+  observation: z.string().optional(),
 });
 
 export type VisitInput = z.infer<typeof visitSchema>;

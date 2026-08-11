@@ -145,7 +145,9 @@ export async function GET(req: NextRequest) {
     });
 
     // Group into managerSupervisorMap
+    const EXCLUDED_SUPS = new Set(['INTERNAL', 'SAMRA']);
     supToMgrMap.forEach((mgrName, supName) => {
+      if (EXCLUDED_SUPS.has(supName.toUpperCase())) return;
       if (!managerSupervisorMap[mgrName]) {
         managerSupervisorMap[mgrName] = [];
       }
@@ -155,7 +157,7 @@ export async function GET(req: NextRequest) {
     });
 
     Object.keys(managerSupervisorMap).forEach((m) => {
-      managerSupervisorMap[m].sort();
+      managerSupervisorMap[m] = managerSupervisorMap[m].filter((s) => !EXCLUDED_SUPS.has(s.toUpperCase())).sort();
     });
 
     const skuMap = new Map<string, any>(skuRows.map((sku: any) => [sku.skuCode, sku]));

@@ -13,6 +13,7 @@ export type UserStatus = "Active" | "Inactive";
 export type VisitStatus = "Draft" | "Submitted";
 export type AssetType = "Chiller" | "Freezer";
 export type ActionRequiredType =
+  | "Select Status"
   | "Working"
   | "Not working"
   | "Working But Service Required"
@@ -80,6 +81,7 @@ export interface Visit {
   visit_type?: "Visit" | "No Visit";
   reason_category?: string;
   reason?: string;
+  observation?: string;
   latitude: number;
   longitude: number;
   accuracy: number;

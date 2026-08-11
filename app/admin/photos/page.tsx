@@ -43,12 +43,16 @@ export default function AuditPhotoGalleryPage() {
 
   const [selectedDate, setSelectedDate] = useState<string>(getTodayStr());
   const [selectedApp, setSelectedApp] = useState<string>('all');
+  const [selectedSupervisor, setSelectedSupervisor] = useState<string>('all');
+  const [selectedOutlet, setSelectedOutlet] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize] = useState<number>(12);
 
   const [photos, setPhotos] = useState<AuditPhoto[]>([]);
   const [applications, setApplications] = useState<string[]>([]);
+  const [supervisors, setSupervisors] = useState<string[]>([]);
+  const [outlets, setOutlets] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [selectedPhoto, setSelectedPhoto] = useState<AuditPhoto | null>(null);
@@ -71,6 +75,8 @@ export default function AuditPhotoGalleryPage() {
         else params.set('date', 'all');
 
         if (selectedApp && selectedApp !== 'all') params.set('appName', selectedApp);
+        if (selectedSupervisor && selectedSupervisor !== 'all') params.set('supervisor', selectedSupervisor);
+        if (selectedOutlet && selectedOutlet !== 'all') params.set('outlet', selectedOutlet);
         if (searchQuery.trim()) params.set('search', searchQuery.trim());
         params.set('page', currentPage.toString());
         params.set('limit', pageSize.toString());
@@ -83,6 +89,12 @@ export default function AuditPhotoGalleryPage() {
           if (data.applications && Array.isArray(data.applications)) {
             setApplications(data.applications);
           }
+          if (data.supervisors && Array.isArray(data.supervisors)) {
+            setSupervisors(data.supervisors);
+          }
+          if (data.outlets && Array.isArray(data.outlets)) {
+            setOutlets(data.outlets);
+          }
           if (data.pagination) {
             setPagination(data.pagination);
           }
@@ -94,7 +106,7 @@ export default function AuditPhotoGalleryPage() {
         setIsRefreshing(false);
       }
     },
-    [selectedDate, selectedApp, searchQuery, currentPage, pageSize]
+    [selectedDate, selectedApp, selectedSupervisor, selectedOutlet, searchQuery, currentPage, pageSize]
   );
 
   useEffect(() => {
@@ -104,6 +116,8 @@ export default function AuditPhotoGalleryPage() {
   const handleResetFilters = () => {
     setSelectedDate(getTodayStr());
     setSelectedApp('all');
+    setSelectedSupervisor('all');
+    setSelectedOutlet('all');
     setSearchQuery('');
     setCurrentPage(1);
   };
@@ -113,7 +127,7 @@ export default function AuditPhotoGalleryPage() {
       filename: `photo_audits_${new Date().toISOString().slice(0, 10)}`,
       sheetName: 'Photo Audits',
       title: 'Audit Photo Gallery Metadata Log',
-      filterSummary: `Date: ${selectedDate || 'All'} | Application: ${selectedApp} | Search: "${searchQuery}"`,
+      filterSummary: `Date: ${selectedDate || 'All'} | App: ${selectedApp} | Supervisor: ${selectedSupervisor} | Outlet: ${selectedOutlet} | Search: "${searchQuery}"`,
       columns: [
         { header: 'Upload Date', key: 'uploadedAt', formatter: (val: any) => val ? new Date(val).toLocaleString() : '—' },
         { header: 'Photo ID', key: 'photoId' },
@@ -199,7 +213,7 @@ export default function AuditPhotoGalleryPage() {
             <SlidersHorizontal className="h-4 w-4 text-accent" />
             Filter Gallery
           </div>
-          {(selectedDate || selectedApp !== 'all' || searchQuery) && (
+          {(selectedDate || selectedApp !== 'all' || selectedSupervisor !== 'all' || selectedOutlet !== 'all' || searchQuery) && (
             <button
               onClick={handleResetFilters}
               className="text-[11px] font-medium text-accent hover:underline cursor-pointer"
@@ -209,7 +223,7 @@ export default function AuditPhotoGalleryPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
           {/* Date Selector (Default: Today) */}
           <div className="space-y-1">
             <label className="text-[11px] font-semibold text-[var(--text-muted)] flex items-center gap-1.5">
@@ -245,6 +259,50 @@ export default function AuditPhotoGalleryPage() {
               {applications.map((app) => (
                 <option key={app} value={app}>
                   {app}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Supervisor Filter Slicer */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-[var(--text-muted)] flex items-center gap-1.5">
+              <User className="h-3.5 w-3.5 text-accent" /> Supervisors
+            </label>
+            <select
+              value={selectedSupervisor}
+              onChange={(e) => {
+                setSelectedSupervisor(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full text-xs px-3 py-2 rounded-xl bg-[var(--surface-2)] text-[var(--text-primary)] border border-[var(--border)] focus:outline-none focus:border-accent transition-colors cursor-pointer"
+            >
+              <option value="all">All Supervisors</option>
+              {supervisors.map((sup) => (
+                <option key={sup} value={sup}>
+                  {sup}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Outlet Name Filter Slicer */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-[var(--text-muted)] flex items-center gap-1.5">
+              <Store className="h-3.5 w-3.5 text-accent" /> Outlet Name
+            </label>
+            <select
+              value={selectedOutlet}
+              onChange={(e) => {
+                setSelectedOutlet(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full text-xs px-3 py-2 rounded-xl bg-[var(--surface-2)] text-[var(--text-primary)] border border-[var(--border)] focus:outline-none focus:border-accent transition-colors cursor-pointer"
+            >
+              <option value="all">All Outlets</option>
+              {outlets.map((outlet) => (
+                <option key={outlet} value={outlet}>
+                  {outlet}
                 </option>
               ))}
             </select>

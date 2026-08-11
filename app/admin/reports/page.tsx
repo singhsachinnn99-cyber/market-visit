@@ -69,7 +69,17 @@ export default function ReportsPage() {
 
   const { data: supervisors = [] } = useQuery<any[]>({
     queryKey: ['supervisors'],
-    queryFn: () => fetch('/api/supervisors').then(r => r.json()).then(d => d.filter((u: any) => u.role === 'Supervisor')),
+    queryFn: () =>
+      fetch('/api/supervisors')
+        .then((r) => r.json())
+        .then((d) =>
+          d.filter(
+            (u: any) =>
+              u.role === 'Supervisor' &&
+              u.name?.toUpperCase() !== 'INTERNAL' &&
+              u.name?.toUpperCase() !== 'SAMRA'
+          )
+        ),
   });
 
   const { data: stats, isLoading, isRefetching, refetch } = useQuery<DashboardStats>({

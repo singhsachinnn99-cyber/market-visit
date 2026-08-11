@@ -150,6 +150,8 @@ export default function SupervisorsPage() {
   };
 
   const filtered = supervisors.filter((sup) => {
+    const supUpper = (sup.name || '').toUpperCase().trim();
+    if (supUpper === 'INTERNAL' || supUpper === 'SAMRA') return false;
     const q = search.toLowerCase();
     return (sup.name.toLowerCase().includes(q) || sup.employeeCode.toLowerCase().includes(q) || sup.email.toLowerCase().includes(q)) &&
       (statusFilter === 'All' || sup.status === statusFilter);

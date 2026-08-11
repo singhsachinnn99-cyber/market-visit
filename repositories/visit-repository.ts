@@ -66,6 +66,9 @@ async function ensureVisitTableSchema(connection: mysql.Connection | mysql.PoolC
   if (!existingColumns.has('reason')) {
     migrations.push("ALTER TABLE `Visit` ADD COLUMN `reason` TEXT NULL");
   }
+  if (!existingColumns.has('observation')) {
+    migrations.push("ALTER TABLE `Visit` ADD COLUMN `observation` TEXT NULL");
+  }
   if (!existingColumns.has('sosAsPerBda')) {
     migrations.push("ALTER TABLE `Visit` ADD COLUMN `sosAsPerBda` TINYINT(1) NULL");
   }
@@ -342,10 +345,10 @@ export const visitRepository = {
     await executor.execute(
       `
       INSERT INTO \`Visit\` (
-        \`visitId\`, \`supervisorId\`, \`cust_rt_id\`, \`dairyClassification\`, \`iceCreamClassification\`, \`visit_type\`, \`reason_category\`, \`reason\`,
+        \`visitId\`, \`supervisorId\`, \`cust_rt_id\`, \`dairyClassification\`, \`iceCreamClassification\`, \`visit_type\`, \`reason_category\`, \`reason\`, \`observation\`,
         \`latitude\`, \`longitude\`, \`accuracy\`, \`status\`, 
         \`createdBy\`, \`visit_datetime\`, \`createdAt\`, \`updatedAt\`, \`sosAsPerBda\`
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         \`supervisorId\` = VALUES(\`supervisorId\`),
         \`cust_rt_id\` = VALUES(\`cust_rt_id\`),
@@ -354,6 +357,7 @@ export const visitRepository = {
         \`visit_type\` = VALUES(\`visit_type\`),
         \`reason_category\` = VALUES(\`reason_category\`),
         \`reason\` = VALUES(\`reason\`),
+        \`observation\` = VALUES(\`observation\`),
         \`latitude\` = VALUES(\`latitude\`),
         \`longitude\` = VALUES(\`longitude\`),
         \`accuracy\` = VALUES(\`accuracy\`),
@@ -371,7 +375,8 @@ export const visitRepository = {
         visit.iceCreamClassification || null,
         visit.visit_type || 'Visit',
         isNoVisit ? (visit.reason_category || null) : null,
-        isNoVisit ? (visit.reason || null) : null,
+        isNoVisit ? (visit.reason || null) : (visit.observation || null),
+        visit.observation || null,
         visit.latitude,
         visit.longitude,
         visit.accuracy,

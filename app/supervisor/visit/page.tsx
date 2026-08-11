@@ -69,6 +69,7 @@ function VisitWizardContent() {
   const [visitType, setVisitType] = useState<'Visit' | 'No Visit'>('Visit');
   const [reasonCategory, setReasonCategory] = useState('');
   const [reason, setReason] = useState('');
+  const [visitObservation, setVisitObservation] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
 
   // Multiple assets list
@@ -159,6 +160,7 @@ function VisitWizardContent() {
         setVisitType(localMatch.visit_type || 'Visit');
         setReasonCategory(localMatch.reason_category || '');
         setReason(localMatch.reason || '');
+        setVisitObservation(localMatch.observation || '');
         setAssets((localMatch.assets || []).map((a: any) => ({ ...a, visitId: resumeId })));
         setPhotos((localMatch.photos || []).map((p: any) => ({ ...p, visitId: resumeId })));
         setPowerSkuResults(localMatch.powerSkuResults || {});
@@ -183,7 +185,7 @@ function VisitWizardContent() {
           assetType: 'Chiller',
           temperature: undefined as number | undefined,
           tempInRange: true,
-          actionRequired: 'Working',
+          actionRequired: 'Select Status',
           observation: '',
           isFirstInFlow: false,
           fefoFollowed: false,
@@ -218,6 +220,7 @@ function VisitWizardContent() {
         visit_type: visitType,
         reason_category: reasonCategory,
         reason,
+        observation: visitObservation,
         customerName: activeCustomer?.customerName || '',
         assets,
         photos,
@@ -427,6 +430,7 @@ function VisitWizardContent() {
         visit_type: visitType,
         reason_category: reasonCategory,
         reason,
+        observation: visitObservation,
         cust_rt_id: effectiveCustomerId,
         routeCode: selectedRoute,
         customerCode: activeCustomer?.customerCode || '',
@@ -468,7 +472,7 @@ function VisitWizardContent() {
         assetType: 'Chiller',
         temperature: undefined as number | undefined,
         tempInRange: true,
-        actionRequired: 'Working',
+        actionRequired: 'Select Status',
         observation: '',
         isFirstInFlow: false,
         fefoFollowed: false,
@@ -778,6 +782,20 @@ function VisitWizardContent() {
                       </div>
                     </div>
                   )}
+
+                  {/* Observation & Action */}
+                  <div className="mt-3 space-y-1">
+                    <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>
+                      Observation & Action
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="Write observation & action details…"
+                      value={visitObservation}
+                      onChange={(e) => setVisitObservation(e.target.value)}
+                      className="form-input text-[12px] w-full p-2.5 rounded-xl border border-solid border-[var(--border-soft)]"
+                    />
+                  </div>
                 </div>
               ) : (
                 <p className="text-[11px] italic text-center py-4" style={{ color: 'var(--text-muted)' }}>
@@ -996,7 +1014,8 @@ function VisitWizardContent() {
                     </div>
                     <div>
                       <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Asset Status / Reason</label>
-                      <select value={ast.actionRequired} onChange={(e) => updateAssetField(ast.assetId, 'actionRequired', e.target.value)} className="form-input h-9 text-[12px]">
+                      <select value={ast.actionRequired || 'Select Status'} onChange={(e) => updateAssetField(ast.assetId, 'actionRequired', e.target.value)} className="form-input h-9 text-[12px]">
+                        <option value="Select Status">Select Status</option>
                         <option value="Working">Working</option>
                         <option value="Not working">Not working</option>
                         <option value="Working But Service Required">Working But Service Required</option>

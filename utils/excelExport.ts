@@ -9,7 +9,7 @@ export interface ExcelColumn<T = any> {
 export interface ExportToExcelOptions<T = any> {
   filename: string;
   sheetName?: string;
-  title: string;
+  title?: string;
   filterSummary?: string;
   userRole?: string;
   columns: ExcelColumn<T>[];
@@ -17,42 +17,15 @@ export interface ExportToExcelOptions<T = any> {
 }
 
 /**
- * Generic Excel Exporter that builds a clean spreadsheet with:
- * 1. Title block
- * 2. Active filters & Export Metadata block
- * 3. Blank separator
- * 4. Header row & formatted data rows
+ * Generic Excel Exporter that builds a clean spreadsheet starting with column headers.
  */
 export function exportToExcel<T = any>({
   filename,
   sheetName = 'Sheet1',
-  title,
-  filterSummary,
-  userRole,
   columns,
   data,
 }: ExportToExcelOptions<T>) {
   const sheetRows: any[][] = [];
-
-  // Title Row
-  sheetRows.push([title]);
-
-  // Export Metadata & Active Filters
-  const exportTime = new Date().toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-
-  const metadataParts: string[] = [`Exported At: ${exportTime}`];
-  if (userRole) metadataParts.push(`Role: ${userRole}`);
-  if (filterSummary) metadataParts.push(`Filters: ${filterSummary.replace(/<[^>]+>/g, '')}`);
-
-  sheetRows.push([metadataParts.join(' | ')]);
-  sheetRows.push([]); // Blank row separator
 
   // Header Row
   sheetRows.push(columns.map((c) => c.header));
@@ -81,7 +54,7 @@ export function exportToExcel<T = any>({
   // Set column widths based on max content length
   const colWidths = columns.map((col, colIdx) => {
     let maxLen = col.header.length;
-    sheetRows.slice(3).forEach((r) => {
+    sheetRows.slice(1).forEach((r) => {
       const val = r[colIdx];
       if (val !== undefined && val !== null) {
         maxLen = Math.max(maxLen, String(val).length);

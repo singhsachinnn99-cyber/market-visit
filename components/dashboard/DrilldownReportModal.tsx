@@ -163,10 +163,6 @@ function buildSummaryText(reportType: string, rows: Record<string, unknown>[]) {
 function exportWorkbook(title: string, summary: string, rows: Record<string, unknown>[], reportType: string, filterChip?: { key: string; value: string; label: string } | null) {
   const headers = REPORT_COLUMNS[reportType].map((col) => col.label);
   const sheetRows = [
-    ['Summary', summary],
-    ['Report', title],
-    ['Filter', filterChip ? `${filterChip.label}` : 'All rows'],
-    [],
     headers,
     ...rows.map((row) => REPORT_COLUMNS[reportType].map((col) => getCellValue(row, col.key))),
   ];

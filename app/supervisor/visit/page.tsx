@@ -419,8 +419,9 @@ function VisitWizardContent() {
     try {
       const validAssets = visitType === 'No Visit' ? [] : assets
         .filter(a => a.temperature !== undefined && a.temperature !== null && (a.temperature as any) !== '' && (a.temperature as any) !== '-')
-        .map(a => ({
+        .map((a, idx) => ({
           ...a,
+          assetId: a.assetId || `ast_${visitId}_${a.assetType}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
           temperature: Number(a.temperature) || 0,
           tempInRange: getTempInRange(a.assetType, Number(a.temperature))
         }));

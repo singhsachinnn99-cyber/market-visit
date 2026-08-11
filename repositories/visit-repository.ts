@@ -148,6 +148,19 @@ async function ensureVisitTableSchema(connection: mysql.Connection | mysql.PoolC
     if (!existingVaColumns.has('fefoFollowed')) {
       await connection.execute("ALTER TABLE `VisitAsset` ADD COLUMN `fefoFollowed` TINYINT(1) NULL DEFAULT 0");
     }
+
+    // Migrate PRIMARY KEY if table was created with legacy composite (visitId, assetType)
+    try {
+      const [pkColsResult]: any = await connection.execute(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'VisitAsset' AND CONSTRAINT_NAME = 'PRIMARY'"
+      );
+      const pkCols = (pkColsResult as any[]).map((r: any) => r.COLUMN_NAME);
+      if (pkCols.includes('visitId') && pkCols.includes('assetType') && !pkCols.includes('assetId')) {
+        // Backfill assetId where null
+        await connection.execute("UPDATE `VisitAsset` SET `assetId` = CONCAT('ast_', `visitId`, '_', `assetType`) WHERE `assetId` IS NULL OR `assetId` = ''");
+        await connection.execute("ALTER TABLE `VisitAsset` DROP PRIMARY KEY, ADD PRIMARY KEY (`assetId`)");
+      }
+    } catch (pkErr) {}
   } catch (e) {
     // Non-blocking VisitAsset migration
   }
@@ -446,18 +459,31 @@ export const visitRepository = {
   async insertAssets(assets: VisitAsset[], connection?: mysql.Connection | mysql.PoolConnection): Promise<void> {
     const executor = connection || pool;
     for (const ast of assets) {
-      const assetIdVal = ast.assetId || `ast_${Math.random().toString(36).substring(2, 9)}`;
+      const assetIdVal = ast.assetId || `ast_${ast.visitId}_${ast.assetType}_${Math.random().toString(36).substring(2, 9)}`;
       try {
         await executor.execute(
           `INSERT INTO \`VisitAsset\` (\`assetId\`, \`visitId\`, \`assetType\`, \`temperature\`, \`tempInRange\`, \`actionRequired\`, \`observation\`, \`isFirstInFlow\`, \`fefoFollowed\`) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             \`assetType\` = VALUES(\`assetType\`),
+             \`temperature\` = VALUES(\`temperature\`),
+             \`tempInRange\` = VALUES(\`tempInRange\`),
+             \`actionRequired\` = VALUES(\`actionRequired\`),
+             \`observation\` = VALUES(\`observation\`),
+             \`isFirstInFlow\` = VALUES(\`isFirstInFlow\`),
+             \`fefoFollowed\` = VALUES(\`fefoFollowed\`)`,
           [assetIdVal, ast.visitId, ast.assetType, ast.temperature ?? null, ast.tempInRange ? 1 : 0, ast.actionRequired, ast.observation || '', ast.isFirstInFlow ? 1 : 0, ast.fefoFollowed ? 1 : 0]
         );
       } catch (err: any) {
         if (err.message && err.message.includes('Unknown column')) {
           await executor.execute(
             `INSERT INTO \`VisitAsset\` (\`visitId\`, \`assetType\`, \`temperature\`, \`tempInRange\`, \`actionRequired\`, \`observation\`) 
-             VALUES (?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+               \`temperature\` = VALUES(\`temperature\`),
+               \`tempInRange\` = VALUES(\`tempInRange\`),
+               \`actionRequired\` = VALUES(\`actionRequired\`),
+               \`observation\` = VALUES(\`observation\`)`,
             [ast.visitId, ast.assetType, ast.temperature ?? null, ast.tempInRange ? 1 : 0, ast.actionRequired, ast.observation || '']
           );
         } else {

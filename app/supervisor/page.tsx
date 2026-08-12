@@ -214,6 +214,19 @@ export default function SupervisorDashboard() {
     return Array.from(new Set(filteredByChannel.map((r) => r.gr))).sort();
   }, [rows, fChannel, fFrom, fTo]);
 
+  // Route Code Options: filtered by Channel
+  const routeOptions = useMemo(() => {
+    const filteredByChannel = rows.filter(r => {
+      const rowDate = new Date(r.createdAt);
+      const from = normalizeDate(fFrom);
+      const to = normalizeDate(fTo);
+      const fromOk = !from || rowDate >= from;
+      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
+      return (!fChannel || r.ch === fChannel) && fromOk && toOk;
+    });
+    return Array.from(new Set(filteredByChannel.map((r) => r.rt).filter(Boolean))).sort() as string[];
+  }, [rows, fChannel, fFrom, fTo]);
+
   const resetFilters = () => {
     setFFrom('');
     setFTo('');
@@ -269,9 +282,9 @@ export default function SupervisorDashboard() {
       const to = normalizeDate(fTo);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && (!fCust || r.cust === fCust) && fromOk && toOk;
+      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && (!fCust || r.cust === fCust) && (!fRoute || r.rt === fRoute) && fromOk && toOk;
     });
-  }, [rows, fMgr, fSuper, fChannel, fClass, fCust, fFrom, fTo]);
+  }, [rows, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fFrom, fTo]);
 
   // Visit set for the two per-vertical Classification charts: respects Manager,
   // Supervisor, Channel, and Outlet/Customer, but not the legacy single-value Classification
@@ -1676,10 +1689,13 @@ export default function SupervisorDashboard() {
           </div>
 
           <div className="fld">
-            <label>Route</label>
-            <select value={fRoute} onChange={(e) => setFRoute(e.target.value)}>
-              <option value="">All Routes</option>
-              {npdRouteOptions.map((r) => (
+            <label>Route Code</label>
+            <select value={fRoute} onChange={(e) => {
+              setFRoute(e.target.value);
+              setFCust('');
+            }}>
+              <option value="">All Route Codes</option>
+              {routeOptions.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>
@@ -1872,6 +1888,7 @@ export default function SupervisorDashboard() {
             fSuper={fSuper}
             fChannel={fChannel}
             fCust={fCust}
+            fRoute={fRoute}
           />
         </div>
 

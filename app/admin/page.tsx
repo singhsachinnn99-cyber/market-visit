@@ -169,6 +169,19 @@ export default function AdminDashboardPage() {
     return Array.from(new Set(filteredByAllUpstream.map((r) => r.gr))).sort();
   }, [rows, fMgr, fSuper, fChannel, fCust, fFrom, fTo]);
 
+  // 6. Route Options: filtered by Manager, Supervisor, Channel
+  const routeOptions = useMemo(() => {
+    const filteredByScope = rows.filter(r => {
+      const rowDate = new Date(r.createdAt);
+      const from = normalizeDate(fFrom);
+      const to = normalizeDate(fTo);
+      const fromOk = !from || rowDate >= from;
+      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
+      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && fromOk && toOk;
+    });
+    return Array.from(new Set(filteredByScope.map((r) => r.rt).filter(Boolean))).sort() as string[];
+  }, [rows, fMgr, fSuper, fChannel, fFrom, fTo]);
+
   // Reset helper
   const resetFilters = () => {
     setFFrom('');
@@ -225,9 +238,9 @@ export default function AdminDashboardPage() {
       const to = normalizeDate(fTo);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && (!fCust || r.cust === fCust) && fromOk && toOk;
+      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && (!fCust || r.cust === fCust) && (!fRoute || r.rt === fRoute) && fromOk && toOk;
     });
-  }, [rows, fMgr, fSuper, fChannel, fClass, fCust, fFrom, fTo]);
+  }, [rows, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fFrom, fTo]);
 
   // Visit set for the two per-vertical Classification charts: respects Manager,
   // Supervisor, Channel, and Outlet/Customer, but not the legacy single-value Classification
@@ -1705,10 +1718,13 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="fld">
-            <label>Route</label>
-            <select value={fRoute} onChange={(e) => setFRoute(e.target.value)}>
-              <option value="">All Routes</option>
-              {npdRouteOptions.map((r) => (
+            <label>Route Code</label>
+            <select value={fRoute} onChange={(e) => {
+              setFRoute(e.target.value);
+              setFCust('');
+            }}>
+              <option value="">All Route Codes</option>
+              {routeOptions.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>

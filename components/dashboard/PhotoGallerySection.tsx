@@ -24,6 +24,7 @@ interface PhotoGallerySectionProps {
   fSuper?: string;
   fChannel?: string;
   fCust?: string;
+  fRoute?: string;
 }
 
 export function PhotoGallerySection({
@@ -34,6 +35,7 @@ export function PhotoGallerySection({
   fSuper,
   fChannel,
   fCust,
+  fRoute,
 }: PhotoGallerySectionProps) {
   const [selectedPhoto, setSelectedPhoto] = useState<DashboardPhoto | null>(null);
 
@@ -50,10 +52,11 @@ export function PhotoGallerySection({
       const superOk = !fSuper || p.supervisor.toUpperCase() === fSuper.toUpperCase();
       const channelOk = !fChannel || p.channel === fChannel;
       const outletOk = !fCust || p.outlet.toLowerCase().includes(fCust.toLowerCase());
+      const routeOk = !fRoute || (p.route && p.route.toUpperCase() === fRoute.toUpperCase());
 
-      return fromOk && toOk && mgrOk && superOk && channelOk && outletOk;
+      return fromOk && toOk && mgrOk && superOk && channelOk && outletOk && routeOk;
     });
-  }, [photos, fFrom, fTo, fMgr, fSuper, fChannel, fCust]);
+  }, [photos, fFrom, fTo, fMgr, fSuper, fChannel, fCust, fRoute]);
 
   const getCategoryColor = (category: string) => {
     const cat = (category || '').toLowerCase();

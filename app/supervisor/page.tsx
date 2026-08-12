@@ -559,17 +559,22 @@ export default function SupervisorDashboard() {
   const handleExportNpdChart = () => {
     const dataToExport = filteredNpdRows.length > 0
       ? filteredNpdRows
-      : filtered.map((r) => ({
-          date: r.createdAt,
-          visitId: r.visitId,
-          manager: r.mgr,
-          supervisor: r.sup,
-          channel: r.ch,
-          outletName: r.cust,
-          classification: r.gr,
-          skuName: 'All NPD SKUs',
-          availability: r.npd === 'A' || r.npd === 'YES' ? 'YES' : 'NO',
-        }));
+      : filtered.map((r) => {
+          const [cCode, rCode] = (r.cust_rt_id || '').split('|');
+          return {
+            date: r.createdAt,
+            visitId: r.visitId,
+            routeCode: r.rt || rCode || '',
+            manager: r.mgr,
+            supervisor: r.sup,
+            channel: r.ch,
+            outletCode: r.custCode || cCode || '',
+            outletName: r.cust,
+            classification: r.gr,
+            skuName: 'All NPD SKUs',
+            availability: r.npd === 'A' || r.npd === 'YES' ? 'YES' : 'NO',
+          };
+        });
 
     exportToExcel({
       filename: `supervisor_npd_${new Date().toISOString().slice(0, 10)}`,
@@ -580,9 +585,11 @@ export default function SupervisorDashboard() {
       columns: [
         { header: 'Date', key: 'date', formatter: (val) => val ? new Date(val).toLocaleString() : '—' },
         { header: 'Visit ID', key: 'visitId' },
+        { header: 'Route Code', key: 'routeCode', formatter: (val: any, row: any) => val || row.route || (row.cust_rt_id ? row.cust_rt_id.split('|')[1] : '—') },
         { header: 'Manager', key: 'manager' },
         { header: 'Supervisor', key: 'supervisor' },
         { header: 'Channel', key: 'channel' },
+        { header: 'Outlet Code', key: 'outletCode', formatter: (val: any, row: any) => val || row.custCode || (row.cust_rt_id ? row.cust_rt_id.split('|')[0] : '—') },
         { header: 'Outlet Name', key: 'outletName' },
         { header: 'Classification', key: 'classification' },
         { header: 'SKU Name', key: 'skuName' },
@@ -594,7 +601,24 @@ export default function SupervisorDashboard() {
 
   const handleExportPowerSkuChart = () => {
     const pskuReportRows = reportRows.psku || [];
-    const dataToExport = pskuReportRows.length > 0 ? pskuReportRows : filtered;
+    const dataToExport = pskuReportRows.length > 0
+      ? pskuReportRows
+      : filtered.map((r) => {
+          const [cCode, rCode] = (r.cust_rt_id || '').split('|');
+          return {
+            date: r.createdAt,
+            visitId: r.visitId,
+            routeCode: r.rt || rCode || '',
+            manager: r.mgr,
+            supervisor: r.sup,
+            channel: r.ch,
+            outletCode: r.custCode || cCode || '',
+            outletName: r.cust,
+            classification: r.gr,
+            skuName: 'All Power SKUs',
+            availability: r.psku === 'A' || r.psku === 'YES' ? 'YES' : 'NO',
+          };
+        });
 
     exportToExcel({
       filename: `supervisor_powersku_${new Date().toISOString().slice(0, 10)}`,
@@ -605,9 +629,11 @@ export default function SupervisorDashboard() {
       columns: [
         { header: 'Date', key: 'date', formatter: (val) => val ? new Date(val).toLocaleString() : '—' },
         { header: 'Visit ID', key: 'visitId' },
+        { header: 'Route Code', key: 'routeCode', formatter: (val: any, row: any) => val || row.route || (row.cust_rt_id ? row.cust_rt_id.split('|')[1] : '—') },
         { header: 'Manager', key: 'manager' },
         { header: 'Supervisor', key: 'supervisor' },
         { header: 'Channel', key: 'channel' },
+        { header: 'Outlet Code', key: 'outletCode', formatter: (val: any, row: any) => val || row.custCode || (row.cust_rt_id ? row.cust_rt_id.split('|')[0] : '—') },
         { header: 'Outlet Name', key: 'outletName' },
         { header: 'Classification', key: 'classification' },
         { header: 'SKU Name', key: 'skuName' },

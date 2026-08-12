@@ -19,6 +19,7 @@ import DrilldownReportModal from '@/components/dashboard/DrilldownReportModal';
 import { getAllowedReports, isFleetRole } from '@/lib/roles';
 import { exportToExcel } from '@/utils/excelExport';
 import { ExportButton } from '@/components/ui/ExportButton';
+import { PhotoGallerySection } from '@/components/dashboard/PhotoGallerySection';
 
 const GCOL: Record<string, string> = {
   A: '#0b7a4c',
@@ -52,6 +53,7 @@ export default function SupervisorDashboard() {
   // Analytics Dashboard Data States (Admin match dependency)
   const [rows, setRows] = useState<any[]>([]);
   const [reportRows, setReportRows] = useState<any>({ npd: [], psku: [], 'cold-chain': [], classification: [], classificationDairy: [], classificationIceCream: [] });
+  const [photos, setPhotos] = useState<any[]>([]);
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(true);
 
   // Analytics Filter States
@@ -131,6 +133,15 @@ export default function SupervisorDashboard() {
       refreshAll();
     }
   }, [session, fFrom, fTo]);
+
+  useEffect(() => {
+    fetch('/api/photos')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.photos) setPhotos(data.photos);
+      })
+      .catch(() => {});
+  }, []);
 
   // Delete draft handler
   const handleDeleteDraft = (visitId: string, e: React.MouseEvent) => {
@@ -1849,6 +1860,19 @@ export default function SupervisorDashboard() {
               <canvas ref={canvasClassIceRef}></canvas>
             </div>
           </div>
+        </div>
+
+        {/* Audit Photo Gallery Section */}
+        <div style={{ marginBottom: '16px' }}>
+          <PhotoGallerySection
+            photos={photos}
+            fFrom={fFrom}
+            fTo={fTo}
+            fMgr={fMgr}
+            fSuper={fSuper}
+            fChannel={fChannel}
+            fCust={fCust}
+          />
         </div>
 
         {/* Operational Cards Row (Pending Drafts & Submitted Audits List to fully retain components) */}

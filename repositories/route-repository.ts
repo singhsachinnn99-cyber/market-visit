@@ -88,11 +88,7 @@ export const routeRepository = {
       params.push(normalizedName);
     }
     const [rows]: any = await pool.execute(sql, params);
-    if (rows.length > 0) return rows.map(mapRowToRoute);
-
-    // Fallback: Return all routes if no specific supervisor mapping is assigned in database
-    const [allRows]: any = await pool.execute('SELECT * FROM `Route`');
-    return allRows.map(mapRowToRoute);
+    return rows.map(mapRowToRoute);
   },
 
   async isRouteAssignedToSupervisor(routeCode: string, supervisorId: string, supervisorName?: string): Promise<boolean> {

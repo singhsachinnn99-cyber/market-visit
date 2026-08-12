@@ -614,6 +614,9 @@ export default function SupervisorReportsPage() {
         },
         options: {
           maintainAspectRatio: false,
+          layout: {
+            padding: { top: 20 },
+          },
           plugins: { legend: { display: false } },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
@@ -631,6 +634,7 @@ export default function SupervisorReportsPage() {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
             y: {
               beginAtZero: true,
+              grace: "15%",
               grid: { color: gridColor },
               ticks: { color: textColor },
             },

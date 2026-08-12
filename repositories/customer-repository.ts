@@ -91,17 +91,18 @@ async function ensureCustomerTableSchema(): Promise<void> {
            SET \`dairyClassification\` = ?, 
                \`iceCreamClassification\` = ?,
                \`classification\` = ?
-           WHERE (UPPER(TRIM(\`customerCode\`)) = ? OR UPPER(TRIM(\`customerCode\`)) = ? OR \`customerName\` LIKE '%AL-KHOURI%')`,
+           WHERE (\`dairyClassification\` IS NULL OR \`iceCreamClassification\` IS NULL)
+             AND (UPPER(TRIM(\`customerCode\`)) = ? OR UPPER(TRIM(\`customerCode\`)) = ? OR \`customerName\` LIKE '%AL-KHOURI%')`,
           [p.dairy, p.ice, p.dairy, codeClean, altCode]
         );
         await pool.execute(
-          `INSERT INTO \`Customer_Classification\` (\`customerCode\`, \`businessVertical\`, \`classification\`)
-           VALUES (?, 'Dairy', ?) ON DUPLICATE KEY UPDATE \`classification\` = VALUES(\`classification\`)`,
+          `INSERT IGNORE INTO \`Customer_Classification\` (\`customerCode\`, \`businessVertical\`, \`classification\`)
+           VALUES (?, 'Dairy', ?)`,
           [p.code, p.dairy]
         );
         await pool.execute(
-          `INSERT INTO \`Customer_Classification\` (\`customerCode\`, \`businessVertical\`, \`classification\`)
-           VALUES (?, 'Ice Cream', ?) ON DUPLICATE KEY UPDATE \`classification\` = VALUES(\`classification\`)`,
+          `INSERT IGNORE INTO \`Customer_Classification\` (\`customerCode\`, \`businessVertical\`, \`classification\`)
+           VALUES (?, 'Ice Cream', ?)`,
           [p.code, p.ice]
         );
       }

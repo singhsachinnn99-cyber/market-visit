@@ -8,6 +8,7 @@ import { userRepository } from '@/repositories/user-repository';
 import { parseSingleFile, mergeParsedData } from '@/utils/xlsx';
 import { auditService } from '@/services/audit-service';
 import { Route, Customer, CustomerRouteMapping, SKU, ImportSummary, PowerSKU } from '@/types';
+import { revalidatePath } from 'next/cache';
 
 const verifyAdminSession = async () => {
   const session = await auth();
@@ -103,10 +104,11 @@ export async function importExcelAction(payload: {
   clearObsolete?: boolean;
 }): Promise<ImportSummary> {
   const session = await verifyAdminSession();
-  const { routes, customers, mappings, skus, powerSkus } = payload;
+  const { routes, customers, mappings, skus, powerSkus, clearObsolete } = payload;
 
   let inserted = 0;
   let updated = 0;
+  let removed = 0;
   let skipped = 0;
   const failed = 0;
   const errors: { row: number; error: string }[] = [];
@@ -154,9 +156,16 @@ export async function importExcelAction(payload: {
         let supervisorId = null;
         if (superName) {
           const cleanSuperName = superName.toLowerCase().replace(/\s+/g, '');
-          const matchedSuper = supervisors.find(
-            (u) => u.name.toLowerCase().replace(/\s+/g, '') === cleanSuperName
-          );
+          const matchedSuper = supervisors.find((u) => {
+            const cleanName = u.name.toLowerCase().replace(/\s+/g, '');
+            const cleanCode = (u.employeeCode || '').toLowerCase().replace(/\s+/g, '');
+            return (
+              cleanName === cleanSuperName ||
+              cleanName.includes(cleanSuperName) ||
+              cleanSuperName.includes(cleanName) ||
+              (cleanCode && cleanCode === cleanSuperName)
+            );
+          });
           if (matchedSuper) {
             supervisorId = matchedSuper.id;
             // Establish One Manager -> Many Supervisors relationship
@@ -211,17 +220,43 @@ export async function importExcelAction(payload: {
       updated += res.updated;
     }
 
+    // 7. Clear Obsolete entries if clearObsolete flag is true
+    if (clearObsolete) {
+      if (routes.length > 0) {
+        const activeRouteCodes = routes.map((r) => r.routeCode);
+        removed += await routeRepository.clearObsoleteRoutes(activeRouteCodes);
+      }
+      if (customers.length > 0) {
+        const activeCustCodes = Array.from(new Set(customers.map((c) => c.customerCode)));
+        removed += await customerRepository.clearObsoleteCustomers(activeCustCodes);
+      }
+      if (mappings.length > 0) {
+        const activeMappingIds = mappings.map((m) => m.cust_rt_id);
+        removed += await customerRepository.clearObsoleteMappings(activeMappingIds);
+      }
+      if (skus.length > 0) {
+        const activeSkuCodes = skus.map((s) => s.skuCode);
+        removed += await skuRepository.clearObsoleteSkus(activeSkuCodes);
+      }
+      if (powerSkus && powerSkus.length > 0) {
+        const activePowerSkuKeys = powerSkus.map((ps) => `${ps.skuCode}_${ps.channel}`);
+        removed += await skuRepository.clearObsoletePowerSkus(activePowerSkuKeys);
+      }
+    }
+
     const adminUser = session.user?.email || 'Admin';
     await auditService.logAction(
       adminUser,
       'Excel Master Import',
-      `Imported/Upserted masters. Totals: Inserted: ${inserted}, Updated: ${updated}`
+      `Imported/Upserted masters. Totals: Inserted: ${inserted}, Updated: ${updated}, Removed: ${removed}`
     );
+
+    revalidatePath('/', 'layout');
 
     return {
       inserted,
       updated,
-      removed: 0, // UPSERT only, no deletions
+      removed,
       failed,
       errors,
       skipped,

@@ -707,6 +707,28 @@ export default function SupervisorDashboard() {
       },
     });
 
+    const createBarValueLabelPlugin = () => ({
+      id: 'barValueLabels',
+      afterDatasetsDraw(chart: any) {
+        const { ctx } = chart;
+        const dataset = chart.data.datasets[0];
+        chart.getDatasetMeta(0).data.forEach((bar: any, index: number) => {
+          const value = dataset.data[index];
+          if (typeof value !== 'number') return;
+          const label = `${value}`;
+          ctx.save();
+          ctx.font = '700 11px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillStyle = theme === 'dark' ? '#f1f5f9' : '#0f172a';
+          ctx.shadowColor = theme === 'dark' ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255, 255, 255, 0.9)';
+          ctx.shadowBlur = 4;
+          ctx.fillText(label, bar.x, bar.y - 4);
+          ctx.restore();
+        });
+      },
+    });
+
     const createDoughnutPctLabelPlugin = () => ({
       id: 'doughnutPctLabels',
       afterDatasetsDraw(chart: any) {
@@ -788,7 +810,7 @@ export default function SupervisorDashboard() {
       });
     }
 
-    // 3. Supervisor Scorecard Bar Chart (percentage-based)
+    // 3. Supervisor Scorecard Bar Chart (Total Visits count)
     if (canvasSuperRef.current) {
       if (chartsRef.current.cSuper) chartsRef.current.cSuper.destroy();
       const sc = countFreq(filtered, (r) => r.sup);
@@ -796,7 +818,6 @@ export default function SupervisorDashboard() {
         .sort((a, b) => b[1] - a[1])
         .slice(0, 8);
       const superTotal = filtered.length;
-      const superPct = (count: number) => (superTotal ? Math.round((count / superTotal) * 100) : 0);
 
       chartsRef.current.cSuper = new Chart(canvasSuperRef.current, {
         type: 'bar',
@@ -804,19 +825,22 @@ export default function SupervisorDashboard() {
           labels: topSup.map((x) => x[0]),
           datasets: [
             {
-              label: 'Visits',
-              data: topSup.map((x) => superPct(x[1])),
+              label: 'Total Visits',
+              data: topSup.map((x) => x[1]),
               backgroundColor: BLUE,
               borderRadius: 6,
             },
           ],
         },
-        plugins: [createBarPctLabelPlugin()],
+        plugins: [createBarValueLabelPlugin()],
         options: {
           maintainAspectRatio: false,
+          layout: {
+            padding: { top: 20 },
+          },
           plugins: {
             legend: { display: false },
-            tooltip: { callbacks: { label: (ctx) => `${ctx.raw}% of ${superTotal} visits` } },
+            tooltip: { callbacks: { label: (ctx) => `${ctx.raw} visits (${superTotal ? Math.round(((ctx.raw as number) / superTotal) * 100) : 0}% of total)` } },
           },
           onClick: (e, el, chart) => {
             if (el.length > 0) {
@@ -829,7 +853,7 @@ export default function SupervisorDashboard() {
           },
           scales: {
             x: { grid: { color: gridColor }, ticks: { color: textColor } },
-            y: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: textColor, callback: (v: any) => `${v}%` } },
+            y: { beginAtZero: true, grace: '15%', grid: { color: gridColor }, ticks: { color: textColor, precision: 0 } },
           },
         },
       });

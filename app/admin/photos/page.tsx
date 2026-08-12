@@ -44,6 +44,7 @@ export default function AuditPhotoGalleryPage() {
   const [selectedDate, setSelectedDate] = useState<string>(getTodayStr());
   const [selectedApp, setSelectedApp] = useState<string>('all');
   const [selectedSupervisor, setSelectedSupervisor] = useState<string>('all');
+  const [selectedRoute, setSelectedRoute] = useState<string>('all');
   const [selectedOutlet, setSelectedOutlet] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -52,6 +53,7 @@ export default function AuditPhotoGalleryPage() {
   const [photos, setPhotos] = useState<AuditPhoto[]>([]);
   const [applications, setApplications] = useState<string[]>([]);
   const [supervisors, setSupervisors] = useState<string[]>([]);
+  const [routes, setRoutes] = useState<string[]>([]);
   const [outlets, setOutlets] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -76,6 +78,7 @@ export default function AuditPhotoGalleryPage() {
 
         if (selectedApp && selectedApp !== 'all') params.set('appName', selectedApp);
         if (selectedSupervisor && selectedSupervisor !== 'all') params.set('supervisor', selectedSupervisor);
+        if (selectedRoute && selectedRoute !== 'all') params.set('routeCode', selectedRoute);
         if (selectedOutlet && selectedOutlet !== 'all') params.set('outlet', selectedOutlet);
         if (searchQuery.trim()) params.set('search', searchQuery.trim());
         params.set('page', currentPage.toString());
@@ -92,6 +95,9 @@ export default function AuditPhotoGalleryPage() {
           if (data.supervisors && Array.isArray(data.supervisors)) {
             setSupervisors(data.supervisors);
           }
+          if (data.routes && Array.isArray(data.routes)) {
+            setRoutes(data.routes);
+          }
           if (data.outlets && Array.isArray(data.outlets)) {
             setOutlets(data.outlets);
           }
@@ -106,7 +112,7 @@ export default function AuditPhotoGalleryPage() {
         setIsRefreshing(false);
       }
     },
-    [selectedDate, selectedApp, selectedSupervisor, selectedOutlet, searchQuery, currentPage, pageSize]
+    [selectedDate, selectedApp, selectedSupervisor, selectedRoute, selectedOutlet, searchQuery, currentPage, pageSize]
   );
 
   useEffect(() => {
@@ -117,6 +123,7 @@ export default function AuditPhotoGalleryPage() {
     setSelectedDate(getTodayStr());
     setSelectedApp('all');
     setSelectedSupervisor('all');
+    setSelectedRoute('all');
     setSelectedOutlet('all');
     setSearchQuery('');
     setCurrentPage(1);
@@ -127,7 +134,7 @@ export default function AuditPhotoGalleryPage() {
       filename: `photo_audits_${new Date().toISOString().slice(0, 10)}`,
       sheetName: 'Photo Audits',
       title: 'Audit Photo Gallery Metadata Log',
-      filterSummary: `Date: ${selectedDate || 'All'} | App: ${selectedApp} | Supervisor: ${selectedSupervisor} | Outlet: ${selectedOutlet} | Search: "${searchQuery}"`,
+      filterSummary: `Date: ${selectedDate || 'All'} | App: ${selectedApp} | Supervisor: ${selectedSupervisor} | Route: ${selectedRoute} | Outlet: ${selectedOutlet} | Search: "${searchQuery}"`,
       columns: [
         { header: 'Upload Date', key: 'uploadedAt', formatter: (val: any) => val ? new Date(val).toLocaleString() : '—' },
         { header: 'Photo ID', key: 'photoId' },
@@ -281,6 +288,28 @@ export default function AuditPhotoGalleryPage() {
               {supervisors.map((sup) => (
                 <option key={sup} value={sup}>
                   {sup}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Route Code Filter Slicer */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-[var(--text-muted)] flex items-center gap-1.5">
+              <MapPin className="h-3.5 w-3.5 text-accent" /> Route Code
+            </label>
+            <select
+              value={selectedRoute}
+              onChange={(e) => {
+                setSelectedRoute(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full text-xs px-3 py-2 rounded-xl bg-[var(--surface-2)] text-[var(--text-primary)] border border-[var(--border)] focus:outline-none focus:border-accent transition-colors cursor-pointer"
+            >
+              <option value="all">All Routes ({routes.length})</option>
+              {routes.map((rt) => (
+                <option key={rt} value={rt}>
+                  {rt}
                 </option>
               ))}
             </select>

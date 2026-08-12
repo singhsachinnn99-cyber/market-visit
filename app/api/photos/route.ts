@@ -117,25 +117,34 @@ export async function GET(req: NextRequest) {
 
     // Dynamic extraction of distinct Supervisors & Outlets from database
     const EXCLUDED_SUPS = new Set(['INTERNAL', 'SAMRA', 'ADMIN']);
-    const dbSupSet = new Set<string>();
-    const dbOutletSet = new Set<string>();
-    allEnrichedPhotos.forEach((p: any) => {
-      if (p.supervisor && !EXCLUDED_SUPS.has(p.supervisor.toUpperCase())) dbSupSet.add(p.supervisor);
-      if (p.outlet) dbOutletSet.add(p.outlet);
-    });
-    const supervisors = Array.from(dbSupSet).sort();
-    const outlets = Array.from(dbOutletSet).sort();
+    const routeParam = searchParams.get('routeCode') || searchParams.get('route'); // route code or 'all'
 
-    // Filter by Date
-    let filtered = allEnrichedPhotos;
-
+    // Filter by Date first so available Outlets, Routes & Supervisors match the selected date
+    let dateFilteredPhotos = allEnrichedPhotos;
     if (dateParam && dateParam !== 'all') {
       const targetDate = dateParam.trim(); // YYYY-MM-DD
-      filtered = filtered.filter((p: any) => {
+      dateFilteredPhotos = allEnrichedPhotos.filter((p: any) => {
         const photoDay = p.uploadedAt.split('T')[0];
         return photoDay === targetDate;
       });
     }
+
+    // Dynamic extraction of distinct Supervisors, Outlets & Routes for the selected date
+    const dbSupSet = new Set<string>();
+    const dbOutletSet = new Set<string>();
+    const dbRouteSet = new Set<string>();
+
+    dateFilteredPhotos.forEach((p: any) => {
+      if (p.supervisor && !EXCLUDED_SUPS.has(p.supervisor.toUpperCase())) dbSupSet.add(p.supervisor);
+      if (p.outlet) dbOutletSet.add(p.outlet);
+      if (p.route) dbRouteSet.add(p.route);
+    });
+
+    const supervisors = Array.from(dbSupSet).sort();
+    const outlets = Array.from(dbOutletSet).sort();
+    const routes = Array.from(dbRouteSet).sort();
+
+    let filtered = dateFilteredPhotos;
 
     // Filter by Application
     if (appNameParam && appNameParam !== 'all') {
@@ -147,6 +156,12 @@ export async function GET(req: NextRequest) {
     if (supervisorParam && supervisorParam !== 'all') {
       const targetSup = supervisorParam.trim().toLowerCase();
       filtered = filtered.filter((p: any) => p.supervisor.toLowerCase() === targetSup);
+    }
+
+    // Filter by Route Code
+    if (routeParam && routeParam !== 'all') {
+      const targetRoute = routeParam.trim().toLowerCase();
+      filtered = filtered.filter((p: any) => (p.route || '').toLowerCase() === targetRoute);
     }
 
     // Filter by Outlet
@@ -183,6 +198,7 @@ export async function GET(req: NextRequest) {
       applications,
       supervisors,
       outlets,
+      routes,
       pagination: {
         totalCount,
         totalPages,

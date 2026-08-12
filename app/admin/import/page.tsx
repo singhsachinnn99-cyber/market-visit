@@ -199,7 +199,7 @@ export default function MasterImportPage() {
     try {
       const summaryResult = await importExcelAction({
         ...importPayload,
-        clearObsolete: activeImportKey === 'ALL',
+        clearObsolete: true,
       });
       setSummary(summaryResult);
       setStep('SUMMARY');

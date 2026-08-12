@@ -239,7 +239,9 @@ export async function importExcelAction(payload: {
         removed += await skuRepository.clearObsoleteSkus(activeSkuCodes);
       }
       if (powerSkus && powerSkus.length > 0) {
-        const activePowerSkuKeys = powerSkus.map((ps) => `${ps.skuCode}_${ps.channel}`);
+        const activePowerSkuKeys = powerSkus.map(
+          (ps) => `${ps.skuCode.trim().toUpperCase()}_${ps.channel.trim().toUpperCase()}`
+        );
         removed += await skuRepository.clearObsoletePowerSkus(activePowerSkuKeys);
       }
     }

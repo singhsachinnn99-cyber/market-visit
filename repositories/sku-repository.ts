@@ -165,9 +165,10 @@ export const skuRepository = {
       const [result]: any = await pool.execute('DELETE FROM `PowerSKU`');
       return result.affectedRows || 0;
     } else {
-      const placeholders = activeKeys.map(() => '?').join(',');
-      const sql = `DELETE FROM \`PowerSKU\` WHERE CONCAT(\`skuCode\`, '_', \`channel\`) NOT IN (${placeholders})`;
-      const [result]: any = await pool.execute(sql, activeKeys);
+      const upperKeys = activeKeys.map((k) => k.toUpperCase());
+      const placeholders = upperKeys.map(() => '?').join(',');
+      const sql = `DELETE FROM \`PowerSKU\` WHERE UPPER(CONCAT(\`skuCode\`, '_', \`channel\`)) NOT IN (${placeholders})`;
+      const [result]: any = await pool.execute(sql, upperKeys);
       return result.affectedRows || 0;
     }
   },

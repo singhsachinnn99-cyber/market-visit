@@ -367,15 +367,15 @@ export const customerRepository = {
     return { inserted, updated };
   },
 
-  async clearObsoleteCustomers(activeCodes: string[]): Promise<number> {
+  async clearObsoleteCustomers(activeIds: string[]): Promise<number> {
     await ensureCustomerTableSchema();
-    if (activeCodes.length === 0) {
+    if (activeIds.length === 0) {
       const [result]: any = await pool.execute('DELETE FROM `Customer`');
       return result.affectedRows || 0;
     } else {
-      const placeholders = activeCodes.map(() => '?').join(',');
-      const sql = `DELETE FROM \`Customer\` WHERE \`customerCode\` NOT IN (${placeholders})`;
-      const [result]: any = await pool.execute(sql, activeCodes);
+      const placeholders = activeIds.map(() => '?').join(',');
+      const sql = `DELETE FROM \`Customer\` WHERE \`cust_rt_id\` NOT IN (${placeholders})`;
+      const [result]: any = await pool.execute(sql, activeIds);
       return result.affectedRows || 0;
     }
   },

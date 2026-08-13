@@ -61,6 +61,7 @@ export default function SupervisorReportsPage() {
   const [fChannel, setFChannel] = useState("");
   const [fClass, setFClass] = useState("");
   const [fCust, setFCust] = useState("");
+  const [masters, setMasters] = useState<any>(null);
 
   // Canvas Refs
   const canvasTrendRef = useRef<HTMLCanvasElement>(null);
@@ -87,6 +88,7 @@ export default function SupervisorReportsPage() {
         const data = await res.json();
         if (data.success && active) {
           setRows(data.rows);
+          setMasters(data.masters || null);
           setLastUpdated(new Date());
         }
       } catch (err) {
@@ -118,12 +120,10 @@ export default function SupervisorReportsPage() {
     return Array.from(new Set(rows.map((r) => r.ch))).sort();
   }, [rows]);
 
-  const custOptions = useMemo(() => {
-    const filteredByUpstream = rows.filter(
-      (r) => (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass),
-    );
-    return Array.from(new Set(filteredByUpstream.map((r) => r.cust))).sort();
-  }, [rows, fChannel, fClass]);
+  const custOptions = useMemo<string[]>(() => {
+    if (!masters) return [];
+    return Array.from(new Set((masters.customers || []).map((c: any) => c.customerName))).sort() as string[];
+  }, [masters]);
 
   const classOptions = useMemo(() => {
     const filteredByUpstream = rows.filter(

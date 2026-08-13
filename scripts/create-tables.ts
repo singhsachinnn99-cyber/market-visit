@@ -10,6 +10,7 @@ async function createTables() {
     'DROP TABLE IF EXISTS `VisitPhoto`',
     'DROP TABLE IF EXISTS `Visit`',
     'DROP TABLE IF EXISTS `CustomerRouteMapping`',
+    'DROP TABLE IF EXISTS `Customer_Classification`',
     'DROP TABLE IF EXISTS `SKU`',
     'DROP TABLE IF EXISTS `Customer`',
     'DROP TABLE IF EXISTS `Route`',
@@ -53,14 +54,16 @@ async function createTables() {
 
     // 3. Customer
     `CREATE TABLE IF NOT EXISTS \`Customer\` (
-      \`cust_rt_id\` VARCHAR(191) NULL,
-      \`customerCode\` VARCHAR(191) PRIMARY KEY,
+      \`cust_rt_id\` VARCHAR(191) PRIMARY KEY,
+      \`customerCode\` VARCHAR(191) NOT NULL,
       \`customerName\` VARCHAR(191) NOT NULL,
       \`classification\` VARCHAR(50) NOT NULL,
       \`dairyClassification\` VARCHAR(50) NULL,
       \`iceCreamClassification\` VARCHAR(50) NULL,
       \`channel\` VARCHAR(191) NOT NULL,
-      \`routeCode\` VARCHAR(191) NULL
+      \`routeCode\` VARCHAR(191) NOT NULL,
+      FOREIGN KEY (\`routeCode\`) REFERENCES \`Route\`(\`routeCode\`) ON DELETE CASCADE,
+      INDEX \`idx_customer_route\` (\`routeCode\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
     // 3b. Customer_Classification
@@ -72,20 +75,17 @@ async function createTables() {
       \`channel\` VARCHAR(100) NULL,
       \`updatedAt\` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       UNIQUE KEY \`uk_customer_vertical\` (\`customerCode\`, \`businessVertical\`),
-      INDEX \`idx_cust_class_code\` (\`customerCode\`),
-      FOREIGN KEY (\`customerCode\`) REFERENCES \`Customer\`(\`customerCode\`) ON DELETE CASCADE
+      INDEX \`idx_cust_class_code\` (\`customerCode\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
     // 4. CustomerRouteMapping
     `CREATE TABLE IF NOT EXISTS \`CustomerRouteMapping\` (
-      \`cust_rt_id\` VARCHAR(191) NULL,
+      \`cust_rt_id\` VARCHAR(191) PRIMARY KEY,
       \`customerCode\` VARCHAR(191) NOT NULL,
       \`routeCode\` VARCHAR(191) NOT NULL,
-      PRIMARY KEY (\`customerCode\`, \`routeCode\`),
-      FOREIGN KEY (\`customerCode\`) REFERENCES \`Customer\`(\`customerCode\`) ON DELETE CASCADE,
+      FOREIGN KEY (\`cust_rt_id\`) REFERENCES \`Customer\`(\`cust_rt_id\`) ON DELETE CASCADE,
       FOREIGN KEY (\`routeCode\`) REFERENCES \`Route\`(\`routeCode\`) ON DELETE CASCADE,
-      INDEX \`idx_mapping_route\` (\`routeCode\`),
-      INDEX \`idx_mapping_cust_rt_id\` (\`cust_rt_id\`)
+      INDEX \`idx_mapping_route\` (\`routeCode\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
     // 5. SKU
@@ -110,28 +110,22 @@ async function createTables() {
     `CREATE TABLE IF NOT EXISTS \`Visit\` (
       \`visitId\` VARCHAR(191) PRIMARY KEY,
       \`supervisorId\` VARCHAR(191) NOT NULL,
-      \`routeCode\` VARCHAR(191) NULL,
-      \`customerCode\` VARCHAR(191) NULL,
-      \`cust_rt_id\` VARCHAR(191) NULL,
-      \`dairyClassification\` VARCHAR(50) NULL,
-      \`iceCreamClassification\` VARCHAR(50) NULL,
-      \`assetType\` VARCHAR(50) NULL,
-      \`temperature\` DOUBLE NULL,
-      \`tempInRange\` TINYINT(1) NULL,
-      \`actionRequired\` VARCHAR(50) NULL,
-      \`observation\` TEXT NULL,
+      \`cust_rt_id\` VARCHAR(191) NOT NULL,
+      \`visit_type\` ENUM('Visit','No Visit') NOT NULL DEFAULT 'Visit',
+      \`reason_category\` VARCHAR(191) NULL,
+      \`reason\` TEXT NULL,
       \`latitude\` DOUBLE NOT NULL,
       \`longitude\` DOUBLE NOT NULL,
       \`accuracy\` DOUBLE NOT NULL,
       \`status\` ENUM('Draft', 'Submitted') NOT NULL,
       \`createdBy\` VARCHAR(191) NOT NULL,
+      \`visit_datetime\` DATETIME NOT NULL,
       \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       \`updatedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
-      FOREIGN KEY (\`routeCode\`) REFERENCES \`Route\`(\`routeCode\`),
-      FOREIGN KEY (\`customerCode\`) REFERENCES \`Customer\`(\`customerCode\`),
+      \`sosAsPerBda\` TINYINT(1) NULL,
+      FOREIGN KEY (\`cust_rt_id\`) REFERENCES \`Customer\`(\`cust_rt_id\`) ON DELETE CASCADE,
       INDEX \`idx_visit_supervisor\` (\`supervisorId\`),
-      INDEX \`idx_visit_route\` (\`routeCode\`),
-      INDEX \`idx_visit_customer\` (\`customerCode\`)
+      INDEX \`idx_visit_cust_rt\` (\`cust_rt_id\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
 
     // 7. VisitPhoto

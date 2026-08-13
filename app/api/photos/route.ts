@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '12', 10)));
 
     // Fetch visits, customers, users, routes, and photos in parallel
-    const [visitsRaw, customers, dbUsers, photosRaw] = await Promise.all([
+    const [visitsRaw, customers, dbUsers, photosRaw, routeRows] = await Promise.all([
       visitRepository.getAllVisits(),
       customerRepository.getAllCustomers(),
       pool.execute(`
@@ -40,6 +40,11 @@ export async function GET(req: NextRequest) {
         LEFT JOIN Manager m ON u.managerId = m.id
       `).then(([rows]: any) => rows).catch(() => []),
       pool.execute('SELECT * FROM `VisitPhoto`').then(([rows]: any) => rows).catch(() => []),
+      pool.execute(`
+        SELECT r.*, m.name as managerName 
+        FROM Route r 
+        LEFT JOIN Manager m ON r.managerId = m.id
+      `).then(([rows]: any) => rows).catch(() => []),
     ]);
 
     let visits = visitsRaw;
@@ -52,21 +57,7 @@ export async function GET(req: NextRequest) {
 
     const visitMap = new Map(visits.map((v) => [v.visitId, v]));
     const customerMap = new Map(customers.map((c) => [c.cust_rt_id, c]));
-    
-    const supToMgrMap = new Map<string, string>();
-    dbUsers.forEach((u: any) => {
-      if (u.role === 'Supervisor' && u.name) {
-        supToMgrMap.set(u.name.toUpperCase().trim(), (u.managerName || '').toUpperCase().trim());
-      }
-    });
-
-    const userMap = new Map<string, { name: string; managerName: string }>(
-      dbUsers.map((u: any) => {
-        const supName = (u.name || '').toUpperCase().trim();
-        const mgrName = supToMgrMap.get(supName) || (u.managerName || '').toUpperCase().trim() || 'UNASSIGNED';
-        return [u.id, { name: supName, managerName: mgrName }];
-      })
-    );
+    const routeMap = new Map<string, any>(routeRows.map((r: any) => [r.routeCode, r]));
 
     // Dynamic extraction of distinct applications from database
     const dbAppSet = new Set<string>();
@@ -83,13 +74,14 @@ export async function GET(req: NextRequest) {
     const sampleApps = ['Chrome', 'Edge', 'VS Code', 'Field Audit'];
     const allEnrichedPhotos = photosRaw.map((p: any, idx: number) => {
       const visit = visitMap.get(p.visitId);
-      const userInfo = visit ? userMap.get(visit.supervisorId) : null;
-      const supName = userInfo ? userInfo.name : 'ADMIN';
-      const mgrName = userInfo ? userInfo.managerName : 'MANAGEMENT';
+      const [_, routeCode] = visit ? (visit.cust_rt_id || '').split('|') : ['', ''];
+      const routeInfo = routeCode ? routeMap.get(routeCode) : null;
+      const supName = routeInfo ? (routeInfo.superName || 'UNASSIGNED').toUpperCase().trim() : 'UNASSIGNED';
+      const mgrName = routeInfo ? (routeInfo.managerName || 'UNASSIGNED').toUpperCase().trim() : 'UNASSIGNED';
+      
       const customer = visit ? customerMap.get(visit.cust_rt_id || '') : null;
       const custName = customer ? customer.customerName : 'General Store';
       const ch = customer ? customer.channel : 'General Trade';
-      const [_, routeCode] = visit ? (visit.cust_rt_id || '').split('|') : ['', ''];
 
       const photoDate = p.uploadedAt || (visit ? visit.createdAt : null);
       const isoDate = photoDate

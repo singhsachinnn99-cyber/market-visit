@@ -227,8 +227,8 @@ export async function importExcelAction(payload: {
         removed += await routeRepository.clearObsoleteRoutes(activeRouteCodes);
       }
       if (customers.length > 0) {
-        const activeCustCodes = Array.from(new Set(customers.map((c) => c.customerCode)));
-        removed += await customerRepository.clearObsoleteCustomers(activeCustCodes);
+        const activeCustRtIds = customers.map((c) => c.cust_rt_id);
+        removed += await customerRepository.clearObsoleteCustomers(activeCustRtIds);
       }
       if (mappings.length > 0) {
         const activeMappingIds = mappings.map((m) => m.cust_rt_id);

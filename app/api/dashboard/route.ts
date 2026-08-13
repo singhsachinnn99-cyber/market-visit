@@ -94,8 +94,31 @@ export async function GET(req: NextRequest) {
       filteredVisits = filteredVisits.filter(v => v.supervisorId === userSession.id);
     }
 
+    const routeMap = new Map<string, any>(routeRows.map((r: any) => [r.routeCode, r]));
+
+    const isExcluded = (name: string) => {
+      const n = (name || '').toUpperCase().trim();
+      return n === 'CLOSED' || n === 'INTERNAL' || n === '';
+    };
+
+    // Filter by Manager parameter (if passed)
+    const managerParam = req.nextUrl.searchParams.get('manager');
+    if (managerParam) {
+      filteredVisits = filteredVisits.filter(v => {
+        const [_, rCode] = (v.cust_rt_id || '').split('|');
+        const routeInfo = routeMap.get(rCode || v.routeCode || '');
+        const mgrName = routeInfo ? (routeInfo.managerName || '') : '';
+        return mgrName.toUpperCase() === managerParam.toUpperCase();
+      });
+    }
+
     if (supervisorIdParam && (scope === 'full' || isFullAccessRole(role))) {
-      filteredVisits = filteredVisits.filter(v => v.supervisorId === supervisorIdParam);
+      filteredVisits = filteredVisits.filter(v => {
+        const [_, rCode] = (v.cust_rt_id || '').split('|');
+        const routeInfo = routeMap.get(rCode || v.routeCode || '');
+        const supName = routeInfo ? (routeInfo.superName || '') : '';
+        return supName.toUpperCase() === supervisorIdParam.toUpperCase();
+      });
     }
     if (routeCodeParam) {
       filteredVisits = filteredVisits.filter(v => {
@@ -104,60 +127,39 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Build dynamic Manager -> Supervisor map
-    const managerSupervisorMap: Record<string, string[]> = {};
-    const supToMgrMap = new Map<string, string>();
+    // Build distinct sorted Managers and Supervisors lists from Route Master (routeRows)
+    const allManagers = Array.from(
+      new Set<string>(
+        routeRows
+          .map((r: any) => (r.managerName || '').trim())
+          .filter((name: string) => !isExcluded(name))
+      )
+    ).sort() as string[];
 
-    // 1. From User table
-    dbUsers.forEach((u: any) => {
-      if (u.role === 'Supervisor' && u.name) {
-        const supName = u.name.toUpperCase().trim();
-        const mgrName = (u.managerName || '').toUpperCase().trim();
-        if (mgrName) {
-          supToMgrMap.set(supName, mgrName);
-        }
-      }
-    });
-
-    // 2. From Route table (Route Master mapping)
-    routeRows.forEach((r: any) => {
-      const superName = (r.superName || '').toUpperCase().trim();
-      const mgrName = (r.managerName || '').toUpperCase().trim();
-      if (superName && superName !== 'CLOSED' && mgrName && mgrName !== 'CLOSED') {
-        if (!supToMgrMap.has(superName)) {
-          supToMgrMap.set(superName, mgrName);
-        }
-      }
-    });
-
-    // Fallback static overrides if DB mapping is partially empty for standard managers
-    const KNOWN_MAP: Record<string, string> = {
-      'ASAD': 'ADNAN', 'JAVED': 'ADNAN', 'KISHAN': 'ADNAN', 'MOHSIN': 'ADNAN', 'RASHWIN': 'ADNAN', 'SAIFULLAH': 'ADNAN',
-      'JAHID': 'ASHFAQ', 'SAIF': 'ASHFAQ', 'WALI': 'ASHFAQ', 'ZEESHAN': 'ASHFAQ',
-      'DANISH': 'KHALID', 'MUSAVEER': 'KHALID', 'RIZVI': 'KHALID', 'YASAR': 'KHALID',
-      'SAMRA': 'EXP MANAGER', 'WASIM': 'INST MANAGER'
-    };
-
-    Object.entries(KNOWN_MAP).forEach(([sup, mgr]) => {
-      if (!supToMgrMap.has(sup)) {
-        supToMgrMap.set(sup, mgr);
-      }
-    });
+    const allSupervisors = Array.from(
+      new Set<string>(
+        routeRows
+          .map((r: any) => (r.superName || '').trim())
+          .filter((name: string) => !isExcluded(name))
+      )
+    ).sort() as string[];
 
     // Group into managerSupervisorMap
-    const EXCLUDED_SUPS = new Set(['INTERNAL', 'SAMRA']);
-    supToMgrMap.forEach((mgrName, supName) => {
-      if (EXCLUDED_SUPS.has(supName.toUpperCase())) return;
-      if (!managerSupervisorMap[mgrName]) {
-        managerSupervisorMap[mgrName] = [];
-      }
-      if (!managerSupervisorMap[mgrName].includes(supName)) {
-        managerSupervisorMap[mgrName].push(supName);
+    const managerSupervisorMap: Record<string, string[]> = {};
+    routeRows.forEach((r: any) => {
+      const sup = (r.superName || '').trim();
+      const mgr = (r.managerName || '').trim();
+      if (sup && !isExcluded(sup) && mgr && !isExcluded(mgr)) {
+        if (!managerSupervisorMap[mgr]) {
+          managerSupervisorMap[mgr] = [];
+        }
+        if (!managerSupervisorMap[mgr].includes(sup)) {
+          managerSupervisorMap[mgr].push(sup);
+        }
       }
     });
-
     Object.keys(managerSupervisorMap).forEach((m) => {
-      managerSupervisorMap[m] = managerSupervisorMap[m].filter((s) => !EXCLUDED_SUPS.has(s.toUpperCase())).sort();
+      managerSupervisorMap[m].sort();
     });
 
     const skuMap = new Map<string, any>(skuRows.map((sku: any) => [sku.skuCode, sku]));
@@ -167,8 +169,7 @@ export async function GET(req: NextRequest) {
     const userMap = new Map<string, { name: string; managerName: string }>(
       dbUsers.map((u: any) => {
         const supName = u.name.toUpperCase().trim();
-        const mgrName = supToMgrMap.get(supName) || (u.managerName || '').toUpperCase().trim() || 'UNASSIGNED';
-        return [u.id, { name: supName, managerName: mgrName }];
+        return [u.id, { name: supName, managerName: '' }];
       })
     );
 
@@ -219,9 +220,10 @@ export async function GET(req: NextRequest) {
     const classificationRowsIceCream: any[] = [];
 
     const rows = filteredVisits.map((v) => {
-      const userInfo = userMap.get(v.supervisorId) || { name: 'UNKNOWN', managerName: 'ADNAN' };
-      const supName = userInfo.name;
-      const mgrName = userInfo.managerName;
+      const [customerCode, routeCode] = (v.cust_rt_id || '').split('|');
+      const routeInfo = routeMap.get(routeCode || v.routeCode || '');
+      const supName = routeInfo ? (routeInfo.superName || 'UNASSIGNED').toUpperCase().trim() : 'UNASSIGNED';
+      const mgrName = routeInfo ? (routeInfo.managerName || 'UNASSIGNED').toUpperCase().trim() : 'UNASSIGNED';
 
       const customer = customerMap.get(v.cust_rt_id || '');
       const custName = customer ? customer.customerName : 'Unknown';
@@ -230,7 +232,6 @@ export async function GET(req: NextRequest) {
       const dairyGr = customer ? (customer.dairyClassification || null) : null;
       const iceGr = customer ? (customer.iceCreamClassification || null) : null;
 
-      const [customerCode, routeCode] = (v.cust_rt_id || '').split('|');
       const visitDate = (v.createdAt as any) instanceof Date ? (v.createdAt as any).toISOString() : v.createdAt;
 
       const date = new Date(v.createdAt);
@@ -440,7 +441,7 @@ export async function GET(req: NextRequest) {
     }).length;
 
     const dbRoutes: any[] = routeRows;
-    const totalSupervisors = dbUsers.filter((u: any) => u.role === 'Supervisor').length;
+    const totalSupervisors = allSupervisors.length;
 
     const totalAssignedCustomers = customers.length;
     const visitedCustRtIds = new Set(filteredVisits.map(v => v.cust_rt_id));
@@ -468,22 +469,22 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => a.date.localeCompare(b.date));
 
     // Coverage per Route
-    const routeMap = new Map<string, { total: number; visited: Set<string>; routeName: string }>();
+    const routeMapForCoverage = new Map<string, { total: number; visited: Set<string>; routeName: string }>();
     customers.forEach(c => {
-      if (!routeMap.has(c.routeCode)) {
-        routeMap.set(c.routeCode, { total: 0, visited: new Set(), routeName: c.routeCode });
+      if (!routeMapForCoverage.has(c.routeCode)) {
+        routeMapForCoverage.set(c.routeCode, { total: 0, visited: new Set(), routeName: c.routeCode });
       }
-      routeMap.get(c.routeCode)!.total++;
+      routeMapForCoverage.get(c.routeCode)!.total++;
     });
 
     filteredVisits.forEach(v => {
       const [cCode, rCode] = (v.cust_rt_id || '').split('|');
-      if (rCode && routeMap.has(rCode)) {
-        routeMap.get(rCode)!.visited.add(v.cust_rt_id);
+      if (rCode && routeMapForCoverage.has(rCode)) {
+        routeMapForCoverage.get(rCode)!.visited.add(v.cust_rt_id);
       }
     });
 
-    const coveragePerRoute = Array.from(routeMap.entries()).map(([routeCode, item]) => {
+    const coveragePerRoute = Array.from(routeMapForCoverage.entries()).map(([routeCode, item]) => {
       const coverage = item.total > 0 ? Math.round((item.visited.size / item.total) * 100) : 0;
       return {
         routeCode,
@@ -494,23 +495,29 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // Supervisor Performance Summary
-    const supervisorPerformance = dbUsers
-      .filter((u: any) => u.role === 'Supervisor')
-      .map((u: any) => {
-        const supVisits = filteredVisits.filter(v => v.supervisorId === u.id);
+    // Supervisor Performance Summary strictly by superName from Route (ROUTE_MASTER)
+    const supervisorPerformance = allSupervisors
+      .map((supName: string) => {
+        const supVisits = filteredVisits.filter(v => {
+          const [_, rCode] = (v.cust_rt_id || '').split('|');
+          const routeInfo = routeMap.get(rCode || v.routeCode || '');
+          const sName = routeInfo ? (routeInfo.superName || '') : '';
+          return sName.toUpperCase() === supName.toUpperCase();
+        });
+
         const visitsCount = supVisits.length;
         const uniqueOutlets = new Set(supVisits.map(v => v.cust_rt_id)).size;
-        
+
         const breaches = supVisits.filter(v => {
           const visitAssets = assetMap.get(v.visitId) || [];
           return visitAssets.length > 0 ? visitAssets.some((a: any) => a.tempInRange !== 1 && a.tempInRange !== true) : false;
         }).length;
 
-        const supRoutes = dbRoutes.filter((r: any) => r.supervisorId === u.id);
+        const supRoutes = routeRows.filter((r: any) => (r.superName || '').toUpperCase().trim() === supName.toUpperCase());
         const totalAssigned = supRoutes.reduce((sum: number, r: any) => {
           return sum + customers.filter(c => c.routeCode === r.routeCode).length;
         }, 0);
+
         const totalVisited = supRoutes.reduce((sum: number, r: any) => {
           const visitedCustIds = new Set(
             filteredVisits
@@ -522,11 +529,12 @@ export async function GET(req: NextRequest) {
           );
           return sum + visitedCustIds.size;
         }, 0);
+
         const coveragePercent = totalAssigned > 0 ? Math.round((totalVisited / totalAssigned) * 100) : 0;
 
         return {
-          supervisorId: u.id,
-          supervisorName: u.name,
+          supervisorId: supName,
+          supervisorName: supName,
           visitsCount,
           uniqueOutlets,
           breaches,
@@ -543,7 +551,9 @@ export async function GET(req: NextRequest) {
       .map(v => {
         const customer = customerMap.get(v.cust_rt_id || '');
         const custName = customer ? customer.customerName : 'Unknown';
-        const userInfo = userMap.get(v.supervisorId) || { name: 'UNKNOWN' };
+        const [_, routeCode] = (v.cust_rt_id || '').split('|');
+        const routeInfo = routeMap.get(routeCode || v.routeCode || '');
+        const supName = routeInfo ? (routeInfo.superName || 'UNASSIGNED').toUpperCase().trim() : 'UNASSIGNED';
         const visitAssets = assetMap.get(v.visitId) || [];
         const firstAsset = visitAssets[0] || { assetType: 'Chiller', temperature: 0 };
         
@@ -552,7 +562,7 @@ export async function GET(req: NextRequest) {
           customerName: custName,
           assetType: firstAsset.assetType,
           temperature: firstAsset.temperature,
-          supervisorName: userInfo.name,
+          supervisorName: supName,
           visitDate: (v.createdAt as any) instanceof Date ? (v.createdAt as any).toISOString() : v.createdAt,
         };
       });
@@ -563,6 +573,22 @@ export async function GET(req: NextRequest) {
       reportRows,
       managerSupervisorMap,
       photos,
+      masters: {
+        managers: allManagers,
+        supervisors: allSupervisors,
+        routes: routeRows.map((r: any) => ({
+          routeCode: r.routeCode,
+          routeName: r.routeName,
+          superName: (r.superName || '').trim(),
+          managerName: (r.managerName || '').trim(),
+        })),
+        customers: customers.map((c: any) => ({
+          customerCode: c.customerCode,
+          customerName: c.customerName,
+          routeCode: c.routeCode,
+          cust_rt_id: c.cust_rt_id,
+        })),
+      },
       totalVisits,
       noVisitCount,
       todayVisits,

@@ -67,6 +67,7 @@ export default function SupervisorDashboard() {
   const [fRoute, setFRoute] = useState('');
   const [fSku, setFSku] = useState('');
   const [fVertical, setFVertical] = useState('');
+  const [masters, setMasters] = useState<any>(null);
 
   // Canvas Refs for Charts
   const canvasTrendRef = useRef<HTMLCanvasElement>(null);
@@ -110,6 +111,7 @@ export default function SupervisorDashboard() {
       if (data.success) {
         setRows(data.rows);
         setReportRows(data.reportRows || { npd: [], psku: [], 'cold-chain': [], classification: [], classificationDairy: [], classificationIceCream: [] });
+        setMasters(data.masters || null);
       }
     } catch (err) {
       console.error('Failed to load dashboard rows:', err);
@@ -189,18 +191,15 @@ export default function SupervisorDashboard() {
     return Array.from(new Set(filteredByDate.map((r) => r.ch))).sort();
   }, [rows, fFrom, fTo]);
 
-  // 2. Customer / Outlet Options: filtered by Channel and Classification
-  const custOptions = useMemo(() => {
-    const filteredByChannelClass = rows.filter(r => {
-      const rowDate = new Date(r.createdAt);
-      const from = normalizeDate(fFrom);
-      const to = normalizeDate(fTo);
-      const fromOk = !from || rowDate >= from;
-      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && fromOk && toOk;
-    });
-    return Array.from(new Set(filteredByChannelClass.map((r) => r.cust))).sort();
-  }, [rows, fChannel, fClass, fFrom, fTo]);
+  // 2. Customer / Outlet Options: strictly from masters, filtered by Route Code if selected
+  const custOptions = useMemo<string[]>(() => {
+    if (!masters) return [];
+    let list = masters.customers || [];
+    if (fRoute) {
+      list = list.filter((c: any) => c.routeCode === fRoute);
+    }
+    return Array.from(new Set(list.map((c: any) => c.customerName))).sort() as string[];
+  }, [masters, fRoute]);
 
   const classOptions = useMemo(() => {
     const filteredByChannel = rows.filter(r => {
@@ -214,18 +213,12 @@ export default function SupervisorDashboard() {
     return Array.from(new Set(filteredByChannel.map((r) => r.gr))).sort();
   }, [rows, fChannel, fFrom, fTo]);
 
-  // Route Code Options: filtered by Channel
-  const routeOptions = useMemo(() => {
-    const filteredByChannel = rows.filter(r => {
-      const rowDate = new Date(r.createdAt);
-      const from = normalizeDate(fFrom);
-      const to = normalizeDate(fTo);
-      const fromOk = !from || rowDate >= from;
-      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return (!fChannel || r.ch === fChannel) && fromOk && toOk;
-    });
-    return Array.from(new Set(filteredByChannel.map((r) => r.rt).filter(Boolean))).sort() as string[];
-  }, [rows, fChannel, fFrom, fTo]);
+  // Route Code Options strictly from masters
+  const routeOptions = useMemo<string[]>(() => {
+    if (!masters) return [];
+    const list = masters.routes || [];
+    return Array.from(new Set(list.map((r: any) => r.routeCode))).sort() as string[];
+  }, [masters]);
 
   const resetFilters = () => {
     setFFrom('');

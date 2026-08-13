@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import nextDynamic from 'next/dynamic';
 import { useToast } from '@/components/ui/toast';
@@ -62,27 +62,7 @@ export default function ReportsPage() {
   const [modalTitle, setModalTitle] = useState('');
   const [modalData, setModalData] = useState<any[]>([]);
 
-  const { data: routes = [] } = useQuery<Route[]>({
-    queryKey: ['routes'],
-    queryFn: () => fetch('/api/routes').then(r => r.json()),
-  });
-
-  const { data: supervisors = [] } = useQuery<any[]>({
-    queryKey: ['supervisors'],
-    queryFn: () =>
-      fetch('/api/supervisors')
-        .then((r) => r.json())
-        .then((d) =>
-          d.filter(
-            (u: any) =>
-              u.role === 'Supervisor' &&
-              u.name?.toUpperCase() !== 'INTERNAL' &&
-              u.name?.toUpperCase() !== 'SAMRA'
-          )
-        ),
-  });
-
-  const { data: stats, isLoading, isRefetching, refetch } = useQuery<DashboardStats>({
+  const { data: stats, isLoading, isRefetching, refetch } = useQuery<any>({
     queryKey: ['dashboard-stats', startDate, endDate, selectedSupervisor, selectedRoute],
     queryFn: async () => {
       const p = new URLSearchParams();
@@ -95,6 +75,19 @@ export default function ReportsPage() {
       return res.json();
     },
   });
+
+  const supervisors = useMemo<string[]>(() => {
+    return (stats?.masters?.supervisors || []) as string[];
+  }, [stats]);
+
+  const routes = useMemo<any[]>(() => {
+    if (!stats?.masters?.routes) return [];
+    let rts = stats.masters.routes;
+    if (selectedSupervisor) {
+      rts = rts.filter((r: any) => r.superName.toUpperCase() === selectedSupervisor.toUpperCase());
+    }
+    return rts as any[];
+  }, [stats, selectedSupervisor]);
 
   const activeFilters = [startDate, endDate, selectedSupervisor, selectedRoute].filter(Boolean).length;
 
@@ -146,9 +139,9 @@ export default function ReportsPage() {
             </div>
             <div>
               <label className="form-label">Supervisor</label>
-              <select value={selectedSupervisor} onChange={e => setSelectedSupervisor(e.target.value)} className="form-input">
+              <select value={selectedSupervisor} onChange={e => { setSelectedSupervisor(e.target.value); setSelectedRoute(''); }} className="form-input">
                 <option value="">All Supervisors</option>
-                {supervisors.map(s => <option key={s.id} value={s.employeeCode}>{s.name}</option>)}
+                {supervisors.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
@@ -312,7 +305,7 @@ export default function ReportsPage() {
                       }
                     }}
                   >
-                    {(stats?.coveragePerRoute ?? []).map((r, i) => (
+                    {((stats?.coveragePerRoute ?? []) as any[]).map((r: any, i: number) => (
                       <Cell key={i} fill={r.coverage >= 80 ? '#10B981' : r.coverage >= 50 ? '#F59E0B' : '#EF4444'} />
                     ))}
                   </Bar>
@@ -330,7 +323,7 @@ export default function ReportsPage() {
             <div className="h-full flex items-center justify-center" style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No supervisor data</div>
           ) : (
             <div className="space-y-2.5">
-              {stats.supervisorPerformance.map((sup, i) => (
+              {((stats?.supervisorPerformance ?? []) as any[]).map((sup: any, i: number) => (
                 <div key={i} className="flex items-center gap-3">
                   <div className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }}>
                     {sup.supervisorName?.charAt(0)}

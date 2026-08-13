@@ -41,6 +41,7 @@ export default function AdminDashboardPage() {
   const [fRoute, setFRoute] = useState('');
   const [fSku, setFSku] = useState('');
   const [fVertical, setFVertical] = useState('');
+  const [masters, setMasters] = useState<any>(null);
 
   // Canvas Refs
   const canvasTrendRef = useRef<HTMLCanvasElement>(null);
@@ -75,6 +76,7 @@ export default function AdminDashboardPage() {
           setReportRows(data.reportRows || { npd: [], psku: [], 'cold-chain': [], classification: [] });
           setManagerSupervisorMap(data.managerSupervisorMap || {});
           setPhotos(data.photos || []);
+          setMasters(data.masters || null);
           setLastUpdated(new Date());
         }
       } catch (err) {
@@ -102,33 +104,25 @@ export default function AdminDashboardPage() {
 
   // Compute dropdown values from unfiltered rows & dynamic DB manager map
   // 1. Manager Options
-  const mgrOptions = useMemo(() => {
-    const mgrsFromRows = rows.map((r) => r.mgr);
-    const mgrsFromMap = Object.keys(managerSupervisorMap);
-    return Array.from(new Set([...mgrsFromRows, ...mgrsFromMap])).filter(Boolean).sort();
-  }, [rows, managerSupervisorMap]);
+  // Compute dropdown values strictly from ROUTE_MASTER and CUSTMASTER via masters payload
+  // 1. Manager Options
+  const mgrOptions = useMemo<string[]>(() => {
+    if (!masters) return [];
+    return (masters.managers || []) as string[];
+  }, [masters]);
 
-  // 2. Supervisor Options: Filtered strictly by Manager if selected, or all supervisors if "All Managers" selected
-  const supOptions = useMemo(() => {
-    const isExcluded = (s: string) => {
-      const upper = (s || '').toUpperCase().trim();
-      return upper === 'INTERNAL' || upper === 'SAMRA';
-    };
+  // 2. Supervisor Options: Filtered strictly by Manager if selected, otherwise all supervisors
+  const supOptions = useMemo<string[]>(() => {
+    if (!masters) return [];
     if (fMgr) {
-      let list: string[] = [];
-      if (managerSupervisorMap[fMgr] && managerSupervisorMap[fMgr].length > 0) {
-        list = managerSupervisorMap[fMgr];
-      } else {
-        list = Array.from(new Set(rows.filter((r) => r.mgr === fMgr).map((r) => r.sup))).filter(Boolean);
-      }
-      return list.filter((s) => !isExcluded(s)).sort();
+      const sups = (masters.routes || [])
+        .filter((r: any) => r.managerName.toUpperCase() === fMgr.toUpperCase())
+        .map((r: any) => r.superName)
+        .filter(Boolean);
+      return Array.from(new Set(sups)).sort() as string[];
     }
-    const supsFromRows = rows.map((r) => r.sup);
-    const supsFromMap = Object.values(managerSupervisorMap).flat();
-    return Array.from(new Set([...supsFromRows, ...supsFromMap]))
-      .filter((s) => Boolean(s) && !isExcluded(s))
-      .sort();
-  }, [rows, fMgr, managerSupervisorMap]);
+    return (masters.supervisors || []) as string[];
+  }, [masters, fMgr]);
 
   // 3. Channel Options: filtered by Manager and Supervisor
   const channelOptions = useMemo(() => {
@@ -143,18 +137,25 @@ export default function AdminDashboardPage() {
     return Array.from(new Set(filteredByMgrSuper.map((r) => r.ch))).sort();
   }, [rows, fMgr, fSuper, fFrom, fTo]);
 
-  // 4. Customer / Outlet Options: filtered by Manager, Supervisor, Channel, and Classification
-  const custOptions = useMemo(() => {
-    const filteredByAllUpstream = rows.filter(r => {
-      const rowDate = new Date(r.createdAt);
-      const from = normalizeDate(fFrom);
-      const to = normalizeDate(fTo);
-      const fromOk = !from || rowDate >= from;
-      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && fromOk && toOk;
-    });
-    return Array.from(new Set(filteredByAllUpstream.map((r) => r.cust))).sort();
-  }, [rows, fMgr, fSuper, fChannel, fClass, fFrom, fTo]);
+  // 4. Customer / Outlet Options: Filtered by Route, Supervisor, or Manager if selected
+  const custOptions = useMemo<string[]>(() => {
+    if (!masters) return [];
+    let routes = masters.routes || [];
+    if (fSuper) {
+      routes = routes.filter((r: any) => r.superName.toUpperCase() === fSuper.toUpperCase());
+    } else if (fMgr) {
+      routes = routes.filter((r: any) => r.managerName.toUpperCase() === fMgr.toUpperCase());
+    }
+    const routeCodes = new Set(routes.map((r: any) => r.routeCode));
+
+    let customersList = masters.customers || [];
+    if (fRoute) {
+      customersList = customersList.filter((c: any) => c.routeCode === fRoute);
+    } else if (fSuper || fMgr) {
+      customersList = customersList.filter((c: any) => routeCodes.has(c.routeCode));
+    }
+    return Array.from(new Set(customersList.map((c: any) => c.customerName))).sort() as string[];
+  }, [masters, fRoute, fSuper, fMgr]);
 
   // 5. Classification Options: filtered by Manager, Supervisor, Channel, and Outlet
   const classOptions = useMemo(() => {
@@ -169,18 +170,17 @@ export default function AdminDashboardPage() {
     return Array.from(new Set(filteredByAllUpstream.map((r) => r.gr))).sort();
   }, [rows, fMgr, fSuper, fChannel, fCust, fFrom, fTo]);
 
-  // 6. Route Options: filtered by Manager, Supervisor, Channel
-  const routeOptions = useMemo(() => {
-    const filteredByScope = rows.filter(r => {
-      const rowDate = new Date(r.createdAt);
-      const from = normalizeDate(fFrom);
-      const to = normalizeDate(fTo);
-      const fromOk = !from || rowDate >= from;
-      const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && fromOk && toOk;
-    });
-    return Array.from(new Set(filteredByScope.map((r) => r.rt).filter(Boolean))).sort() as string[];
-  }, [rows, fMgr, fSuper, fChannel, fFrom, fTo]);
+  // 6. Route Options: Filtered by Supervisor or Manager if selected
+  const routeOptions = useMemo<string[]>(() => {
+    if (!masters) return [];
+    let routes = masters.routes || [];
+    if (fSuper) {
+      routes = routes.filter((r: any) => r.superName.toUpperCase() === fSuper.toUpperCase());
+    } else if (fMgr) {
+      routes = routes.filter((r: any) => r.managerName.toUpperCase() === fMgr.toUpperCase());
+    }
+    return Array.from(new Set(routes.map((r: any) => r.routeCode))).sort() as string[];
+  }, [masters, fSuper, fMgr]);
 
   // Reset helper
   const resetFilters = () => {

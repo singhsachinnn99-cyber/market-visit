@@ -105,12 +105,11 @@ export function MultiSelectDropdown({
         <div className="flex items-center gap-1 flex-shrink-0">
           {selectedValues.length > 0 && (
             <span
-              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onChange([]);
               }}
-              className="p-0.5 rounded-full hover:bg-[var(--surface-2)] text-[var(--text-muted)] hover:text-[var(--danger)]"
+              className="p-0.5 rounded-full hover:bg-[var(--surface-2)] text-[var(--text-muted)] hover:text-[var(--danger)] cursor-pointer"
               title="Clear selection"
             >
               <X className="h-3 w-3" />

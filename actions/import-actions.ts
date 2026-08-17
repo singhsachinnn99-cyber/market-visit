@@ -28,6 +28,8 @@ const verifyAdminSession = async () => {
 export async function validateExcelAction(formData: FormData) {
   await verifyAdminSession();
 
+  const isIndividual = formData.get('individual') === 'true';
+
   const fileKeys = [
     { key: 'routeMaster', name: 'ROUTE MASTER.xlsx', type: 'routes' as const, required: true },
     { key: 'custMaster', name: 'CUSTMASTER.xlsx', type: 'custMappings' as const, required: true },
@@ -42,7 +44,7 @@ export async function validateExcelAction(formData: FormData) {
   for (const fk of fileKeys) {
     const file = formData.get(fk.key) as File | null;
     if (!file || file.size === 0) {
-      if (fk.required) {
+      if (fk.required && !isIndividual) {
         errors.push({ row: 0, error: `Required file "${fk.name}" was not selected.` });
       }
       continue;

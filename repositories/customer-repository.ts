@@ -300,6 +300,15 @@ export const customerRepository = {
     let updated = 0;
 
     for (const cust of customers) {
+      if (cust.routeCode) {
+        try {
+          await pool.execute(
+            `INSERT IGNORE INTO \`Route\` (\`routeCode\`, \`routeName\`, \`channel\`) VALUES (?, ?, ?)`,
+            [cust.routeCode, `Route ${cust.routeCode}`, cust.channel || 'GT']
+          );
+        } catch (e) {}
+      }
+
       const [res]: any = await pool.execute(
         `INSERT INTO \`Customer\` (\`cust_rt_id\`, \`customerCode\`, \`customerName\`, \`classification\`, \`dairyClassification\`, \`iceCreamClassification\`, \`channel\`, \`routeCode\`) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -349,6 +358,15 @@ export const customerRepository = {
       if (!m.customerCode || !m.routeCode) continue;
       const cust_rt_id = m.cust_rt_id || `${m.customerCode}|${m.routeCode}`;
 
+      if (m.routeCode) {
+        try {
+          await pool.execute(
+            `INSERT IGNORE INTO \`Route\` (\`routeCode\`, \`routeName\`, \`channel\`) VALUES (?, ?, 'GT')`,
+            [m.routeCode, `Route ${m.routeCode}`]
+          );
+        } catch (e) {}
+      }
+
       const [res]: any = await pool.execute(
         `INSERT INTO \`CustomerRouteMapping\` (\`cust_rt_id\`, \`customerCode\`, \`routeCode\`) 
          VALUES (?, ?, ?)
@@ -372,12 +390,27 @@ export const customerRepository = {
     if (activeIds.length === 0) {
       const [result]: any = await pool.execute('DELETE FROM `Customer`');
       return result.affectedRows || 0;
-    } else {
-      const placeholders = activeIds.map(() => '?').join(',');
-      const sql = `DELETE FROM \`Customer\` WHERE \`cust_rt_id\` NOT IN (${placeholders})`;
-      const [result]: any = await pool.execute(sql, activeIds);
-      return result.affectedRows || 0;
     }
+
+    const activeSet = new Set(activeIds);
+    const [dbRows]: any = await pool.execute('SELECT `cust_rt_id` FROM `Customer`');
+    const dbIds: string[] = (dbRows as any[]).map((r) => r.cust_rt_id).filter(Boolean);
+    const toDelete = dbIds.filter((id) => !activeSet.has(id));
+
+    if (toDelete.length === 0) return 0;
+
+    let deleted = 0;
+    const chunkSize = 500;
+    for (let i = 0; i < toDelete.length; i += chunkSize) {
+      const chunk = toDelete.slice(i, i + chunkSize);
+      const placeholders = chunk.map(() => '?').join(',');
+      const [res]: any = await pool.execute(
+        `DELETE FROM \`Customer\` WHERE \`cust_rt_id\` IN (${placeholders})`,
+        chunk
+      );
+      deleted += res.affectedRows || 0;
+    }
+    return deleted;
   },
 
   async clearObsoleteMappings(activeIds: string[]): Promise<number> {
@@ -385,11 +418,26 @@ export const customerRepository = {
     if (activeIds.length === 0) {
       const [result]: any = await pool.execute('DELETE FROM `CustomerRouteMapping`');
       return result.affectedRows || 0;
-    } else {
-      const placeholders = activeIds.map(() => '?').join(',');
-      const sql = `DELETE FROM \`CustomerRouteMapping\` WHERE \`cust_rt_id\` NOT IN (${placeholders})`;
-      const [result]: any = await pool.execute(sql, activeIds);
-      return result.affectedRows || 0;
     }
+
+    const activeSet = new Set(activeIds);
+    const [dbRows]: any = await pool.execute('SELECT `cust_rt_id` FROM `CustomerRouteMapping`');
+    const dbIds: string[] = (dbRows as any[]).map((r) => r.cust_rt_id).filter(Boolean);
+    const toDelete = dbIds.filter((id) => !activeSet.has(id));
+
+    if (toDelete.length === 0) return 0;
+
+    let deleted = 0;
+    const chunkSize = 500;
+    for (let i = 0; i < toDelete.length; i += chunkSize) {
+      const chunk = toDelete.slice(i, i + chunkSize);
+      const placeholders = chunk.map(() => '?').join(',');
+      const [res]: any = await pool.execute(
+        `DELETE FROM \`CustomerRouteMapping\` WHERE \`cust_rt_id\` IN (${placeholders})`,
+        chunk
+      );
+      deleted += res.affectedRows || 0;
+    }
+    return deleted;
   },
 };

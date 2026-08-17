@@ -1897,20 +1897,6 @@ export default function SupervisorDashboard() {
           </div>
         </div>
 
-        {/* Audit Photo Gallery Section */}
-        <div style={{ marginBottom: '16px' }}>
-          <PhotoGallerySection
-            photos={photos}
-            fFrom={fFrom}
-            fTo={fTo}
-            fMgr={fMgr}
-            fSuper={fSuper}
-            fChannel={fChannel}
-            fCust={fCust}
-            fRoute={fRoute}
-          />
-        </div>
-
         {/* Operational Cards Row (Pending Drafts & Submitted Audits List to fully retain components) */}
         <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
           

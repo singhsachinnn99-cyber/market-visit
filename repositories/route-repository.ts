@@ -174,11 +174,26 @@ export const routeRepository = {
     if (activeCodes.length === 0) {
       const [result]: any = await pool.execute('DELETE FROM `Route`');
       return result.affectedRows || 0;
-    } else {
-      const placeholders = activeCodes.map(() => '?').join(',');
-      const sql = `DELETE FROM \`Route\` WHERE \`routeCode\` NOT IN (${placeholders})`;
-      const [result]: any = await pool.execute(sql, activeCodes);
-      return result.affectedRows || 0;
     }
+
+    const activeSet = new Set(activeCodes);
+    const [dbRows]: any = await pool.execute('SELECT `routeCode` FROM `Route`');
+    const dbCodes: string[] = (dbRows as any[]).map((r) => r.routeCode).filter(Boolean);
+    const toDelete = dbCodes.filter((code) => !activeSet.has(code));
+
+    if (toDelete.length === 0) return 0;
+
+    let deleted = 0;
+    const chunkSize = 500;
+    for (let i = 0; i < toDelete.length; i += chunkSize) {
+      const chunk = toDelete.slice(i, i + chunkSize);
+      const placeholders = chunk.map(() => '?').join(',');
+      const [res]: any = await pool.execute(
+        `DELETE FROM \`Route\` WHERE \`routeCode\` IN (${placeholders})`,
+        chunk
+      );
+      deleted += res.affectedRows || 0;
+    }
+    return deleted;
   },
 };

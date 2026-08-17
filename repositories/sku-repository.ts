@@ -151,12 +151,27 @@ export const skuRepository = {
     if (activeCodes.length === 0) {
       const [result]: any = await pool.execute('DELETE FROM `SKU`');
       return result.affectedRows || 0;
-    } else {
-      const placeholders = activeCodes.map(() => '?').join(',');
-      const sql = `DELETE FROM \`SKU\` WHERE \`skuCode\` NOT IN (${placeholders})`;
-      const [result]: any = await pool.execute(sql, activeCodes);
-      return result.affectedRows || 0;
     }
+
+    const activeSet = new Set(activeCodes);
+    const [dbRows]: any = await pool.execute('SELECT `skuCode` FROM `SKU`');
+    const dbCodes: string[] = (dbRows as any[]).map((r) => r.skuCode).filter(Boolean);
+    const toDelete = dbCodes.filter((code) => !activeSet.has(code));
+
+    if (toDelete.length === 0) return 0;
+
+    let deleted = 0;
+    const chunkSize = 500;
+    for (let i = 0; i < toDelete.length; i += chunkSize) {
+      const chunk = toDelete.slice(i, i + chunkSize);
+      const placeholders = chunk.map(() => '?').join(',');
+      const [res]: any = await pool.execute(
+        `DELETE FROM \`SKU\` WHERE \`skuCode\` IN (${placeholders})`,
+        chunk
+      );
+      deleted += res.affectedRows || 0;
+    }
+    return deleted;
   },
 
   async clearObsoletePowerSkus(activeKeys: string[]): Promise<number> {
@@ -164,12 +179,27 @@ export const skuRepository = {
     if (activeKeys.length === 0) {
       const [result]: any = await pool.execute('DELETE FROM `PowerSKU`');
       return result.affectedRows || 0;
-    } else {
-      const upperKeys = activeKeys.map((k) => k.toUpperCase());
-      const placeholders = upperKeys.map(() => '?').join(',');
-      const sql = `DELETE FROM \`PowerSKU\` WHERE UPPER(CONCAT(\`skuCode\`, '_', \`channel\`)) NOT IN (${placeholders})`;
-      const [result]: any = await pool.execute(sql, upperKeys);
-      return result.affectedRows || 0;
     }
+
+    const activeSet = new Set(activeKeys.map((k) => k.toUpperCase()));
+    const [dbRows]: any = await pool.execute('SELECT UPPER(CONCAT(`skuCode`, \'_\', `channel`)) as pkey, `id` FROM `PowerSKU`');
+    const toDeleteIds: number[] = (dbRows as any[])
+      .filter((r) => r.pkey && !activeSet.has(r.pkey))
+      .map((r) => r.id);
+
+    if (toDeleteIds.length === 0) return 0;
+
+    let deleted = 0;
+    const chunkSize = 500;
+    for (let i = 0; i < toDeleteIds.length; i += chunkSize) {
+      const chunk = toDeleteIds.slice(i, i + chunkSize);
+      const placeholders = chunk.map(() => '?').join(',');
+      const [res]: any = await pool.execute(
+        `DELETE FROM \`PowerSKU\` WHERE \`id\` IN (${placeholders})`,
+        chunk
+      );
+      deleted += res.affectedRows || 0;
+    }
+    return deleted;
   },
 };

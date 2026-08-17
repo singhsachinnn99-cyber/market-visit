@@ -975,18 +975,20 @@ function VisitWizardContent() {
                     <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Size / Model</label>
                     <div className="flex flex-wrap gap-1.5">
                       {getSizeModelsForCategory(ast.assetType || 'Chiller').map((modelOption) => {
-                        const isSelected = (ast.observation || '').includes(modelOption);
+                        const selectedModels = (ast.sizeModel || '').split(',').map((s) => s.trim()).filter(Boolean);
+                        const isSelected = selectedModels.includes(modelOption);
                         return (
                           <button
                             key={modelOption}
                             type="button"
                             onClick={() => {
-                              const currentObs = ast.observation || '';
+                              let updatedModels: string[];
                               if (isSelected) {
-                                updateAssetField(ast.assetId, 'observation', currentObs.replace(modelOption, '').trim());
+                                updatedModels = selectedModels.filter((m) => m !== modelOption);
                               } else {
-                                updateAssetField(ast.assetId, 'observation', currentObs ? `${currentObs} (${modelOption})` : modelOption);
+                                updatedModels = [...selectedModels, modelOption];
                               }
+                              updateAssetField(ast.assetId, 'sizeModel', updatedModels.join(', '));
                             }}
                             className="text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all cursor-pointer"
                             style={{

@@ -251,9 +251,11 @@ export default function AdminDashboardPage() {
       const to = normalizeDate(fTo);
       const fromOk = !from || rowDate >= from;
       const toOk = !to || rowDate <= new Date(`${fTo}T23:59:59`);
-      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && (!fCust || r.cust === fCust) && (!fRoute || r.rt === fRoute) && fromOk && toOk;
+      const catOk = !fAssetCategory || fAssetCategory === 'All' || (r.atype && r.atype.toLowerCase().includes(fAssetCategory.toLowerCase().replace(/s$/, '')));
+      const modelOk = fSizeModels.length === 0 || (r.observation && fSizeModels.some(sm => (r.observation as string).toLowerCase().includes(sm.toLowerCase())));
+      return (!fMgr || r.mgr === fMgr) && (!fSuper || r.sup === fSuper) && (!fChannel || r.ch === fChannel) && (!fClass || r.gr === fClass) && (!fCust || r.cust === fCust) && (!fRoute || r.rt === fRoute) && catOk && modelOk && fromOk && toOk;
     });
-  }, [rows, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fFrom, fTo]);
+  }, [rows, fMgr, fSuper, fChannel, fClass, fCust, fRoute, fAssetCategory, fSizeModels, fFrom, fTo]);
 
   // Visit set for the two per-vertical Classification charts: respects Manager,
   // Supervisor, Channel, and Outlet/Customer, but not the legacy single-value Classification
@@ -1412,6 +1414,7 @@ export default function AdminDashboardPage() {
           display:flex;
           flex-direction:column;
           gap:4px;
+          position:relative;
         }
         .fld label {
           font-size:10.5px;

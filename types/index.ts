@@ -112,6 +112,7 @@ export interface VisitAsset {
   observation: string;
   isFirstInFlow: boolean;
   fefoFollowed: boolean;
+  sizeModel?: string;
 }
 
 export interface VisitPhoto {

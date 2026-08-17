@@ -122,7 +122,7 @@ export function MultiSelectDropdown({
       {/* Dropdown Menu */}
       {isOpen && (
         <div
-          className="absolute left-0 right-0 mt-1 z-50 rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-xl overflow-hidden animate-slide-up"
+          className="absolute left-0 right-0 mt-1 z-[9999] rounded-xl bg-[var(--surface)] border border-[var(--border)] shadow-2xl overflow-hidden animate-slide-up"
           style={{ minWidth: '220px', backgroundColor: 'var(--surface)' }}
         >
           {/* Search Box */}

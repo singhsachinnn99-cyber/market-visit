@@ -60,11 +60,36 @@ export default function PWARegister() {
       
       window.addEventListener("appinstalled", handleAppInstalled);
 
-      return () => {
-        navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
-        window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-        window.removeEventListener("appinstalled", handleAppInstalled);
-      };
+    // 5. Catch ChunkLoadError globally on stale client bundles after new deployment
+    const handleGlobalError = (event: ErrorEvent | PromiseRejectionEvent) => {
+      const reason = 'reason' in event ? event.reason : event.error;
+      const message = reason?.message || reason?.toString() || '';
+      if (
+        message.includes('Loading chunk') ||
+        message.includes('ChunkLoadError') ||
+        message.includes('dynamically imported module')
+      ) {
+        console.warn('Chunk load error detected. Reloading page for updated deployment assets...');
+        const reloadKey = 'global_chunk_reload_' + Date.now();
+        const lastReload = sessionStorage.getItem('last_chunk_reload');
+        // Prevent infinite loops if network is down
+        if (!lastReload || Date.now() - parseInt(lastReload, 10) > 10000) {
+          sessionStorage.setItem('last_chunk_reload', Date.now().toString());
+          window.location.reload();
+        }
+      }
+    };
+
+    window.addEventListener('unhandledrejection', handleGlobalError);
+    window.addEventListener('error', handleGlobalError);
+
+    return () => {
+      navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+      window.removeEventListener('unhandledrejection', handleGlobalError);
+      window.removeEventListener('error', handleGlobalError);
+    };
   }, []);
 
   const handleInstallClick = async () => {

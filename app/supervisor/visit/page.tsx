@@ -8,6 +8,8 @@ import { useToast } from '@/components/ui/toast';
 import { useGeolocation } from '@/hooks/use-geolocation';
 import { saveVisitDraftAction, submitVisitAction } from '@/actions/visit-actions';
 import { isFleetRole } from '@/lib/roles';
+import { compressImage } from '@/utils/image-compressor';
+import { getSizeModelsForCategory } from '@/utils/asset-config';
 import {
   ArrowLeft,
   Save,
@@ -79,6 +81,7 @@ function VisitWizardContent() {
   // Photos category split
   const [photos, setPhotos] = useState<VisitPhoto[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoProcessingStatus, setPhotoProcessingStatus] = useState<string | null>(null);
 
   // SKU Checklists states
   const [powerSkuResults, setPowerSkuResults] = useState<Record<string, any>>({});
@@ -251,18 +254,33 @@ function VisitWizardContent() {
       let successCount = 0;
       let failCount = 0;
 
-      for (const file of files) {
-        try {
-          const base64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = (err) => reject(err);
-            reader.readAsDataURL(file);
-          });
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const fileNum = i + 1;
+        const totalFiles = files.length;
+        const origSizeMb = (file.size / (1024 * 1024)).toFixed(1);
 
+        try {
+          // 1. Show compression loading indicator
+          setPhotoProcessingStatus(
+            `Compressing photo ${fileNum} of ${totalFiles} (${origSizeMb} MB)...`
+          );
+
+          // 2. Perform client-side compression & resolution scaling
+          const compressed = await compressImage(file);
+
+          const compressedSizeKb = (compressed.size / 1024).toFixed(0);
+          const ratio = compressed.compressionRatio;
+
+          // 3. Show upload status
+          setPhotoProcessingStatus(
+            `Uploading photo ${fileNum} of ${totalFiles} (${compressedSizeKb} KB, -${ratio}%)...`
+          );
+
+          // 4. Send compressed base64 payload to server upload endpoint
           const res = await fetch('/api/upload', {
             method: 'POST',
-            body: JSON.stringify({ file: base64, category }),
+            body: JSON.stringify({ file: compressed.base64, category }),
             headers: { 'Content-Type': 'application/json' },
           });
 
@@ -281,18 +299,19 @@ function VisitWizardContent() {
           setPhotos((prev) => [...prev, newPhoto]);
           successCount++;
         } catch (err) {
-          console.error(err);
+          console.error('Photo compression/upload error:', err);
           failCount++;
         }
       }
 
       if (successCount > 0) {
-        showToast(`${successCount} photo(s) uploaded successfully to ${category === 'Vegetables' ? 'Assets' : category}.`, 'success');
+        showToast(`${successCount} photo(s) compressed & uploaded successfully to ${category === 'Vegetables' ? 'Assets' : category}.`, 'success');
       }
       if (failCount > 0) {
-        showToast(`Failed to upload ${failCount} photo(s).`, 'error');
+        showToast(`Failed to process/upload ${failCount} photo(s).`, 'error');
       }
       setUploadingPhoto(false);
+      setPhotoProcessingStatus(null);
       e.target.value = '';
     }
   };
@@ -917,18 +936,6 @@ function VisitWizardContent() {
       {/* STEP 4: CAPTURE ASSETS */}
       {currentStep === 3 && (
         <div className="card p-5 space-y-4 animate-slide-up">
-          <div className="flex items-center justify-between">
-            <span className="badge badge-accent">Asset Monitoring (Optional)</span>
-            <button
-              type="button"
-              onClick={addAsset}
-              className="btn-ghost"
-              style={{ color: 'var(--accent)', height: '32px', padding: '0 12px' }}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Add Asset</span>
-            </button>
-          </div>
 
           <div className="space-y-4">
             {assets.map((ast, idx) => {
@@ -961,6 +968,38 @@ function VisitWizardContent() {
                         {type}
                       </button>
                     ))}
+                  </div>
+
+                  {/* Size / Model Presets */}
+                  <div>
+                    <label className="form-label mb-1 font-bold text-black" style={{ color: '#000000', fontWeight: 700 }}>Size / Model</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {getSizeModelsForCategory(ast.assetType || 'Chiller').map((modelOption) => {
+                        const isSelected = (ast.observation || '').includes(modelOption);
+                        return (
+                          <button
+                            key={modelOption}
+                            type="button"
+                            onClick={() => {
+                              const currentObs = ast.observation || '';
+                              if (isSelected) {
+                                updateAssetField(ast.assetId, 'observation', currentObs.replace(modelOption, '').trim());
+                              } else {
+                                updateAssetField(ast.assetId, 'observation', currentObs ? `${currentObs} (${modelOption})` : modelOption);
+                              }
+                            }}
+                            className="text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all cursor-pointer"
+                            style={{
+                              background: isSelected ? 'var(--accent-light)' : 'var(--surface)',
+                              color: isSelected ? 'var(--accent)' : 'var(--text-secondary)',
+                              border: `1px solid ${isSelected ? 'var(--accent)' : 'var(--border)'}`,
+                            }}
+                          >
+                            {modelOption} {isSelected ? '✓' : ''}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -1020,6 +1059,8 @@ function VisitWizardContent() {
                         <option value="Working">Working</option>
                         <option value="Not working">Not working</option>
                         <option value="Working But Service Required">Working But Service Required</option>
+                        <option value="Outlet Own Asset Available">Outlet Own Asset Available</option>
+                        <option value="No Dandy Asset">No Dandy Asset</option>
                         <option value="Others">Others</option>
                       </select>
                     </div>
@@ -1105,6 +1146,23 @@ function VisitWizardContent() {
             <strong style={{ color: 'var(--text-primary)' }}>Range Rules:</strong> Chiller: <span style={{ color: 'var(--accent)' }}>0°C to 8°C</span> · Freezer: <span style={{ color: '#7C3AED' }}>Below -15°C</span>
           </div>
 
+          {/* Moved + Add Asset Button to Bottom */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={addAsset}
+              className="w-full h-11 text-[12px] font-extrabold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:shadow"
+              style={{
+                background: 'var(--accent-light)',
+                color: 'var(--accent)',
+                border: '1.5px dashed var(--accent)',
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              <span>+ Add Asset</span>
+            </button>
+          </div>
+
           {/* SOS option if MT */}
           {activeCustomer && activeCustomer.channel.toUpperCase() === 'MT' && (
             <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}>
@@ -1186,9 +1244,12 @@ function VisitWizardContent() {
               );
             })}
             {uploadingPhoto && (
-              <div className="flex items-center justify-center gap-2.5 p-3.5 rounded-xl text-[12px] font-bold animate-pulse" style={{ background: 'var(--accent-light)', color: 'var(--accent)', border: '1px solid var(--accent-soft)' }}>
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                Uploading to Cloudinary…
+              <div className="flex flex-col items-center justify-center gap-1.5 p-4 rounded-xl text-[12px] font-bold animate-pulse" style={{ background: 'var(--accent-light)', color: 'var(--accent)', border: '1px solid var(--accent-soft)' }}>
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>{photoProcessingStatus || 'Optimizing & uploading photo...'}</span>
+                </div>
+                <p className="text-[10.5px] font-normal opacity-80">Images are compressed on-device before uploading to minimize data usage.</p>
               </div>
             )}
           </div>

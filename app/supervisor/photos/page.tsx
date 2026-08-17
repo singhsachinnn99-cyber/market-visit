@@ -18,6 +18,8 @@ import {
   AppWindow,
   CheckCircle2,
   SlidersHorizontal,
+  FileCheck,
+  Maximize2,
 } from 'lucide-react';
 import { exportToExcel } from '@/utils/excelExport';
 import { ExportButton } from '@/components/ui/ExportButton';
@@ -372,9 +374,14 @@ export default function SupervisorAuditPhotoGalleryPage() {
                     {photo.category || 'Attachment'}
                   </div>
 
-                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <span className="text-xs font-semibold text-white px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-sm flex items-center gap-1.5">
-                      <ExternalLink className="h-3.5 w-3.5" /> View Larger
+                  {/* Image Spec Badge Overlay */}
+                  <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded text-[9.5px] font-mono font-bold bg-black/70 text-white/90 backdrop-blur-sm border border-white/20 flex items-center gap-1">
+                    <FileCheck className="h-3 w-3 text-emerald-400" /> Optimized HD (~350 KB)
+                  </div>
+
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <span className="text-xs font-bold text-white px-3 py-1.5 rounded-xl bg-accent backdrop-blur-sm flex items-center gap-1.5 shadow-lg">
+                      <Maximize2 className="h-3.5 w-3.5" /> Click to Expand
                     </span>
                   </div>
                 </div>
@@ -406,24 +413,40 @@ export default function SupervisorAuditPhotoGalleryPage() {
 
       {/* Pagination Footer */}
       {pagination.totalPages > 1 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-[var(--border-soft)]">
           <p className="text-xs text-[var(--text-muted)]">
             Showing Page <strong>{pagination.currentPage}</strong> of <strong>{pagination.totalPages}</strong> ({pagination.totalCount} total photos)
           </p>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-secondary)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--border-soft)] transition-colors flex items-center gap-1 cursor-pointer"
+              className="h-8 px-3 text-xs font-semibold rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-secondary)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--border-soft)] transition-colors flex items-center gap-1 cursor-pointer"
             >
               <ChevronLeft className="h-3.5 w-3.5" /> Previous
             </button>
 
+            <div className="flex items-center gap-1">
+              {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((pNum) => (
+                <button
+                  key={pNum}
+                  onClick={() => setCurrentPage(pNum)}
+                  className={`h-8 w-8 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    currentPage === pNum
+                      ? 'bg-accent text-white shadow-sm'
+                      : 'bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] hover:bg-[var(--surface-2)]'
+                  }`}
+                >
+                  {pNum}
+                </button>
+              ))}
+            </div>
+
             <button
               onClick={() => setCurrentPage((prev) => Math.min(pagination.totalPages, prev + 1))}
               disabled={currentPage >= pagination.totalPages}
-              className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-secondary)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--border-soft)] transition-colors flex items-center gap-1 cursor-pointer"
+              className="h-8 px-3 text-xs font-semibold rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--text-secondary)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--border-soft)] transition-colors flex items-center gap-1 cursor-pointer"
             >
               Next <ChevronRight className="h-3.5 w-3.5" />
             </button>

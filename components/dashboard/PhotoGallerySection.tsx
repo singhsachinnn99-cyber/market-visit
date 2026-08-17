@@ -1,7 +1,21 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { Camera, Calendar, User, MapPin, Store, Tag, X, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  Camera,
+  Calendar,
+  User,
+  MapPin,
+  Store,
+  Tag,
+  X,
+  ExternalLink,
+  Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  FileCheck,
+} from 'lucide-react';
 
 export interface DashboardPhoto {
   photoId: string;
@@ -38,6 +52,8 @@ export function PhotoGallerySection({
   fRoute,
 }: PhotoGallerySectionProps) {
   const [selectedPhoto, setSelectedPhoto] = useState<DashboardPhoto | null>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 8; // 8 uniform photos per page
 
   // Filter photos based on active dashboard filters
   const filteredPhotos = useMemo(() => {
@@ -58,6 +74,19 @@ export function PhotoGallerySection({
     });
   }, [photos, fFrom, fTo, fMgr, fSuper, fChannel, fCust, fRoute]);
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [fFrom, fTo, fMgr, fSuper, fChannel, fCust, fRoute]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPhotos.length / pageSize));
+  const validPage = Math.min(currentPage, totalPages);
+
+  const paginatedPhotos = useMemo(() => {
+    const start = (validPage - 1) * pageSize;
+    return filteredPhotos.slice(start, start + pageSize);
+  }, [filteredPhotos, validPage, pageSize]);
+
   const getCategoryColor = (category: string) => {
     const cat = (category || '').toLowerCase();
     if (cat.includes('dairy')) return { bg: 'rgba(59, 130, 246, 0.15)', text: '#3b82f6', border: 'rgba(59, 130, 246, 0.3)' };
@@ -67,7 +96,7 @@ export function PhotoGallerySection({
   };
 
   return (
-    <div className="card p-5 space-y-4">
+    <div className="card p-5 space-y-4 my-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[var(--border-soft)]">
         <div className="flex items-center gap-2.5">
@@ -79,13 +108,15 @@ export function PhotoGallerySection({
               Audit Photo Gallery
             </h3>
             <p className="text-xs text-[var(--text-muted)]">
-              Real-time audit attachments captured during market visits ({filteredPhotos.length} photo{filteredPhotos.length === 1 ? '' : 's'})
+              Real-time audit attachments captured during market visits ({filteredPhotos.length} total photo{filteredPhotos.length === 1 ? '' : 's'})
             </p>
           </div>
         </div>
 
-        <div className="text-xs font-medium px-3 py-1.5 rounded-full bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border)] self-start sm:self-auto">
-          {fFrom || fTo ? `Filtered: ${fFrom || 'Start'} to ${fTo || 'Today'}` : 'All Dates'}
+        <div className="flex items-center gap-2">
+          <div className="text-xs font-medium px-3 py-1.5 rounded-full bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border)]">
+            {fFrom || fTo ? `Filtered: ${fFrom || 'Start'} to ${fTo || 'Today'}` : 'All Dates'}
+          </div>
         </div>
       </div>
 
@@ -94,75 +125,131 @@ export function PhotoGallerySection({
         <div className="py-12 text-center text-[var(--text-muted)] space-y-2">
           <ImageIcon className="h-10 w-10 mx-auto opacity-40" />
           <p className="text-sm font-medium">No audit photos found matching the selected filters.</p>
-          <p className="text-xs opacity-75">Try expanding your date range or clearing specific manager/supervisor filters.</p>
+          <p className="text-xs opacity-75">Try expanding your date range or clearing specific filters.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredPhotos.map((photo) => {
-            const catStyle = getCategoryColor(photo.category);
-            const dateObj = new Date(photo.uploadedAt);
-            const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-            const formattedTime = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-fr">
+            {paginatedPhotos.map((photo) => {
+              const catStyle = getCategoryColor(photo.category);
+              const dateObj = new Date(photo.uploadedAt);
+              const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              const formattedTime = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
-            return (
-              <div
-                key={photo.photoId}
-                onClick={() => setSelectedPhoto(photo)}
-                className="group relative rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col"
-              >
-                {/* Image Aspect Box */}
-                <div className="relative aspect-video w-full bg-slate-950 overflow-hidden">
-                  <img
-                    src={photo.cloudinaryUrl}
-                    alt={photo.category}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    loading="lazy"
-                  />
-                  {/* Category Pill Overlay */}
-                  <div
-                    className="absolute top-2 left-2 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md shadow-sm"
-                    style={{
-                      backgroundColor: catStyle.bg,
-                      color: catStyle.text,
-                      border: `1px solid ${catStyle.border}`,
-                    }}
-                  >
-                    {photo.category || 'Attachment'}
+              return (
+                <div
+                  key={photo.photoId}
+                  onClick={() => setSelectedPhoto(photo)}
+                  className="group relative rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col h-full"
+                >
+                  {/* Fixed-Height Uniform Image Frame */}
+                  <div className="relative h-44 sm:h-48 w-full bg-slate-950 overflow-hidden flex-shrink-0">
+                    <img
+                      src={photo.cloudinaryUrl}
+                      alt={photo.category}
+                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+                      loading="lazy"
+                    />
+
+                    {/* Category Pill Overlay */}
+                    <div
+                      className="absolute top-2 left-2 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider backdrop-blur-md shadow-sm z-10"
+                      style={{
+                        backgroundColor: catStyle.bg,
+                        color: catStyle.text,
+                        border: `1px solid ${catStyle.border}`,
+                      }}
+                    >
+                      {photo.category || 'Attachment'}
+                    </div>
+
+                    {/* Image Spec Badge Overlay */}
+                    <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded text-[9.5px] font-mono font-bold bg-black/75 text-white/90 backdrop-blur-sm border border-white/20 flex items-center gap-1 z-10">
+                      <FileCheck className="h-3 w-3 text-emerald-400" /> Optimized HD (~350 KB)
+                    </div>
+
+                    {/* Hover Overlay */}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
+                      <span className="text-xs font-bold text-white px-3 py-1.5 rounded-xl bg-accent backdrop-blur-sm flex items-center gap-1.5 shadow-lg">
+                        <Maximize2 className="h-3.5 w-3.5" /> Click to Expand
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <span className="text-xs font-semibold text-white px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-sm flex items-center gap-1.5">
-                      <ExternalLink className="h-3.5 w-3.5" /> View Larger
-                    </span>
+                  {/* Fixed/Uniform Footer Box */}
+                  <div className="p-3 space-y-1.5 flex-1 flex flex-col justify-between bg-[var(--surface)]">
+                    <div className="space-y-1">
+                      <p className="text-xs font-extrabold text-[var(--text-primary)] truncate flex items-center gap-1.5">
+                        <Store className="h-3.5 w-3.5 text-accent flex-shrink-0" />
+                        <span className="truncate" title={photo.outlet}>{photo.outlet}</span>
+                      </p>
+                      <p className="text-[11px] font-medium text-[var(--text-secondary)] truncate flex items-center gap-1.5">
+                        <User className="h-3.5 w-3.5 text-[var(--text-muted)] flex-shrink-0" />
+                        <span className="truncate">Sup: {photo.supervisor} ({photo.manager})</span>
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-[var(--border-soft)] flex items-center justify-between text-[10px] text-[var(--text-muted)]">
+                      <span className="flex items-center gap-1 truncate max-w-[50%]">
+                        <MapPin className="h-3 w-3 flex-shrink-0" /> <span className="truncate">Route: {photo.route || 'N/A'}</span>
+                      </span>
+                      <span className="flex items-center gap-1 font-mono flex-shrink-0">
+                        <Calendar className="h-3 w-3 text-accent" /> {formattedDate} {formattedTime}
+                      </span>
+                    </div>
                   </div>
                 </div>
+              );
+            })}
+          </div>
 
-                {/* Details Footer */}
-                <div className="p-3 space-y-1.5 flex-1 flex flex-col justify-between">
-                  <div className="space-y-1">
-                    <p className="text-xs font-bold text-[var(--text-primary)] truncate flex items-center gap-1.5">
-                      <Store className="h-3.5 w-3.5 text-[var(--accent)] flex-shrink-0" />
-                      <span className="truncate">{photo.outlet}</span>
-                    </p>
-                    <p className="text-[11px] text-[var(--text-secondary)] truncate flex items-center gap-1.5">
-                      <User className="h-3.5 w-3.5 text-[var(--text-muted)] flex-shrink-0" />
-                      <span>Sup: {photo.supervisor} ({photo.manager})</span>
-                    </p>
-                  </div>
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-[var(--border-soft)]">
+              <span className="text-xs font-semibold text-[var(--text-muted)]">
+                Showing Page <strong>{validPage}</strong> of <strong>{totalPages}</strong> ({filteredPhotos.length} total photos)
+              </span>
 
-                  <div className="pt-2 border-t border-[var(--border-soft)] flex items-center justify-between text-[10px] text-[var(--text-muted)]">
-                    <span className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3" /> Route: {photo.route || 'N/A'}
-                    </span>
-                    <span className="flex items-center gap-1 font-mono">
-                      <Calendar className="h-3 w-3" /> {formattedDate} {formattedTime}
-                    </span>
-                  </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={validPage === 1}
+                  className="h-8 px-3 text-xs font-bold rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--surface-2)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" /> Previous
+                </button>
+
+                {/* Page Number Pills */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((pNum) => (
+                    <button
+                      key={pNum}
+                      type="button"
+                      onClick={() => setCurrentPage(pNum)}
+                      className={`h-8 w-8 text-xs font-extrabold rounded-xl transition-all cursor-pointer ${
+                        validPage === pNum
+                          ? 'bg-accent text-white shadow-sm'
+                          : 'bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] hover:bg-[var(--surface-2)]'
+                      }`}
+                    >
+                      {pNum}
+                    </button>
+                  ))}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={validPage === totalPages}
+                  className="h-8 px-3 text-xs font-bold rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--surface-2)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  Next <ChevronRight className="h-3.5 w-3.5" />
+                </button>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Lightbox Dialog Modal */}
@@ -175,11 +262,11 @@ export function PhotoGallerySection({
 
           <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden z-10 animate-slide-up flex flex-col md:flex-row max-h-[90vh]">
             {/* Image View */}
-            <div className="flex-1 bg-black flex items-center justify-center p-4 min-h-[300px] max-h-[60vh] md:max-h-[90vh]">
+            <div className="flex-1 bg-black flex items-center justify-center p-4 min-h-[320px] max-h-[60vh] md:max-h-[90vh]">
               <img
                 src={selectedPhoto.cloudinaryUrl}
                 alt={selectedPhoto.category}
-                className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
               />
             </div>
 
@@ -192,7 +279,7 @@ export function PhotoGallerySection({
                   </span>
                   <button
                     onClick={() => setSelectedPhoto(null)}
-                    className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                    className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
                   >
                     <X className="h-5 w-5" />
                   </button>
@@ -221,6 +308,13 @@ export function PhotoGallerySection({
                   </div>
 
                   <div>
+                    <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Image Specification</label>
+                    <p className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5 mt-0.5">
+                      <FileCheck className="h-3.5 w-3.5" /> Client-Optimized (~350 KB • 1800 px Max)
+                    </p>
+                  </div>
+
+                  <div>
                     <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Date & Time</label>
                     <p className="text-xs font-mono text-slate-300">
                       {new Date(selectedPhoto.uploadedAt).toLocaleString('en-US', {
@@ -245,7 +339,7 @@ export function PhotoGallerySection({
                 href={selectedPhoto.cloudinaryUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="btn-primary w-full justify-center py-2.5 text-xs"
+                className="btn-primary w-full justify-center py-2.5 text-xs font-bold"
               >
                 <ExternalLink className="h-4 w-4 mr-2" /> Open Full HD Image
               </a>

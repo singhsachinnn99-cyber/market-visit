@@ -2093,6 +2093,18 @@ export default function SupervisorDashboard() {
           </div>
         </div>
 
+        {/* Audit Photo Gallery Section with Pagination */}
+        <PhotoGallerySection
+          photos={photos}
+          fFrom={fFrom}
+          fTo={fTo}
+          fMgr={fMgr}
+          fSuper={fSuper}
+          fChannel={fChannel}
+          fCust={fCust}
+          fRoute={fRoute}
+        />
+
         {/* Footer */}
         <div className="foot">
           <b>Real database visits live sync.</b> Recalculates compliance & scorecard data dynamically.

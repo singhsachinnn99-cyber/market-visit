@@ -10,6 +10,9 @@ import { isFleetRole } from "@/lib/roles";
 import { exportToExcel } from "@/utils/excelExport";
 import { ExportButton } from "@/components/ui/ExportButton";
 
+import MultiSelectDropdown from "@/components/ui/MultiSelectDropdown";
+import { getSizeModelsForCategory, ASSET_CATEGORIES } from "@/utils/asset-config";
+
 const SUPERVISOR_TO_MANAGER: Record<string, string> = {
   YASAR: "KHALID",
   JAHID: "ASHFAQ",
@@ -61,6 +64,8 @@ export default function SupervisorReportsPage() {
   const [fChannel, setFChannel] = useState("");
   const [fClass, setFClass] = useState("");
   const [fCust, setFCust] = useState("");
+  const [fAssetCategory, setFAssetCategory] = useState("Chillers");
+  const [fSizeModels, setFSizeModels] = useState<string[]>([]);
   const [masters, setMasters] = useState<any>(null);
 
   // Canvas Refs
@@ -132,6 +137,11 @@ export default function SupervisorReportsPage() {
     return Array.from(new Set(filteredByUpstream.map((r) => r.gr))).sort();
   }, [rows, fChannel]);
 
+  // Dynamic Size/Model options based on selected Asset Category
+  const availableSizeModels = useMemo(() => {
+    return getSizeModelsForCategory(fAssetCategory);
+  }, [fAssetCategory]);
+
   // Reset helper
   const resetFilters = () => {
     setFFrom("");
@@ -141,6 +151,8 @@ export default function SupervisorReportsPage() {
     setFChannel("");
     setFClass("");
     setFCust("");
+    setFAssetCategory("Chillers");
+    setFSizeModels([]);
   };
 
   // Filtered rows matching selection
@@ -1263,6 +1275,34 @@ export default function SupervisorReportsPage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="fld">
+            <label>Asset Category</label>
+            <select
+              value={fAssetCategory}
+              onChange={(e) => {
+                setFAssetCategory(e.target.value);
+                setFSizeModels([]);
+              }}
+            >
+              <option value="All">All Categories</option>
+              {ASSET_CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="fld min-w-[190px]">
+            <label>Size / Model</label>
+            <MultiSelectDropdown
+              placeholder="Select Size/Model"
+              options={availableSizeModels}
+              selectedValues={fSizeModels}
+              onChange={setFSizeModels}
+            />
           </div>
 
           <button className="reset" onClick={resetFilters}>

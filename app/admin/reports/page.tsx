@@ -12,6 +12,9 @@ import {
 import { DashboardStats, Route } from '@/types';
 import InteractiveChartTableModal from '@/components/dashboard/InteractiveChartTableModal';
 
+import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown';
+import { getSizeModelsForCategory, ASSET_CATEGORIES } from '@/utils/asset-config';
+
 const AreaChart       = nextDynamic(() => import('recharts').then(m => m.AreaChart), { ssr: false });
 const Area            = nextDynamic(() => import('recharts').then(m => m.Area), { ssr: false });
 const BarChart        = nextDynamic(() => import('recharts').then(m => m.BarChart), { ssr: false });
@@ -56,11 +59,17 @@ export default function ReportsPage() {
   const [endDate, setEndDate]     = useState('');
   const [selectedSupervisor, setSelectedSupervisor] = useState('');
   const [selectedRoute, setSelectedRoute]           = useState('');
+  const [selectedAssetCategory, setSelectedAssetCategory] = useState('Chillers');
+  const [selectedSizeModels, setSelectedSizeModels]       = useState<string[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalData, setModalData] = useState<any[]>([]);
+
+  const availableSizeModels = useMemo(() => {
+    return getSizeModelsForCategory(selectedAssetCategory);
+  }, [selectedAssetCategory]);
 
   const { data: stats, isLoading, isRefetching, refetch } = useQuery<any>({
     queryKey: ['dashboard-stats', startDate, endDate, selectedSupervisor, selectedRoute],
@@ -89,7 +98,7 @@ export default function ReportsPage() {
     return rts as any[];
   }, [stats, selectedSupervisor]);
 
-  const activeFilters = [startDate, endDate, selectedSupervisor, selectedRoute].filter(Boolean).length;
+  const activeFilters = [startDate, endDate, selectedSupervisor, selectedRoute, selectedAssetCategory !== 'All' ? selectedAssetCategory : '', selectedSizeModels.length > 0 ? 'models' : ''].filter(Boolean).length;
 
   const pieData = [
     { name: 'In Range', value: 100 - (stats?.tempBreachPercent ?? 0) },
@@ -128,7 +137,7 @@ export default function ReportsPage() {
       {/* Filters */}
       {filtersOpen && (
         <div className="card p-4 animate-slide-up" style={{ borderColor: 'var(--accent-light)' }}>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             <div>
               <label className="form-label">Start Date</label>
               <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="form-input" />
@@ -151,8 +160,33 @@ export default function ReportsPage() {
                 {routes.map(r => <option key={r.routeCode} value={r.routeCode}>{r.routeCode}</option>)}
               </select>
             </div>
+            <div>
+              <label className="form-label">Asset Category</label>
+              <select
+                value={selectedAssetCategory}
+                onChange={(e) => {
+                  setSelectedAssetCategory(e.target.value);
+                  setSelectedSizeModels([]);
+                }}
+                className="form-input"
+              >
+                <option value="All">All Categories</option>
+                {ASSET_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Size / Model</label>
+              <MultiSelectDropdown
+                placeholder="Select Size/Model"
+                options={availableSizeModels}
+                selectedValues={selectedSizeModels}
+                onChange={setSelectedSizeModels}
+              />
+            </div>
             <div className="flex items-end">
-              <button className="btn-ghost w-full justify-center" onClick={() => { setStartDate(''); setEndDate(''); setSelectedSupervisor(''); setSelectedRoute(''); showToast('Filters cleared', 'info'); }}>
+              <button className="btn-ghost w-full justify-center" onClick={() => { setStartDate(''); setEndDate(''); setSelectedSupervisor(''); setSelectedRoute(''); setSelectedAssetCategory('Chillers'); setSelectedSizeModels([]); showToast('Filters cleared', 'info'); }}>
                 <RotateCcw className="h-3.5 w-3.5" />Reset
               </button>
             </div>

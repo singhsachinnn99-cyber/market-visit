@@ -10,6 +10,10 @@ import { isFleetRole, getAllowedReports } from '@/lib/roles';
 import { exportToExcel } from '@/utils/excelExport';
 import { ExportButton } from '@/components/ui/ExportButton';
 
+import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown';
+import { getSizeModelsForCategory, ASSET_CATEGORIES } from '@/utils/asset-config';
+import { PhotoGallerySection } from '@/components/dashboard/PhotoGallerySection';
+
 const GCOL: Record<string, string> = {
   A: '#0b7a4c',
   B: '#2b9c62',
@@ -41,6 +45,8 @@ export default function AdminDashboardPage() {
   const [fRoute, setFRoute] = useState('');
   const [fSku, setFSku] = useState('');
   const [fVertical, setFVertical] = useState('');
+  const [fAssetCategory, setFAssetCategory] = useState('Chillers');
+  const [fSizeModels, setFSizeModels] = useState<string[]>([]);
   const [masters, setMasters] = useState<any>(null);
 
   // Canvas Refs
@@ -182,6 +188,11 @@ export default function AdminDashboardPage() {
     return Array.from(new Set(routes.map((r: any) => r.routeCode))).sort() as string[];
   }, [masters, fSuper, fMgr]);
 
+  // Dynamic Size/Model options based on selected Asset Category
+  const availableSizeModels = useMemo(() => {
+    return getSizeModelsForCategory(fAssetCategory);
+  }, [fAssetCategory]);
+
   // Reset helper
   const resetFilters = () => {
     setFFrom('');
@@ -194,6 +205,8 @@ export default function AdminDashboardPage() {
     setFRoute('');
     setFSku('');
     setFVertical('');
+    setFAssetCategory('Chillers');
+    setFSizeModels([]);
   };
 
   // NPD Product report-level filter options (SKU-response granularity, not available on visit-level `rows`)
@@ -1754,6 +1767,32 @@ export default function AdminDashboardPage() {
             </select>
           </div>
 
+          <div className="fld">
+            <label>Asset Category</label>
+            <select
+              value={fAssetCategory}
+              onChange={(e) => {
+                setFAssetCategory(e.target.value);
+                setFSizeModels([]);
+              }}
+            >
+              <option value="All">All Categories</option>
+              {ASSET_CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="fld min-w-[190px]">
+            <label>Size / Model</label>
+            <MultiSelectDropdown
+              placeholder="Select Size/Model"
+              options={availableSizeModels}
+              selectedValues={fSizeModels}
+              onChange={setFSizeModels}
+            />
+          </div>
+
           <button className="reset" onClick={resetFilters}>Reset</button>
 
           <ExportButton onClick={handleExportAllFilteredVisits} label="Export Filtered Data" variant="default" />
@@ -2065,6 +2104,18 @@ export default function AdminDashboardPage() {
             </table>
           </div>
         </div>
+
+        {/* Audit Photo Gallery Section with Pagination */}
+        <PhotoGallerySection
+          photos={photos}
+          fFrom={fFrom}
+          fTo={fTo}
+          fMgr={fMgr}
+          fSuper={fSuper}
+          fChannel={fChannel}
+          fCust={fCust}
+          fRoute={fRoute}
+        />
 
         {/* Footer */}
         <div className="foot">
